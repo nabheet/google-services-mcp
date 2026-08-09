@@ -1,11 +1,11 @@
 {
-  "name": "google-services-mcp",
+  "name": "google-service-mcp",
   "version": "0.1.0",
   "description": "MCP server for Google consumer services — Gmail, Calendar, Meet, Drive, Contacts, Tasks — with multi-account OAuth support.",
   "type": "module",
   "main": "dist/main.js",
   "bin": {
-    "google-services-mcp": "dist/main.js"
+    "google-service-mcp": "dist/main.js"
   },
   "files": [
     "dist/",

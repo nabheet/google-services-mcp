@@ -70,7 +70,7 @@ class AuthManager {
     }
     if (accounts.length === 0) {
       throw new Error(
-        "No Google accounts configured. Add one with the account_add tool or run: google-services-mcp add <name>"
+        "No Google accounts configured. Add one with the account_add tool or run: google-service-mcp add <name>"
       );
     }
     const config = await this.getConfig();
@@ -80,7 +80,7 @@ class AuthManager {
     }
     if (accounts.length === 1) return accounts[0];
     throw new Error(
-      `Multiple accounts configured but no default set. Pass account="..." or run: google-services-mcp set-default <name>`
+      `Multiple accounts configured but no default set. Pass account="..." or run: google-service-mcp set-default <name>`
     );
   }
 

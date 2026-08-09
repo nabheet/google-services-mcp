@@ -7,17 +7,17 @@ export interface CliResult {
 
 const VERSION = "0.1.0";
 
-const HELP = `google-services-mcp — Google services MCP server
+const HELP = `google-service-mcp — Google services MCP server
 
 Usage:
-  google-services-mcp                 Run the MCP server over stdio
-  google-services-mcp add <name> [--timeout <seconds>]  Add a Google account (opens browser)
-  google-services-mcp list            List connected accounts
-  google-services-mcp remove <name>   Remove an account
-  google-services-mcp set-default <name>  Set the default account
-  google-services-mcp status          Show config, accounts and token health
-  google-services-mcp --version       Print version
-  google-services-mcp --help          Show this help
+  google-service-mcp                 Run the MCP server over stdio
+  google-service-mcp add <name> [--timeout <seconds>]  Add a Google account (opens browser)
+  google-service-mcp list            List connected accounts
+  google-service-mcp remove <name>   Remove an account
+  google-service-mcp set-default <name>  Set the default account
+  google-service-mcp status          Show config, accounts and token health
+  google-service-mcp --version       Print version
+  google-service-mcp --help          Show this help
 `;
 
 /** Parse an optional `--timeout <seconds>` flag into milliseconds. */
@@ -47,7 +47,7 @@ export async function dispatchCommand(args: string[]): Promise<CliResult> {
     case "add": {
       const name = rest[0];
       if (!name) {
-        return { exitCode: 1, output: "Usage: google-services-mcp add <name> [--timeout <seconds>]\n" };
+        return { exitCode: 1, output: "Usage: google-service-mcp add <name> [--timeout <seconds>]\n" };
       }
       try {
         const timeoutMs = parseTimeout(rest);
@@ -72,14 +72,14 @@ export async function dispatchCommand(args: string[]): Promise<CliResult> {
     }
     case "remove": {
       const name = rest[0];
-      if (!name) return { exitCode: 1, output: "Usage: google-services-mcp remove <name>\n" };
+      if (!name) return { exitCode: 1, output: "Usage: google-service-mcp remove <name>\n" };
       const removed = await authManager.removeAccount(name);
       if (!removed) return { exitCode: 1, output: `No account named "${name}" was found.\n` };
       return { exitCode: 0, output: `Removed account "${name}".\n` };
     }
     case "set-default": {
       const name = rest[0];
-      if (!name) return { exitCode: 1, output: "Usage: google-services-mcp set-default <name>\n" };
+      if (!name) return { exitCode: 1, output: "Usage: google-service-mcp set-default <name>\n" };
       try {
         await authManager.setDefaultAccount(name);
         return { exitCode: 0, output: `Default account set to "${name}".\n` };

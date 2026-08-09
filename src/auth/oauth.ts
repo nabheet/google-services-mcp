@@ -117,7 +117,7 @@ export function waitForOAuthCallback(
     };
 
     const callbackHtml =
-      "<html><body><h3>Google MCP: authorization received.</h3>" +
+      "<html><body><h3>Google Service MCP: authorization received.</h3>" +
       "<p>You can close this window and return to your terminal.</p></body></html>";
 
     server = createServer((req, res) => {
