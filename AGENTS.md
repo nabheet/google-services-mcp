@@ -84,7 +84,9 @@ node dist/main.js --help
 All publishing happens from GitHub Actions via npm **trusted publishing** (OIDC provenance) — no local npm login/token.
 
 - `.github/workflows/ci.yml` — typecheck/test/build on `main` + PRs (Node 24)
-- `.github/workflows/publish.yml` — on tag `v*`: publish `latest`; on tag `v*-beta*`: publish `beta` + prerelease GitHub release
-- `.github/workflows/publish-stage.yml` — on push to `dev` or manual dispatch: bump to next `-beta.X` prerelease (no git change), publish to `beta` tag
+- `.github/workflows/publish.yml` — the single publishing workflow (npm allows ONE trusted publisher per package; workflow filename must match):
+  - tag `v*` → publish `latest` + GitHub release
+  - tag `v*-beta*` → publish `beta` + prerelease GitHub release
+  - manual dispatch → bump to next `-beta.X` prerelease (no git change), publish `beta` (staging build from `main`)
 
 Never publish from a local shell. Version bumps flow through `npm version` + git tags, never manual package.json edits for releases.

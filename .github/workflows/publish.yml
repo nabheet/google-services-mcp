@@ -1,15 +1,28 @@
 name: Publish to npm
 
+# Single publishing workflow — matches the ONE trusted publisher configured
+# on npm (workflow filename = publish.yml). Handles both channels:
+#   - tag  v*        -> publish to `latest` (stable release + GitHub release)
+#   - tag  v*-beta*  -> publish to `beta`   (prerelease + GitHub release)
+#   - manual dispatch -> bump to next -beta.X prerelease (no git change),
+#                        publish to `beta` (staging build from main)
+#
+# Staging is manual (Actions -> Run workflow) because the pre-merge dev
+# branch is deleted after the MR; no long-lived branch is watched.
+#
+# npm trusted publishing (OIDC) auto-generates provenance — no token needed.
+
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write # trusted publishing (OIDC) — no NPM_TOKEN needed
+      id-token: write # trusted publishing (OIDC)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,19 +33,29 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - name: Determine dist-tag and prerelease flag
-        id: dist-tag
+      - name: Determine channel (latest / beta / staging)
+        id: channel
         run: |
-          if [[ "${{ github.ref_name }}" == *-beta* ]]; then
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            if [[ "${{ github.ref_name }}" == *-beta* ]]; then
+              echo "tag=beta" >> "$GITHUB_OUTPUT"
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "tag=latest" >> "$GITHUB_OUTPUT"
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            # manual dispatch -> staging beta build
+            npm version prerelease --preid=beta --no-git-tag-version --no-commit-hooks
             echo "tag=beta" >> "$GITHUB_OUTPUT"
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=latest" >> "$GITHUB_OUTPUT"
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Publish with provenance
-        run: npm publish --tag ${{ steps.dist-tag.outputs.tag }} --provenance --access public
+      - name: Show publishing target
+        run: 'echo "Publishing $(npm pkg get version) to tag ${{ steps.channel.outputs.tag }}"'
+      - name: Publish
+        run: npm publish --tag ${{ steps.channel.outputs.tag }} --provenance --access public
       - uses: softprops/action-gh-release@v2
+        if: github.ref_type == 'tag'
         with:
           generate_release_notes: true
-          prerelease: ${{ steps.dist-tag.outputs.prerelease }}
+          prerelease: ${{ steps.channel.outputs.prerelease }}

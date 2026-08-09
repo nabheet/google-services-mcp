@@ -41,7 +41,7 @@ npm install -g google-services-mcp
 ### Release channels
 
 - `latest` — stable releases, published from `v*` git tags
-- `beta` — staging builds, auto-published from every push to `dev`
+- `beta` — staging builds, published manually from `main`
   (e.g. `0.1.1-beta.0`)
 
 Try the staging channel without touching your stable install:
@@ -237,9 +237,9 @@ See [AGENTS.md](AGENTS.md) for architecture and conventions.
 
 All publishing happens from GitHub Actions — no local npm login needed:
 
-1. **Staging** — every push to `dev` auto-publishes a `beta` build
-   (`0.1.1-beta.X`) under the `beta` dist-tag with provenance. Trigger it
-   manually from the Actions tab ("Publish staging build") if needed.
+1. **Staging** — manual beta builds from `main`: **Actions → Publish to npm
+   → Run workflow**. Publishes a `beta` build (`0.1.1-beta.X`) under the
+   `beta` dist-tag with provenance.
 2. **Stable** — bump the version, then tag and push:
 
    ```bash
@@ -254,8 +254,10 @@ All publishing happens from GitHub Actions — no local npm login needed:
 
 Publishing uses npm **trusted publishing** (OIDC): configure it once per
 package at `npmjs.com/package/google-services-mcp/access` with the GitHub
-repository `nabheet/google-services-mcp` and workflow names `publish.yml` +
-`publish-stage.yml`. No `NPM_TOKEN` secret is required.
+repository `nabheet/google-services-mcp` and workflow name `publish.yml`.
+npm allows **one trusted publisher per package** and validates the calling
+workflow's filename — both channels run from the same `publish.yml` file.
+No `NPM_TOKEN` secret is required.
 
 ## License
 
