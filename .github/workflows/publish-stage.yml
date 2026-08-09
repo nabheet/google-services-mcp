@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write # trusted publishing (OIDC) — no NPM_TOKEN needed
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -34,7 +35,5 @@ jobs:
         run: npm version prerelease --preid=beta --no-git-tag-version --no-commit-hooks
       - name: Show staged version
         run: 'echo "Publishing as $(npm pkg get version) (tag: beta)"'
-      - name: Publish to beta tag
-        run: npm publish --tag beta
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to beta tag with provenance
+        run: npm publish --tag beta --provenance --access public

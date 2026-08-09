@@ -9,6 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write # trusted publishing (OIDC) — no NPM_TOKEN needed
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,10 +30,8 @@ jobs:
             echo "tag=latest" >> "$GITHUB_OUTPUT"
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Publish
-        run: npm publish --tag ${{ steps.dist-tag.outputs.tag }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish with provenance
+        run: npm publish --tag ${{ steps.dist-tag.outputs.tag }} --provenance --access public
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
