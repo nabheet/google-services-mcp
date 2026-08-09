@@ -1,0 +1,40 @@
+name: Publish staging build to npm (beta)
+
+# Publishes a staged build of the `dev` branch to the `beta` dist-tag so the
+# staging channel can be consumed with `npx google-services-mcp@beta` without
+# touching the `latest` tag. Triggered automatically on every push to `dev`
+# and manually via workflow_dispatch.
+#
+# Version: bumps the current package version to the next prerelease
+# (e.g. 0.1.0 -> 0.1.1-beta.0) WITHOUT committing or tagging — the package.json
+# in the repo keeps the release version, only the published artifact is bumped.
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+jobs:
+  publish-stage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org/
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Bump to next prerelease (beta) without git changes
+        run: npm version prerelease --preid=beta --no-git-tag-version --no-commit-hooks
+      - name: Show staged version
+        run: 'echo "Publishing as $(npm pkg get version) (tag: beta)"'
+      - name: Publish to beta tag
+        run: npm publish --tag beta
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
