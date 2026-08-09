@@ -33,6 +33,10 @@
     "oauth"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nabheet/google-service-mcp.git"
+  },
   "engines": {
     "node": ">=18.0.0"
   },
