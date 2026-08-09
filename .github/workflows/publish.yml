@@ -54,8 +54,12 @@ jobs:
             LAST=$(npm view google-services-mcp@latest version 2>/dev/null || true)
             CUR=$(npm pkg get version | tr -d '"')
             if [ -n "$LAST" ] && [ "$(printf '%s\n%s' "$CUR" "$LAST" | sort -V | tail -1)" = "$LAST" ]; then
-              # tree at/below registry -> set to registry, then patch
-              npm version "$LAST" --no-git-tag-version --no-commit-hooks
+              # tree at/below registry -> align to registry (unless equal),
+              # then bump patch; npm errors on "Version not changed" if the
+              # align target equals the current version
+              if [ "$CUR" != "$LAST" ]; then
+                npm version "$LAST" --no-git-tag-version --no-commit-hooks
+              fi
               npm version patch --no-git-tag-version --no-commit-hooks
             else
               # tree version ahead (intentional minor/major bump) -> as-is
