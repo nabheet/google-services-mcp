@@ -1,0 +1,77 @@
+name: Publish to npm
+
+# Single publishing workflow — matches the ONE trusted publisher configured
+# on npm (workflow filename = publish.yml). Handles both channels:
+#   - tag  v*        -> publish to `latest` (stable release + GitHub release)
+#   - tag  v*-beta*  -> publish to `beta`   (prerelease + GitHub release)
+#   - manual dispatch -> publish next -beta.X prerelease (no git change) to
+#                        `beta` (staging build from main).
+#                        Next beta is derived from the last published beta so
+#                        repeated runs don't collide with a published version.
+#
+# Staging is manual (Actions -> Run workflow) because the pre-merge dev
+# branch is deleted after the MR; no long-lived branch is watched.
+#
+# npm trusted publishing (OIDC) auto-generates provenance — no token needed.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write # trusted publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org/
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Determine channel (latest / beta / staging)
+        id: channel
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            if [[ "${{ github.ref_name }}" == *-beta* ]]; then
+              echo "tag=beta" >> "$GITHUB_OUTPUT"
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "tag=latest" >> "$GITHUB_OUTPUT"
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            # manual dispatch -> next staging beta, derived from the last
+            # published beta (working tree is unchanged between runs)
+            CUR=$(npm pkg get version | tr -d '"')
+            LAST_BETA=$(npm view google-services-mcp@beta version 2>/dev/null || true)
+            if [ -n "$LAST_BETA" ]; then
+              LAST_BASE="${LAST_BETA%-beta.*}"
+              NEXT_BASE=$(printf '%s\n' "$CUR" "$LAST_BASE" | sort -V | tail -1)
+              if [ "$NEXT_BASE" = "$LAST_BASE" ] && [ "$NEXT_BASE" != "$CUR" ]; then
+                N="${LAST_BETA##*-beta.}"
+                npm version "${NEXT_BASE}-beta.$((N + 1))" --no-git-tag-version --no-commit-hooks
+              else
+                npm version prerelease --preid=beta --no-git-tag-version --no-commit-hooks
+              fi
+            else
+              npm version prerelease --preid=beta --no-git-tag-version --no-commit-hooks
+            fi
+            echo "tag=beta" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Show publishing target
+        run: 'echo "Publishing $(npm pkg get version) to tag ${{ steps.channel.outputs.tag }}"'
+      - name: Publish
+        run: npm publish --tag ${{ steps.channel.outputs.tag }} --provenance --access public
+      - uses: softprops/action-gh-release@v2
+        if: github.ref_type == 'tag'
+        with:
+          generate_release_notes: true
+          prerelease: ${{ steps.channel.outputs.prerelease }}
