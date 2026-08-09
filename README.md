@@ -40,7 +40,7 @@ npm install -g google-services-mcp
 
 ### Release channels
 
-- `latest` — stable releases, published from `v*` git tags
+- `latest` — stable releases, published automatically on every merge to `main`
 - `beta` — staging builds, published manually from `main`
   (e.g. `0.1.1-beta.0`)
 
@@ -237,26 +237,22 @@ See [AGENTS.md](AGENTS.md) for architecture and conventions.
 
 All publishing happens from GitHub Actions — no local npm login needed:
 
-1. **Staging** — manual beta builds from `main`: **Actions → Publish to npm
+1. **Stable** — every merge to `main` auto-publishes the next patch version
+   to `latest` with provenance, then creates a `vX.Y.Z` tag and GitHub
+   release. No manual steps. The next version is derived from the last
+   published `latest` on npm, so repeated merges never collide; an
+   intentional minor/major bump in `package.json` is honored.
+2. **Staging** — manual beta builds from `main`: **Actions → Publish to npm
    → Run workflow**. Publishes a `beta` build (`0.1.1-beta.X`) under the
    `beta` dist-tag with provenance.
-2. **Stable** — bump the version, then tag and push:
 
-   ```bash
-   npm version patch   # or minor / major — creates the tag, updates package.json
-   git push --tags
-   ```
-
-   The `v*` tag triggers `publish.yml`: it runs tests + build, publishes to
-   `latest` (or `beta` for `v*-beta*` tags) with provenance, and creates a
-   GitHub release. Follow the package version with a `-beta.N` suffix
-   (`0.2.0-beta.1`) for prerelease tags.
-
-Publishing uses npm **trusted publishing** (OIDC): configure it once per
-package at `npmjs.com/package/google-services-mcp/access` with the GitHub
-repository `nabheet/google-services-mcp` and workflow name `publish.yml`.
+Prerelease tags `v*-beta*` publish to `beta` with a prerelease GitHub release
+(patch/minor builds for milestone testing). Publishing uses npm **trusted
+publishing** (OIDC): configure it once per package at
+`npmjs.com/package/google-services-mcp/access` with the GitHub repository
+`nabheet/google-services-mcp` and workflow name `publish.yml`.
 npm allows **one trusted publisher per package** and validates the calling
-workflow's filename — both channels run from the same `publish.yml` file.
+workflow's filename — all channels run from the same `publish.yml` file.
 No `NPM_TOKEN` secret is required.
 
 ## License
