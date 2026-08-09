@@ -4,8 +4,10 @@ name: Publish to npm
 # on npm (workflow filename = publish.yml). Handles both channels:
 #   - tag  v*        -> publish to `latest` (stable release + GitHub release)
 #   - tag  v*-beta*  -> publish to `beta`   (prerelease + GitHub release)
-#   - manual dispatch -> bump to next -beta.X prerelease (no git change),
-#                        publish to `beta` (staging build from main)
+#   - manual dispatch -> publish next -beta.X prerelease (no git change) to
+#                        `beta` (staging build from main).
+#                        Next beta is derived from the last published beta so
+#                        repeated runs don't collide with a published version.
 #
 # Staging is manual (Actions -> Run workflow) because the pre-merge dev
 # branch is deleted after the MR; no long-lived branch is watched.
@@ -45,8 +47,22 @@ jobs:
               echo "prerelease=false" >> "$GITHUB_OUTPUT"
             fi
           else
-            # manual dispatch -> staging beta build
-            npm version prerelease --preid=beta --no-git-tag-version --no-commit-hooks
+            # manual dispatch -> next staging beta, derived from the last
+            # published beta (working tree is unchanged between runs)
+            CUR=$(npm pkg get version | tr -d '"')
+            LAST_BETA=$(npm view google-services-mcp@beta version 2>/dev/null || true)
+            if [ -n "$LAST_BETA" ]; then
+              LAST_BASE="${LAST_BETA%-beta.*}"
+              NEXT_BASE=$(printf '%s\n' "$CUR" "$LAST_BASE" | sort -V | tail -1)
+              if [ "$NEXT_BASE" = "$LAST_BASE" ] && [ "$NEXT_BASE" != "$CUR" ]; then
+                N="${LAST_BETA##*-beta.}"
+                npm version "${NEXT_BASE}-beta.$((N + 1))" --no-git-tag-version --no-commit-hooks
+              else
+                npm version prerelease --preid=beta --no-git-tag-version --no-commit-hooks
+              fi
+            else
+              npm version prerelease --preid=beta --no-git-tag-version --no-commit-hooks
+            fi
             echo "tag=beta" >> "$GITHUB_OUTPUT"
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           fi
