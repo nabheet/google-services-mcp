@@ -85,8 +85,8 @@ All publishing happens from GitHub Actions via npm **trusted publishing** (OIDC 
 
 - `.github/workflows/ci.yml` — typecheck/test/build on `main` + PRs (Node 24)
 - `.github/workflows/publish.yml` — the single publishing workflow (npm allows ONE trusted publisher per package; workflow filename must match):
-  - tag `v*` → publish `latest` + GitHub release
+  - push to `main` → auto-publish next patch to `latest` + create `vX.Y.Z` tag + GitHub release (version derived from last published `latest`; intentional minor/major bumps in package.json are honored)
   - tag `v*-beta*` → publish `beta` + prerelease GitHub release
   - manual dispatch → bump to next `-beta.X` prerelease (no git change), publish `beta` (staging build from `main`)
 
-Never publish from a local shell. Version bumps flow through `npm version` + git tags, never manual package.json edits for releases.
+Never publish from a local shell. Stable versions are auto-derived from the npm registry on merge to `main`; manual version edits are not needed for patch releases.

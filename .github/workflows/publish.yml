@@ -2,21 +2,29 @@ name: Publish to npm
 
 # Single publishing workflow — matches the ONE trusted publisher configured
 # on npm (workflow filename = publish.yml). Handles both channels:
-#   - tag  v*        -> publish to `latest` (stable release + GitHub release)
-#   - tag  v*-beta*  -> publish to `beta`   (prerelease + GitHub release)
-#   - manual dispatch -> publish next -beta.X prerelease (no git change) to
-#                        `beta` (staging build from main).
-#                        Next beta is derived from the last published beta so
-#                        repeated runs don't collide with a published version.
+#   - push to main       -> publish next patch to `latest`, then create
+#                           vX.Y.Z tag + GitHub release (auto-release on merge)
+#   - tag  v*-beta*      -> publish to `beta`   (prerelease + GitHub release)
+#   - manual dispatch    -> publish next -beta.X prerelease (no git change) to
+#                           `beta` (staging build from main).
+#                           Next beta is derived from the last published beta
+#                           so repeated runs don't collide with a published
+#                           version.
 #
-# Staging is manual (Actions -> Run workflow) because the pre-merge dev
-# branch is deleted after the MR; no long-lived branch is watched.
+# Stable version comes from the npm registry (last published `latest` + patch),
+# not from a possibly-stale package.json, so repeated merges never collide.
+# An intentional minor/major bump in package.json is honored: if the working
+# tree version is ahead of the registry, it is published as-is.
+#
+# The vX.Y.Z tag pushed here does NOT re-trigger this workflow (only v*-beta*
+# tags do), so no publish loop.
 #
 # npm trusted publishing (OIDC) auto-generates provenance — no token needed.
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+    tags: ["v*-beta*"]
   workflow_dispatch:
 
 jobs:
@@ -39,13 +47,22 @@ jobs:
         id: channel
         run: |
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            if [[ "${{ github.ref_name }}" == *-beta* ]]; then
-              echo "tag=beta" >> "$GITHUB_OUTPUT"
-              echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "tag=beta" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            # merge to main -> next patch after the last published `latest`
+            LAST=$(npm view google-services-mcp@latest version 2>/dev/null || true)
+            CUR=$(npm pkg get version | tr -d '"')
+            if [ -n "$LAST" ] && [ "$(printf '%s\n%s' "$CUR" "$LAST" | sort -V | tail -1)" = "$LAST" ]; then
+              # tree at/below registry -> set to registry, then patch
+              npm version "$LAST" --no-git-tag-version --no-commit-hooks
+              npm version patch --no-git-tag-version --no-commit-hooks
             else
-              echo "tag=latest" >> "$GITHUB_OUTPUT"
-              echo "prerelease=false" >> "$GITHUB_OUTPUT"
+              # tree version ahead (intentional minor/major bump) -> as-is
+              :
             fi
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
           else
             # manual dispatch -> next staging beta, derived from the last
             # published beta (working tree is unchanged between runs)
@@ -70,8 +87,17 @@ jobs:
         run: 'echo "Publishing $(npm pkg get version) to tag ${{ steps.channel.outputs.tag }}"'
       - name: Publish
         run: npm publish --tag ${{ steps.channel.outputs.tag }} --provenance --access public
+      - name: Create tag + GitHub release (stable only)
+        if: steps.channel.outputs.tag == 'latest'
+        run: |
+          V=$(npm pkg get version | tr -d '"')
+          git tag "v$V"
+          git push origin "v$V"
+          gh release create "v$V" --generate-notes --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
       - uses: softprops/action-gh-release@v2
         if: github.ref_type == 'tag'
         with:
           generate_release_notes: true
-          prerelease: ${{ steps.channel.outputs.prerelease }}
+          prerelease: true
