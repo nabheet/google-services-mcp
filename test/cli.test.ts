@@ -28,7 +28,7 @@ describe("cli dispatch", () => {
   it("prints help for --help", async () => {
     const result = await dispatchCommand(["--help"]);
     expect(result.exitCode).toBe(0);
-    expect(result.output).toContain("google-service-mcp add <name>");
+    expect(result.output).toContain("google-services-mcp add <name>");
   });
 
   it("prints help for -h and bare unknown", async () => {
@@ -47,7 +47,7 @@ describe("cli dispatch", () => {
   it("add requires a name", async () => {
     const result = await dispatchCommand(["add"]);
     expect(result.exitCode).toBe(1);
-    expect(result.output).toContain("Usage: google-service-mcp add <name>");
+    expect(result.output).toContain("Usage: google-services-mcp add <name>");
     expect(addAccount).not.toHaveBeenCalled();
   });
 
@@ -100,7 +100,7 @@ describe("cli dispatch", () => {
   it("remove requires a name", async () => {
     const result = await dispatchCommand(["remove"]);
     expect(result.exitCode).toBe(1);
-    expect(result.output).toContain("Usage: google-service-mcp remove <name>");
+    expect(result.output).toContain("Usage: google-services-mcp remove <name>");
   });
 
   it("remove reports missing account", async () => {

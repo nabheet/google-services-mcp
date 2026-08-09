@@ -4,7 +4,7 @@ Guide for AI agents working in this repository.
 
 ## Project
 
-TypeScript MCP server connecting to Google consumer services (Gmail, Calendar, Meet, Drive, Contacts, Tasks) with multi-account OAuth. Package name `google-service-mcp`, executable `google-service-mcp`. ESM (`"type": "module"`), Node16 module resolution, target ES2022.
+TypeScript MCP server connecting to Google consumer services (Gmail, Calendar, Meet, Drive, Contacts, Tasks) with multi-account OAuth. Package name `google-services-mcp`, executable `google-services-mcp`. ESM (`"type": "module"`), Node16 module resolution, target ES2022.
 
 ## Architecture
 

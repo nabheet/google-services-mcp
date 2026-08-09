@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
  *   1. Environment variables GOOGLE_MCP_CLIENT_ID / GOOGLE_MCP_CLIENT_SECRET
  *   2. The config file at <dir>/config.json
  *
- * The data directory defaults to ~/.google-service-mcp and can be overridden with
+ * The data directory defaults to ~/.google-services-mcp and can be overridden with
  * GOOGLE_MCP_DIR.
  */
 
@@ -60,7 +60,7 @@ export interface Config {
 }
 
 export function getDataDir(): string {
-  return process.env.GOOGLE_MCP_DIR || path.join(os.homedir(), ".google-service-mcp");
+  return process.env.GOOGLE_MCP_DIR || path.join(os.homedir(), ".google-services-mcp");
 }
 
 export function getConfigPath(): string {

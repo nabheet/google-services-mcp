@@ -1,4 +1,4 @@
-# google-service-mcp
+# google-services-mcp
 
 MCP (Model Context Protocol) server that gives AI agents direct access to your
 Google services — **Gmail, Calendar, Google Meet, Drive, Contacts, Tasks,
@@ -35,7 +35,7 @@ create documents and spreadsheets, and more — using your real Google data.
 ## Install
 
 ```bash
-npm install -g google-service-mcp
+npm install -g google-services-mcp
 ```
 
 > **Note:** until the first public release lands on npm, install from source
@@ -46,7 +46,7 @@ npm install -g google-service-mcp
 1. **Add a Google account** — opens your browser for one-time authorization:
 
    ```bash
-   google-service-mcp add personal
+   google-services-mcp add personal
    ```
 
 2. **Register the server** with your MCP client (see
@@ -54,11 +54,11 @@ npm install -g google-service-mcp
    opencode, and generic configs).
 
 3. **Start using it** — ask your agent to "check my email" or "add an event to
-   my calendar". Or add more accounts any time: `google-service-mcp add work`.
+   my calendar". Or add more accounts any time: `google-services-mcp add work`.
 
 ## MCP client configuration
 
-The server speaks MCP over stdio. Point your client at the `google-service-mcp`
+The server speaks MCP over stdio. Point your client at the `google-services-mcp`
 executable and pass your OAuth credentials via environment variables.
 
 ### opencode
@@ -68,9 +68,9 @@ In `opencode.json` (or your global config):
 ```json
 {
   "mcp": {
-    "google-service-mcp": {
+    "google-services-mcp": {
       "type": "local",
-      "command": ["google-service-mcp"],
+      "command": ["google-services-mcp"],
       "enabled": true,
       "environment": {
         "GOOGLE_MCP_CLIENT_ID": "your-client-id",
@@ -88,8 +88,8 @@ In the client's MCP settings file (e.g. `claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
-    "google-service-mcp": {
-      "command": "google-service-mcp",
+    "google-services-mcp": {
+      "command": "google-services-mcp",
       "env": {
         "GOOGLE_MCP_CLIENT_ID": "your-client-id",
         "GOOGLE_MCP_CLIENT_SECRET": "your-client-secret"
@@ -107,7 +107,7 @@ never shared.
 ### 1. Create a project
 
 Open the [Google Cloud Console](https://console.cloud.google.com/), choose
-**Select a project → New Project**, and name it (e.g. `google-service-mcp`).
+**Select a project → New Project**, and name it (e.g. `google-services-mcp`).
 
 ### 2. Configure the OAuth consent screen
 
@@ -148,7 +148,7 @@ GOOGLE_MCP_CLIENT_SECRET=<your-oauth-client-secret>
 Optional:
 
 ```
-GOOGLE_MCP_DIR=~/.google-service-mcp   # where config and tokens live (default ~/.google-service-mcp)
+GOOGLE_MCP_DIR=~/.google-services-mcp   # where config and tokens live (default ~/.google-services-mcp)
 GOOGLE_MCP_REDIRECT_PORT=8787          # local loopback port for OAuth (default 8787)
 # Full redirect URI override. Takes precedence over REDIRECT_PORT and must
 # exactly match a URI registered for this OAuth client in the Cloud Console.
@@ -158,23 +158,23 @@ GOOGLE_MCP_REDIRECT_PORT=8787          # local loopback port for OAuth (default 
 ### 6. Connect your first account
 
 ```bash
-google-service-mcp add personal
+google-services-mcp add personal
 ```
 
 A browser opens to the Google consent screen. After you approve, the account is
-stored in `~/.google-service-mcp/accounts/` and ready to use. Repeat with a
+stored in `~/.google-services-mcp/accounts/` and ready to use. Repeat with a
 different name (e.g. `work`) to connect more accounts.
 
 ## CLI reference
 
 ```
-google-service-mcp                     # run the MCP server over stdio
-google-service-mcp add <name>          # add a Google account (opens browser)
-google-service-mcp list                # list connected accounts
-google-service-mcp remove <name>       # remove an account
-google-service-mcp set-default <name>  # set the default account
-google-service-mcp status              # show config and token health
-google-service-mcp --help              # show help
+google-services-mcp                     # run the MCP server over stdio
+google-services-mcp add <name>          # add a Google account (opens browser)
+google-services-mcp list                # list connected accounts
+google-services-mcp remove <name>       # remove an account
+google-services-mcp set-default <name>  # set the default account
+google-services-mcp status              # show config and token health
+google-services-mcp --help              # show help
 ```
 
 ## For AI agents
@@ -189,7 +189,7 @@ google-service-mcp --help              # show help
 
 ## Security
 
-- OAuth tokens are stored in `~/.google-service-mcp/accounts/<account-name>.json`
+- OAuth tokens are stored in `~/.google-services-mcp/accounts/<account-name>.json`
   with restrictive file permissions. Keep them private — never commit them.
 - The server never logs tokens or credentials.
 - Scopes requested: Gmail modify, Calendar, Drive, Contacts, Tasks, Sheets,
@@ -209,8 +209,8 @@ google-service-mcp --help              # show help
 ## Local development
 
 ```bash
-git clone https://github.com/nabheet/google-service-mcp.git
-cd google-service-mcp
+git clone https://github.com/nabheet/google-services-mcp.git
+cd google-services-mcp
 npm install
 npm run build        # compile to dist/
 npm test             # vitest, TDD suites
