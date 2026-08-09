@@ -59,6 +59,19 @@ describe("cli dispatch", () => {
     expect(addAccount).toHaveBeenCalledWith("work");
   });
 
+  it("add passes --timeout seconds to authManager", async () => {
+    addAccount.mockResolvedValue({ name: "work", email: "a@example.com" });
+    const result = await dispatchCommand(["add", "work", "--timeout", "120"]);
+    expect(result.exitCode).toBe(0);
+    expect(addAccount).toHaveBeenCalledWith("work", { timeoutMs: 120_000 });
+  });
+
+  it("add ignores a malformed --timeout value", async () => {
+    addAccount.mockResolvedValue({ name: "work", email: "a@example.com" });
+    await dispatchCommand(["add", "work", "--timeout", "not-a-number"]);
+    expect(addAccount).toHaveBeenCalledWith("work");
+  });
+
   it("add surfaces errors", async () => {
     addAccount.mockRejectedValue(new Error("bad secret"));
     const result = await dispatchCommand(["add", "work"]);

@@ -38,6 +38,8 @@ export const DEFAULT_SCOPES: string[] = [
   "https://www.googleapis.com/auth/youtube",
   // Forms: read/write forms and responses
   "https://www.googleapis.com/auth/forms",
+  // Identity: lets fetchUserInfo return the signed-in email for account display
+  "https://www.googleapis.com/auth/userinfo.email",
 ];
 
 export interface Config {

@@ -11,7 +11,7 @@ const HELP = `google-services-mcp — Google services MCP server
 
 Usage:
   google-services-mcp                 Run the MCP server over stdio
-  google-services-mcp add <name>      Add a Google account (opens browser)
+  google-services-mcp add <name> [--timeout <seconds>]  Add a Google account (opens browser)
   google-services-mcp list            List connected accounts
   google-services-mcp remove <name>   Remove an account
   google-services-mcp set-default <name>  Set the default account
@@ -19,6 +19,14 @@ Usage:
   google-services-mcp --version       Print version
   google-services-mcp --help          Show this help
 `;
+
+/** Parse an optional `--timeout <seconds>` flag into milliseconds. */
+function parseTimeout(args: string[]): number | undefined {
+  const idx = args.indexOf("--timeout");
+  if (idx === -1) return undefined;
+  const seconds = Number(args[idx + 1]);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : undefined;
+}
 
 /** Pure dispatch used by the CLI. Returns exit code + text output. */
 export async function dispatchCommand(args: string[]): Promise<CliResult> {
@@ -38,9 +46,12 @@ export async function dispatchCommand(args: string[]): Promise<CliResult> {
     }
     case "add": {
       const name = rest[0];
-      if (!name) return { exitCode: 1, output: "Usage: google-services-mcp add <name>\n" };
+      if (!name) {
+        return { exitCode: 1, output: "Usage: google-services-mcp add <name> [--timeout <seconds>]\n" };
+      }
       try {
-        const account = await authManager.addAccount(name);
+        const timeoutMs = parseTimeout(rest);
+        const account = await authManager.addAccount(name, ...(timeoutMs ? [{ timeoutMs }] : []));
         return {
           exitCode: 0,
           output: `Added account "${account.name}" for ${account.email}\n`,
