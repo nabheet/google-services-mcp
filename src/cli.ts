@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { authManager } from "./auth/manager.js";
 
 export interface CliResult {
@@ -5,7 +6,23 @@ export interface CliResult {
   output: string;
 }
 
-const VERSION = "0.1.0";
+/**
+ * Read the package version at runtime instead of hardcoding it, so
+ * `--version` always matches the actually-published version (the publish
+ * workflow bumps package.json before packing, so the hardcoded string would
+ * drift). Resolves relative to this module — works from src/ (tsx dev) and
+ * dist/ (compiled) alike.
+ */
+const VERSION = ((): string => {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+    ) as { version?: string };
+    return pkg.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+})();
 
 const HELP = `google-services-mcp — Google services MCP server
 
