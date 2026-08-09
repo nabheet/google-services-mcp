@@ -78,3 +78,13 @@ node dist/main.js --help
 ## CLI commands
 
 `serve` (default), `add <name>`, `list`, `remove <name>`, `set-default <name>`, `status`, `--help`, `--version`. `dispatchCommand()` is pure and unit-tested; `main.ts` owns process I/O.
+
+## Releases (CI/CD only)
+
+All publishing happens from GitHub Actions via npm **trusted publishing** (OIDC provenance) — no local npm login/token.
+
+- `.github/workflows/ci.yml` — typecheck/test/build on `main` + PRs (Node 24)
+- `.github/workflows/publish.yml` — on tag `v*`: publish `latest`; on tag `v*-beta*`: publish `beta` + prerelease GitHub release
+- `.github/workflows/publish-stage.yml` — on push to `dev` or manual dispatch: bump to next `-beta.X` prerelease (no git change), publish to `beta` tag
+
+Never publish from a local shell. Version bumps flow through `npm version` + git tags, never manual package.json edits for releases.

@@ -28,7 +28,7 @@ create documents and spreadsheets, and more — using your real Google data.
 
 ## Requirements
 
-- Node.js **18+**
+- Node.js **24+** (CI runs Node 24; local dev on 26)
 - A Google Cloud project with the required APIs enabled and an OAuth 2.0
   **Desktop app** client (one-time setup, ~10 minutes — see below)
 
@@ -38,8 +38,21 @@ create documents and spreadsheets, and more — using your real Google data.
 npm install -g google-services-mcp
 ```
 
-> **Note:** until the first public release lands on npm, install from source
-> instead — see [Local development](#local-development).
+### Release channels
+
+- `latest` — stable releases, published from `v*` git tags
+- `beta` — staging builds, auto-published from every push to `dev`
+  (e.g. `0.1.1-beta.0`)
+
+Try the staging channel without touching your stable install:
+
+```bash
+npm install -g google-services-mcp@beta
+npx -y google-services-mcp@beta --version
+```
+
+All publishes are signed with npm **provenance** (trusted publishing via
+GitHub Actions OIDC) — no npm token is stored in CI.
 
 ## Quick start
 
@@ -219,6 +232,30 @@ npm run dev          # run from source with tsx
 ```
 
 See [AGENTS.md](AGENTS.md) for architecture and conventions.
+
+## Releases (maintainers)
+
+All publishing happens from GitHub Actions — no local npm login needed:
+
+1. **Staging** — every push to `dev` auto-publishes a `beta` build
+   (`0.1.1-beta.X`) under the `beta` dist-tag with provenance. Trigger it
+   manually from the Actions tab ("Publish staging build") if needed.
+2. **Stable** — bump the version, then tag and push:
+
+   ```bash
+   npm version patch   # or minor / major — creates the tag, updates package.json
+   git push --tags
+   ```
+
+   The `v*` tag triggers `publish.yml`: it runs tests + build, publishes to
+   `latest` (or `beta` for `v*-beta*` tags) with provenance, and creates a
+   GitHub release. Follow the package version with a `-beta.N` suffix
+   (`0.2.0-beta.1`) for prerelease tags.
+
+Publishing uses npm **trusted publishing** (OIDC): configure it once per
+package at `npmjs.com/package/google-services-mcp/access` with the GitHub
+repository `nabheet/google-services-mcp` and workflow names `publish.yml` +
+`publish-stage.yml`. No `NPM_TOKEN` secret is required.
 
 ## License
 
