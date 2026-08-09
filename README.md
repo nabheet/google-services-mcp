@@ -140,6 +140,14 @@ Open the [Google Cloud Console](https://console.cloud.google.com/), choose
 `Google Tasks API` · `Google Sheets API` · `Google Docs API` ·
 `Google Slides API` · `YouTube Data API v3` · `Google Forms API`
 
+> **Automated:** with the `gcloud` CLI installed and authenticated
+> (`gcloud auth login`), enable all 10 APIs at once — idempotent, safe to
+> re-run:
+>
+> ```bash
+> bash scripts/enable-apis.sh --project your-project-id
+> ```
+
 ### 4. Create OAuth client credentials
 
 **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
