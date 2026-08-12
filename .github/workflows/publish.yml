@@ -20,6 +20,10 @@ name: Publish to npm
 # tags do), so no publish loop.
 #
 # npm trusted publishing (OIDC) auto-generates provenance — no token needed.
+#
+# Concurrency: publishes are serialized so two rapid merges can't race the
+# same next-version. Retry: 3 attempts, transient failures only — a version
+# conflict (version already published) is NEVER retried.
 
 on:
   push:
@@ -27,12 +31,17 @@ on:
     tags: ["v*-beta*"]
   workflow_dispatch:
 
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write # trusted publishing (OIDC)
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -41,8 +50,11 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org/
       - run: npm ci
+        timeout-minutes: 2
       - run: npm test
+        timeout-minutes: 2
       - run: npm run build
+        timeout-minutes: 2
       - name: Determine channel (latest / beta / staging)
         id: channel
         run: |
@@ -89,19 +101,37 @@ jobs:
           fi
       - name: Show publishing target
         run: 'echo "Publishing $(npm pkg get version) to tag ${{ steps.channel.outputs.tag }}"'
-      - name: Publish
-        run: npm publish --tag ${{ steps.channel.outputs.tag }} --provenance --access public
-      - name: Create tag + GitHub release (stable only)
+      - name: Publish (retry transient only)
+        timeout-minutes: 5
+        run: |
+          for i in $(seq 1 3); do
+            OUT=$(npm publish --tag ${{ steps.channel.outputs.tag }} --provenance --access public 2>&1) && { echo "$OUT"; exit 0; }
+            if echo "$OUT" | grep -qE "cannot publish over|previously published"; then
+              echo "$OUT" >&2
+              echo "Version conflict — not retrying" >&2
+              exit 1
+            fi
+            echo "$OUT"
+            echo "Publish failed (transient?), retrying ($i/3)..."
+            sleep 3
+          done
+          exit 1
+      - name: Push tag (stable only)
+        id: tag
         if: steps.channel.outputs.tag == 'latest'
         run: |
           V=$(npm pkg get version | tr -d '"')
+          echo "published=$V" >> "$GITHUB_OUTPUT"
           git tag "v$V"
           git push origin "v$V"
-          gh release create "v$V" --generate-notes --repo ${{ github.repository }}
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: softprops/action-gh-release@v2
+        if: steps.channel.outputs.tag == 'latest'
+        with:
+          tag_name: v${{ steps.tag.outputs.published }}
+          generate_release_notes: true
       - uses: softprops/action-gh-release@v2
         if: github.ref_type == 'tag'
         with:
+          tag_name: ${{ github.ref_name }}
           generate_release_notes: true
           prerelease: true
