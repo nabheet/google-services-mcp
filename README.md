@@ -34,20 +34,50 @@ create documents and spreadsheets, and more — using your real Google data.
 
 ## Install
 
+No install needed — run straight from npm via `npx`:
+
+```bash
+npx -y google-services-mcp --version
+```
+
+`npx` downloads the package on first run and caches it. Every command in
+this README (`add`, `list`, `status`, ...) works the same way:
+
+```bash
+npx -y google-services-mcp add personal
+```
+
+> **Pin a version for reproducibility** — check the current release with
+> `npm view google-services-mcp version`, then run an exact version:
+>
+> ```bash
+> npx -y google-services-mcp@<version> add personal
+> ```
+>
+> MCP clients auto-launch this server, so pinning avoids surprise breakage
+> when a new release ships.
+
+### Alternative: global install
+
+Prefer a persistent `google-services-mcp` command (and faster MCP client
+startup)?
+
 ```bash
 npm install -g google-services-mcp
 ```
+
+Then replace `npx -y google-services-mcp` with `google-services-mcp`
+everywhere below.
 
 ### Release channels
 
 - `latest` — stable releases, published automatically on every merge to `main`
 - `beta` — staging builds, published manually from `main`
-  (e.g. `0.1.1-beta.0`)
+  (e.g. `0.x.x-beta.0`)
 
 Try the staging channel without touching your stable install:
 
 ```bash
-npm install -g google-services-mcp@beta
 npx -y google-services-mcp@beta --version
 ```
 
@@ -59,7 +89,7 @@ GitHub Actions OIDC) — no npm token is stored in CI.
 1. **Add a Google account** — opens your browser for one-time authorization:
 
    ```bash
-   google-services-mcp add personal
+   npx -y google-services-mcp add personal
    ```
 
 2. **Register the server** with your MCP client (see
@@ -67,12 +97,14 @@ GitHub Actions OIDC) — no npm token is stored in CI.
    opencode, and generic configs).
 
 3. **Start using it** — ask your agent to "check my email" or "add an event to
-   my calendar". Or add more accounts any time: `google-services-mcp add work`.
+   my calendar". Or add more accounts any time: `npx -y google-services-mcp add work`.
 
 ## MCP client configuration
 
-The server speaks MCP over stdio. Point your client at the `google-services-mcp`
-executable and pass your OAuth credentials via environment variables.
+The server speaks MCP over stdio. Point your client at the
+`google-services-mcp` package via `npx` and pass your OAuth credentials via
+environment variables. (If you installed globally, use `google-services-mcp`
+as the command instead.)
 
 ### opencode
 
@@ -83,7 +115,7 @@ In `opencode.json` (or your global config):
   "mcp": {
     "google-services-mcp": {
       "type": "local",
-      "command": ["google-services-mcp"],
+      "command": ["npx", "-y", "google-services-mcp"],
       "enabled": true,
       "environment": {
         "GOOGLE_MCP_CLIENT_ID": "your-client-id",
@@ -102,7 +134,8 @@ In the client's MCP settings file (e.g. `claude_desktop_config.json`):
 {
   "mcpServers": {
     "google-services-mcp": {
-      "command": "google-services-mcp",
+      "command": "npx",
+      "args": ["-y", "google-services-mcp"],
       "env": {
         "GOOGLE_MCP_CLIENT_ID": "your-client-id",
         "GOOGLE_MCP_CLIENT_SECRET": "your-client-secret"
@@ -179,7 +212,7 @@ GOOGLE_MCP_REDIRECT_PORT=8787          # local loopback port for OAuth (default 
 ### 6. Connect your first account
 
 ```bash
-google-services-mcp add personal
+npx -y google-services-mcp add personal
 ```
 
 A browser opens to the Google consent screen. After you approve, the account is
@@ -189,13 +222,13 @@ different name (e.g. `work`) to connect more accounts.
 ## CLI reference
 
 ```
-google-services-mcp                     # run the MCP server over stdio
-google-services-mcp add <name>          # add a Google account (opens browser)
-google-services-mcp list                # list connected accounts
-google-services-mcp remove <name>       # remove an account
-google-services-mcp set-default <name>  # set the default account
-google-services-mcp status              # show config and token health
-google-services-mcp --help              # show help
+npx -y google-services-mcp                     # run the MCP server over stdio
+npx -y google-services-mcp add <name>          # add a Google account (opens browser)
+npx -y google-services-mcp list                # list connected accounts
+npx -y google-services-mcp remove <name>       # remove an account
+npx -y google-services-mcp set-default <name>  # set the default account
+npx -y google-services-mcp status              # show config and token health
+npx -y google-services-mcp --help              # show help
 ```
 
 ## For AI agents
@@ -225,6 +258,7 @@ google-services-mcp --help              # show help
 | `access blocked` on consent | Account not in **Test users** (setup step 2.3) — add it and retry |
 | `redirect_uri_mismatch` | Redirect URI must be exactly `http://localhost:8787` — no trailing slash — and match what your OAuth client allows |
 | Tokens stop working after ~7 days | App is in **Testing** mode — re-run `add`, or **Publish app** on the consent screen |
+| `npx: command not found` in the MCP client | GUI clients (Claude Desktop, Cursor) may not inherit your shell PATH — use the absolute path to `npx` (e.g. `/usr/local/bin/npx`) or install globally |
 | `Google hasn't verified this app` | Normal for unverified apps — click **Advanced → Continue** for personal use |
 
 ## Local development
