@@ -284,7 +284,7 @@ All publishing happens from GitHub Actions — no local npm login needed:
    release. No manual steps. The next version is derived from the last
    published `latest` on npm, so repeated merges never collide; an
    intentional minor/major bump in `package.json` is honored.
-2. **Staging** — manual beta builds from `main`: **Actions → Publish to npm
+2. **Staging** — manual beta builds from `main`: **Actions → CI
    → Run workflow**. Publishes a `beta` build (`0.1.1-beta.X`) under the
    `beta` dist-tag with provenance.
 
@@ -292,9 +292,9 @@ Prerelease tags `v*-beta*` publish to `beta` with a prerelease GitHub release
 (patch/minor builds for milestone testing). Publishing uses npm **trusted
 publishing** (OIDC): configure it once per package at
 `npmjs.com/package/google-services-mcp/access` with the GitHub repository
-`nabheet/google-services-mcp` and workflow name `publish.yml`.
+`nabheet/google-services-mcp` and workflow name `ci.yml`.
 npm allows **one trusted publisher per package** and validates the calling
-workflow's filename — all channels run from the same `publish.yml` file.
+workflow's filename — all channels run from the same `ci.yml` file.
 No `NPM_TOKEN` secret is required.
 
 ## License
