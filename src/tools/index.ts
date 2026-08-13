@@ -695,7 +695,7 @@ export function registerTools(server: McpServer): void {
       description: "Send raw Sheets batchUpdate requests (add/delete sheets, formatting, etc.).",
       inputSchema: {
         spreadsheetId: z.string().describe("Spreadsheet ID."),
-        requests: z.array(z.record(z.any())).describe("Sheets API batchUpdate requests."),
+        requests: z.array(z.record(z.string(), z.any())).describe("Sheets API batchUpdate requests."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
@@ -783,7 +783,7 @@ export function registerTools(server: McpServer): void {
       description: "Send raw Docs batchUpdate requests (styles, tables, headers, etc.).",
       inputSchema: {
         documentId: z.string().describe("Document ID."),
-        requests: z.array(z.record(z.any())).describe("Docs API batchUpdate requests."),
+        requests: z.array(z.record(z.string(), z.any())).describe("Docs API batchUpdate requests."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
