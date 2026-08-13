@@ -128,12 +128,12 @@ jobs:
           echo "published=$V" >> "$GITHUB_OUTPUT"
           git tag "v$V"
           git push origin "v$V"
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         if: steps.channel.outputs.tag == 'latest'
         with:
           tag_name: v${{ steps.tag.outputs.published }}
           generate_release_notes: true
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         if: github.ref_type == 'tag'
         with:
           tag_name: ${{ github.ref_name }}
