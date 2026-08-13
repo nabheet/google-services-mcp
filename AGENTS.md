@@ -83,7 +83,7 @@ node dist/main.js --help
 
 All publishing happens from GitHub Actions via npm **trusted publishing** (OIDC provenance) — no local npm login/token.
 
-- `.github/workflows/ci.yml` — typecheck/test/build on `main` + PRs (Node 24)
+- `.github/workflows/ci.yml` — typecheck/test/build on `main` + PRs (Node 24). On every PR push a `prerelease` job publishes `<version>-beta.<run_number>` to the `beta` dist-tag (`npm i google-services-mcp@beta`), so every PR is instantly installable (same-repo, non-draft, non-dependabot PRs; re-runs deduped).
 - `.github/workflows/publish.yml` — the single publishing workflow (npm allows ONE trusted publisher per package; workflow filename must match):
   - push to `main` → auto-publish next patch to `latest` + create `vX.Y.Z` tag + GitHub release (version derived from last published `latest`; intentional minor/major bumps in package.json are honored)
   - tag `v*-beta*` → publish `beta` + prerelease GitHub release

@@ -23,3 +23,69 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: node dist/main.js --version
+
+  # Per-PR beta prerelease: every PR push publishes a unique <version>-beta.<run_number>
+  # to the npm `beta` dist-tag, so every PR is instantly installable
+  # (`npm i google-services-mcp@beta`). run_number increases per workflow run, so
+  # each push gets a unique version; re-runs collide with themselves and are
+  # deduped (conflict = exit 0). Same-repo, non-draft, non-dependabot PRs only.
+  prerelease:
+    runs-on: ubuntu-latest
+    needs: test
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    concurrency:
+      group: pr-prerelease-${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      id-token: write # trusted publishing (OIDC)
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org/
+      - run: npm ci
+      - run: npm run build
+      - name: Compute prerelease version
+        id: version
+        run: |
+          BASE=$(npm pkg get version | tr -d '"')
+          echo "version=${BASE}-beta.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+      - name: Set version (no git change)
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --no-commit-hooks
+      - name: Publish beta prerelease
+        timeout-minutes: 5
+        run: |
+          for i in $(seq 1 3); do
+            OUT=$(npm publish --tag beta --provenance --access public 2>&1) && { echo "$OUT"; exit 0; }
+            if echo "$OUT" | grep -qE "cannot publish over|previously published"; then
+              echo "$OUT" >&2
+              echo "Version conflict (workflow re-run) — deduped" >&2
+              exit 0
+            fi
+            echo "$OUT"
+            echo "Publish failed (transient?), retrying ($i/3)..."
+            sleep 3
+          done
+          exit 1
+      - name: Comment version on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `Beta prerelease published: \`${{ steps.version.outputs.version }}\` — installable with \`npm i google-services-mcp@beta\`.`;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number
+            });
+            const marker = comments.find(c => c.user.login === 'github-actions[bot]' && c.body.startsWith('Beta prerelease published:'));
+            if (marker) {
+              await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: marker.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
+            }
