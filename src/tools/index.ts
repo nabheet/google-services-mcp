@@ -2,7 +2,26 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { ok, err } from "../util/result.js";
 import { authManager } from "../auth/manager.js";
-import { sendGmail, listGmailMessages, getGmailMessage, modifyGmailMessage, replyGmail } from "../services/gmail.js";
+import {
+  sendGmail,
+  listGmailMessages,
+  getGmailMessage,
+  modifyGmailMessage,
+  replyGmail,
+  listGmailAttachments,
+  getGmailAttachment,
+  createGmailDraft,
+  listGmailDrafts,
+  getGmailDraft,
+  sendGmailDraft,
+  deleteGmailDraft,
+  listGmailLabels,
+  createGmailLabel,
+  deleteGmailLabel,
+  trashGmailMessage,
+  untrashGmailMessage,
+  deleteGmailMessage,
+} from "../services/gmail.js";
 import {
   listCalendars,
   listEvents,
@@ -19,6 +38,10 @@ import {
   updateDriveFile,
   deleteDriveFile,
   shareDriveFile,
+  downloadDriveFile,
+  exportDriveFile,
+  createDriveFolder,
+  copyDriveFile,
 } from "../services/drive.js";
 import {
   listContacts,
@@ -48,10 +71,12 @@ import {
 } from "../services/docs.js";
 import {
   getPresentation,
+  getSlidePage,
   createPresentation,
   replaceAllText as replaceSlidesText,
   createSlide,
   deleteSlide,
+  batchUpdatePresentation,
 } from "../services/slides.js";
 import {
   searchVideos,
@@ -258,6 +283,207 @@ export function registerTools(server: McpServer): void {
     },
     async ({ threadId, messageId, body, bodyType, account }) =>
       withClient(account, (client) => replyGmail(client, { threadId, messageId, body, bodyType }))
+  );
+
+  server.registerTool(
+    "google_gmail_list_attachments",
+    {
+      title: "List email attachments",
+      description: "List attachments on a message (metadata only, no bytes).",
+      inputSchema: {
+        id: z.string().describe("Message ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ id, account }) => withClient(account, (client) => listGmailAttachments(client, { id }))
+  );
+
+  server.registerTool(
+    "google_gmail_get_attachment",
+    {
+      title: "Get email attachment",
+      description: "Download a single attachment by message ID and attachment ID. Text-like files are returned decoded as text; binary files as base64.",
+      inputSchema: {
+        id: z.string().describe("Message ID."),
+        attachmentId: z.string().describe("Attachment ID (from list_attachments)."),
+        partId: z.string().optional().describe("Stable part ID (from list_attachments); preferred over attachmentId for lookup."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ id, attachmentId, partId, account }) =>
+      withClient(account, (client) => getGmailAttachment(client, { id, attachmentId, partId }))
+  );
+
+  server.registerTool(
+    "google_gmail_drafts_create",
+    {
+      title: "Create email draft",
+      description: "Create a draft email (not sent).",
+      inputSchema: {
+        to: z.union([z.string(), z.array(z.string())]).describe("Recipient email(s)."),
+        subject: z.string().describe("Subject line."),
+        body: z.string().describe("Message body."),
+        cc: z.union([z.string(), z.array(z.string())]).optional().describe("CC recipient(s)."),
+        bcc: z.union([z.string(), z.array(z.string())]).optional().describe("BCC recipient(s)."),
+        bodyType: z.enum(["text", "html"]).optional().describe("Body format (default text)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ to, subject, body, cc, bcc, bodyType, account }) =>
+      withClient(account, (client) => createGmailDraft(client, { to, subject, body, cc, bcc, bodyType }))
+  );
+
+  server.registerTool(
+    "google_gmail_drafts_list",
+    {
+      title: "List email drafts",
+      description: "List draft emails.",
+      inputSchema: {
+        maxResults: z.number().min(1).max(100).optional().describe("Max drafts (default 25)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ maxResults, account }) => withClient(account, (client) => listGmailDrafts(client, { maxResults }))
+  );
+
+  server.registerTool(
+    "google_gmail_drafts_get",
+    {
+      title: "Get email draft",
+      description: "Fetch a single draft with parsed headers and body.",
+      inputSchema: {
+        id: z.string().describe("Draft ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ id, account }) => withClient(account, (client) => getGmailDraft(client, { id }))
+  );
+
+  server.registerTool(
+    "google_gmail_drafts_send",
+    {
+      title: "Send email draft",
+      description: "Send an existing draft email.",
+      inputSchema: {
+        id: z.string().describe("Draft ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ id, account }) => withClient(account, (client) => sendGmailDraft(client, { id }))
+  );
+
+  server.registerTool(
+    "google_gmail_drafts_delete",
+    {
+      title: "Delete email draft",
+      description: "Delete a draft email.",
+      inputSchema: {
+        id: z.string().describe("Draft ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ id, account }) => {
+      try {
+        const client = await authManager.getClient(account);
+        return ok(await deleteGmailDraft(client, { id }));
+      } catch (error) {
+        return err(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "google_gmail_labels_list",
+    {
+      title: "List email labels",
+      description: "List all Gmail labels.",
+      inputSchema: {
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ account }) => withClient(account, (client) => listGmailLabels(client))
+  );
+
+  server.registerTool(
+    "google_gmail_labels_create",
+    {
+      title: "Create email label",
+      description: "Create a custom Gmail label.",
+      inputSchema: {
+        name: z.string().describe("Label name."),
+        messageListVisibility: z.string().optional().describe("e.g. show or hide."),
+        labelListVisibility: z.string().optional().describe("e.g. labelShow or labelHide."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ name, messageListVisibility, labelListVisibility, account }) =>
+      withClient(account, (client) => createGmailLabel(client, { name, messageListVisibility, labelListVisibility }))
+  );
+
+  server.registerTool(
+    "google_gmail_labels_delete",
+    {
+      title: "Delete email label",
+      description: "Delete a Gmail label.",
+      inputSchema: {
+        id: z.string().describe("Label ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ id, account }) => {
+      try {
+        const client = await authManager.getClient(account);
+        return ok(await deleteGmailLabel(client, { id }));
+      } catch (error) {
+        return err(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "google_gmail_trash",
+    {
+      title: "Trash email",
+      description: "Move a message to trash.",
+      inputSchema: {
+        id: z.string().describe("Message ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ id, account }) => withClient(account, (client) => trashGmailMessage(client, { id }))
+  );
+
+  server.registerTool(
+    "google_gmail_untrash",
+    {
+      title: "Restore email from trash",
+      description: "Restore a message from trash.",
+      inputSchema: {
+        id: z.string().describe("Message ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ id, account }) => withClient(account, (client) => untrashGmailMessage(client, { id }))
+  );
+
+  server.registerTool(
+    "google_gmail_delete",
+    {
+      title: "Delete email permanently",
+      description: "Permanently delete a message (irreversible).",
+      inputSchema: {
+        id: z.string().describe("Message ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ id, account }) => {
+      try {
+        const client = await authManager.getClient(account);
+        return ok(await deleteGmailMessage(client, { id }));
+      } catch (error) {
+        return err(error);
+      }
+    }
   );
 
   // ---- Calendar -----------------------------------------------------------
@@ -485,6 +711,63 @@ export function registerTools(server: McpServer): void {
     },
     async ({ fileId, email, role, sendNotificationEmail, account }) =>
       withClient(account, (client) => shareDriveFile(client, { fileId, email, role, sendNotificationEmail }))
+  );
+
+  server.registerTool(
+    "google_drive_download",
+    {
+      title: "Download Drive file",
+      description: "Download a file's raw bytes (non-Google-native files). Text content returns decoded text; binary returns base64.",
+      inputSchema: {
+        fileId: z.string().describe("Drive file ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ fileId, account }) => withClient(account, (client) => downloadDriveFile(client, { fileId }))
+  );
+
+  server.registerTool(
+    "google_drive_export",
+    {
+      title: "Export Drive file",
+      description: "Export a Google-native file (Docs/Sheets/Slides/Drawings) to another format (e.g. application/pdf, text/plain, application/vnd.openxmlformats-officedocument.wordprocessingml.document).",
+      inputSchema: {
+        fileId: z.string().describe("Drive file ID."),
+        mimeType: z.string().describe("Target MIME type (e.g. application/pdf)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ fileId, mimeType, account }) =>
+      withClient(account, (client) => exportDriveFile(client, { fileId, mimeType }))
+  );
+
+  server.registerTool(
+    "google_drive_create_folder",
+    {
+      title: "Create Drive folder",
+      description: "Create a folder in Drive.",
+      inputSchema: {
+        name: z.string().describe("Folder name."),
+        parentFolderId: z.string().optional().describe("Parent folder ID (root if omitted)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ name, parentFolderId, account }) =>
+      withClient(account, (client) => createDriveFolder(client, { name, parentFolderId }))
+  );
+
+  server.registerTool(
+    "google_drive_copy",
+    {
+      title: "Copy Drive file",
+      description: "Copy a file, optionally with a new name.",
+      inputSchema: {
+        fileId: z.string().describe("Drive file ID."),
+        name: z.string().optional().describe("New name."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ fileId, name, account }) => withClient(account, (client) => copyDriveFile(client, { fileId, name }))
   );
 
   // ---- Contacts -----------------------------------------------------------
@@ -861,6 +1144,36 @@ export function registerTools(server: McpServer): void {
     },
     async ({ presentationId, slideObjectId, account }) =>
       withClient(account, (client) => deleteSlide(client, { presentationId, slideObjectId }))
+  );
+
+  server.registerTool(
+    "google_slides_get_page",
+    {
+      title: "Get slide page",
+      description: "Get the contents of a single slide page by object ID.",
+      inputSchema: {
+        presentationId: z.string().describe("Presentation ID."),
+        pageObjectId: z.string().describe("Slide page object ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ presentationId, pageObjectId, account }) =>
+      withClient(account, (client) => getSlidePage(client, { presentationId, pageObjectId }))
+  );
+
+  server.registerTool(
+    "google_slides_batch_update",
+    {
+      title: "Batch update presentation",
+      description: "Send raw Slides batchUpdate requests (create textboxes, shapes, images, style elements, etc.).",
+      inputSchema: {
+        presentationId: z.string().describe("Presentation ID."),
+        requests: z.array(z.any()).describe("Slides API batchUpdate requests array."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ presentationId, requests, account }) =>
+      withClient(account, (client) => batchUpdatePresentation(client, { presentationId, requests }))
   );
 
   // ---- YouTube ------------------------------------------------------------
