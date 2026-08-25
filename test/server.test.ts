@@ -91,6 +91,19 @@ describe("server tool registration", () => {
     expect(names).toContain("google_gmail_get");
     expect(names).toContain("google_gmail_modify");
     expect(names).toContain("google_gmail_reply");
+    expect(names).toContain("google_gmail_list_attachments");
+    expect(names).toContain("google_gmail_get_attachment");
+    expect(names).toContain("google_gmail_drafts_create");
+    expect(names).toContain("google_gmail_drafts_list");
+    expect(names).toContain("google_gmail_drafts_get");
+    expect(names).toContain("google_gmail_drafts_send");
+    expect(names).toContain("google_gmail_drafts_delete");
+    expect(names).toContain("google_gmail_labels_list");
+    expect(names).toContain("google_gmail_labels_create");
+    expect(names).toContain("google_gmail_labels_delete");
+    expect(names).toContain("google_gmail_trash");
+    expect(names).toContain("google_gmail_untrash");
+    expect(names).toContain("google_gmail_delete");
     expect(names).toContain("google_calendar_list_calendars");
     expect(names).toContain("google_calendar_list_events");
     expect(names).toContain("google_calendar_create_event");
@@ -104,6 +117,10 @@ describe("server tool registration", () => {
     expect(names).toContain("google_drive_update");
     expect(names).toContain("google_drive_delete");
     expect(names).toContain("google_drive_share");
+    expect(names).toContain("google_drive_download");
+    expect(names).toContain("google_drive_export");
+    expect(names).toContain("google_drive_create_folder");
+    expect(names).toContain("google_drive_copy");
     expect(names).toContain("google_contacts_list");
     expect(names).toContain("google_contacts_search");
     expect(names).toContain("google_contacts_create");
@@ -129,6 +146,8 @@ describe("server tool registration", () => {
     expect(names).toContain("google_slides_replace_text");
     expect(names).toContain("google_slides_add_slide");
     expect(names).toContain("google_slides_delete_slide");
+    expect(names).toContain("google_slides_get_page");
+    expect(names).toContain("google_slides_batch_update");
     expect(names).toContain("google_youtube_search");
     expect(names).toContain("google_youtube_get_video");
     expect(names).toContain("google_youtube_my_videos");
@@ -141,7 +160,7 @@ describe("server tool registration", () => {
     expect(names).toContain("google_forms_responses");
     expect(names).toContain("google_forms_create");
     expect(names).toContain("google_forms_add_question");
-    expect(names.length).toBe(60);
+    expect(names.length).toBe(79);
   });
 });
 
