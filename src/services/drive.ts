@@ -42,6 +42,27 @@ export interface DriveFile {
   webViewLink?: string;
 }
 
+export interface DownloadDriveResult {
+  /** Base64-encoded raw bytes (binary) or the raw string (text). */
+  data: string;
+  binary: boolean;
+  mimeType?: string;
+}
+
+async function mapDownload(res: any): Promise<DownloadDriveResult> {
+  let data = res.data;
+  // googleapis returns a Blob (not Buffer/string) for alt=media and binary
+  // exports — convert so Buffer.isBuffer works below.
+  if (typeof Blob !== "undefined" && data instanceof Blob) {
+    data = Buffer.from(await data.arrayBuffer());
+  }
+  const binary = Buffer.isBuffer(data);
+  return {
+    data: binary ? data.toString("base64") : String(data ?? ""),
+    binary,
+  };
+}
+
 /** List files, optionally filtered by a Drive query (e.g. "'<folderId>' in parents"). */
 export async function listDriveFiles(client: Auth.OAuth2Client, opts: ListDriveOptions): Promise<DriveFile[]> {
   const drive = google.drive({ version: "v3", auth: client });
@@ -122,4 +143,45 @@ function mapFile(f: any): DriveFile {
     modifiedTime: f.modifiedTime as string | undefined,
     webViewLink: f.webViewLink as string | undefined,
   };
+}
+
+/** Download a file's raw bytes (non-Google-native files). */
+export async function downloadDriveFile(client: Auth.OAuth2Client, opts: GetDriveOptions): Promise<DownloadDriveResult> {
+  const drive = google.drive({ version: "v3", auth: client });
+  const res = await drive.files.get({ fileId: opts.fileId, alt: "media" });
+  return mapDownload(res);
+}
+
+/** Export a Google-native file (Docs/Sheets/Slides) to another format. */
+export async function exportDriveFile(
+  client: Auth.OAuth2Client,
+  opts: GetDriveOptions & { mimeType: string }
+): Promise<DownloadDriveResult> {
+  const drive = google.drive({ version: "v3", auth: client });
+  const res = await drive.files.export({ fileId: opts.fileId, mimeType: opts.mimeType });
+  return mapDownload(res);
+}
+
+/** Create a folder. */
+export async function createDriveFolder(
+  client: Auth.OAuth2Client,
+  opts: { name: string; parentFolderId?: string }
+): Promise<DriveFile> {
+  const drive = google.drive({ version: "v3", auth: client });
+  const requestBody: any = { name: opts.name, mimeType: "application/vnd.google-apps.folder" };
+  if (opts.parentFolderId) requestBody.parents = [opts.parentFolderId];
+  const res = await drive.files.create({ requestBody });
+  return mapFile(res.data);
+}
+
+/** Copy a file. */
+export async function copyDriveFile(
+  client: Auth.OAuth2Client,
+  opts: GetDriveOptions & { name?: string }
+): Promise<DriveFile> {
+  const drive = google.drive({ version: "v3", auth: client });
+  const requestBody: any = {};
+  if (opts.name) requestBody.name = opts.name;
+  const res = await drive.files.copy({ fileId: opts.fileId, requestBody });
+  return mapFile(res.data);
 }
