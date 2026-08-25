@@ -6,6 +6,8 @@ const mockFiles = {
   create: vi.fn(),
   update: vi.fn(),
   delete: vi.fn(),
+  copy: vi.fn(),
+  export: vi.fn(),
 };
 const mockPermissions = { create: vi.fn(), delete: vi.fn() };
 
@@ -22,6 +24,10 @@ import {
   updateDriveFile,
   deleteDriveFile,
   shareDriveFile,
+  downloadDriveFile,
+  exportDriveFile,
+  createDriveFolder,
+  copyDriveFile,
 } from "../src/services/drive.js";
 
 const client = {} as never;
@@ -117,5 +123,76 @@ describe("shareDriveFile", () => {
     mockPermissions.create.mockResolvedValue({ data: {} });
     await shareDriveFile(client, { fileId: "f1", email: "__VG_EMAIL_b3e8b64ce83f__", role: "writer" });
     expect(mockPermissions.create.mock.calls[0][0].sendNotificationEmail).toBe(true);
+  });
+});
+
+describe("downloadDriveFile", () => {
+  it("returns decoded text for text responses", async () => {
+    mockFiles.get.mockResolvedValue({ data: "plain file content" });
+    const result = await downloadDriveFile(client, { fileId: "f1" });
+    expect(mockFiles.get).toHaveBeenCalledWith({ fileId: "f1", alt: "media" });
+    expect(result).toEqual({ data: "plain file content", binary: false });
+  });
+
+  it("returns base64 for binary responses", async () => {
+    mockFiles.get.mockResolvedValue({ data: Buffer.from([0x89, 0x50, 0x4e, 0x47]) });
+    const result = await downloadDriveFile(client, { fileId: "f1" });
+    expect(result.binary).toBe(true);
+    expect(Buffer.from(result.data, "base64")).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  });
+
+  it("converts Blob responses to base64 (real googleapis shape)", async () => {
+    mockFiles.get.mockResolvedValue({ data: new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])]) });
+    const result = await downloadDriveFile(client, { fileId: "f1" });
+    expect(result.binary).toBe(true);
+    expect(Buffer.from(result.data, "base64")).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  });
+});
+
+describe("exportDriveFile", () => {
+  it("requests a target mime type export", async () => {
+    mockFiles.export.mockResolvedValue({ data: "%PDF-1.4" });
+    const result = await exportDriveFile(client, { fileId: "f1", mimeType: "application/pdf" });
+    expect(mockFiles.export).toHaveBeenCalledWith({ fileId: "f1", mimeType: "application/pdf" });
+    expect(result).toEqual({ data: "%PDF-1.4", binary: false });
+  });
+
+  it("converts Blob export responses to base64 (real googleapis shape)", async () => {
+    mockFiles.export.mockResolvedValue({ data: new Blob([Buffer.from("%PDF-1.4 fake")]) });
+    const result = await exportDriveFile(client, { fileId: "f1", mimeType: "application/pdf" });
+    expect(result.binary).toBe(true);
+    expect(Buffer.from(result.data, "base64").toString()).toBe("%PDF-1.4 fake");
+  });
+});
+
+describe("createDriveFolder", () => {
+  it("creates a folder with the right mime type", async () => {
+    mockFiles.create.mockResolvedValue({ data: { id: "fld1", name: "Reports", mimeType: "application/vnd.google-apps.folder" } });
+    const result = await createDriveFolder(client, { name: "Reports" });
+    expect(mockFiles.create).toHaveBeenCalledWith({
+      requestBody: { name: "Reports", mimeType: "application/vnd.google-apps.folder" },
+    });
+    expect(result).toMatchObject({ id: "fld1", name: "Reports" });
+  });
+
+  it("places the folder in a parent when given", async () => {
+    mockFiles.create.mockResolvedValue({ data: { id: "fld2" } });
+    await createDriveFolder(client, { name: "Sub", parentFolderId: "fld1" });
+    expect(mockFiles.create.mock.calls[0][0].requestBody.parents).toEqual(["fld1"]);
+  });
+});
+
+describe("copyDriveFile", () => {
+  it("copies a file with an optional new name", async () => {
+    mockFiles.copy.mockResolvedValue({ data: { id: "f-copy", name: "notes copy.md" } });
+    const result = await copyDriveFile(client, { fileId: "f1", name: "notes copy.md" });
+    expect(mockFiles.copy).toHaveBeenCalledWith({ fileId: "f1", requestBody: { name: "notes copy.md" } });
+    expect(result.id).toBe("f-copy");
+  });
+
+  it("copies without renaming when no name is given", async () => {
+    mockFiles.copy.mockResolvedValue({ data: { id: "f-copy2" } });
+    await copyDriveFile(client, { fileId: "f1" });
+    expect(mockFiles.copy).toHaveBeenCalledWith({ fileId: "f1", requestBody: {} });
   });
 });
