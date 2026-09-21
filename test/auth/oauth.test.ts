@@ -4,9 +4,9 @@ import {
   buildAuthUrl,
   exchangeCode,
   fetchUserInfo,
+  generatePkce,
   refreshAccessToken,
   waitForOAuthCallback,
-  generatePkce,
 } from "../../src/auth/oauth.js";
 
 // Field names defined once as data so the environment's secret-scrubber does not
@@ -53,14 +53,16 @@ describe("buildAuthUrl", () => {
   });
 
   it("honors a custom redirect port and scopes", () => {
-    const url = new URL(buildAuthUrl(config({ redirectPort: 9999, scopes: ["s1", "s2"] }), "s", "ch"));
+    const url = new URL(
+      buildAuthUrl(config({ redirectPort: 9999, scopes: ["s1", "s2"] }), "s", "ch"),
+    );
     expect(url.searchParams.get("redirect_uri")).toBe("http://127.0.0.1:9999");
     expect(url.searchParams.get("scope")).toBe("s1 s2");
   });
 
   it("uses a configured redirectUri verbatim", () => {
     const url = new URL(
-      buildAuthUrl(config({ redirectUri: "http://localhost:9000/custom-callback" }), "s", "ch")
+      buildAuthUrl(config({ redirectUri: "http://localhost:9000/custom-callback" }), "s", "ch"),
     );
     expect(url.searchParams.get("redirect_uri")).toBe("http://localhost:9000/custom-callback");
   });

@@ -219,7 +219,11 @@ async function postTokenRequest(config: Config, body: Record<string, string>): P
 }
 
 /** Exchange an authorization code for tokens. */
-export async function exchangeCode(config: Config, code: string, codeVerifier: string): Promise<TokenSet> {
+export async function exchangeCode(
+  config: Config,
+  code: string,
+  codeVerifier: string,
+): Promise<TokenSet> {
   return postTokenRequest(config, {
     code,
     code_verifier: codeVerifier,
