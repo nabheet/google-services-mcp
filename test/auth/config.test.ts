@@ -1,21 +1,21 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import fs from "node:fs/promises";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   DEFAULT_SCOPES,
-  getDataDir,
-  getConfigPath,
-  getAccountsDir,
-  getAccountPath,
-  sanitizeName,
-  isValidName,
   ensureDirs,
-  loadConfig,
-  saveConfig,
-  saveClientCredentials,
+  getAccountPath,
+  getAccountsDir,
+  getConfigPath,
+  getDataDir,
   hasCredentials,
+  isValidName,
+  loadConfig,
+  sanitizeName,
+  saveClientCredentials,
+  saveConfig,
 } from "../../src/auth/config.js";
 
 let tmp: string;
@@ -136,7 +136,12 @@ describe("loadConfig / saveConfig", () => {
   });
 
   it("saveClientCredentials merges without clobbering other fields", async () => {
-    await saveConfig({ clientId: "", clientSecret: "", redirectPort: 7777, defaultAccount: "work" });
+    await saveConfig({
+      clientId: "",
+      clientSecret: "",
+      redirectPort: 7777,
+      defaultAccount: "work",
+    });
     await saveClientCredentials("merged-id", "merged-secret");
     const config = await loadConfig();
     expect(config.clientId).toBe("merged-id");

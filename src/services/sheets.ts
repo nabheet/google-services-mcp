@@ -45,11 +45,11 @@ export interface BatchUpdateArgs {
 
 export async function getSpreadsheet(
   client: Auth.OAuth2Client,
-  { spreadsheetId, range }: GetSpreadsheetArgs
-): Promise<any> {
+  { spreadsheetId, range }: GetSpreadsheetArgs,
+): Promise<sheets_v4.Schema$Spreadsheet> {
   const sheets = google.sheets({ version: "v4", auth: client });
   const meta = await sheets.spreadsheets.get({ spreadsheetId, includeGridData: false });
-  const result = meta.data as any;
+  const result = meta.data as sheets_v4.Schema$Spreadsheet & { values?: string[][] };
   if (range) {
     const values = await sheets.spreadsheets.values.get({ spreadsheetId, range });
     if (values.data?.values) {
@@ -61,7 +61,7 @@ export async function getSpreadsheet(
 
 export async function readSheetRange(
   client: Auth.OAuth2Client,
-  { spreadsheetId, range, majorDimension = "ROWS" as const }: ReadRangeArgs
+  { spreadsheetId, range, majorDimension = "ROWS" as const }: ReadRangeArgs,
 ): Promise<string[][]> {
   const sheets = google.sheets({ version: "v4", auth: client });
   const res = await sheets.spreadsheets.values.get({ spreadsheetId, range, majorDimension });
@@ -70,8 +70,8 @@ export async function readSheetRange(
 
 export async function writeSheetRange(
   client: Auth.OAuth2Client,
-  { spreadsheetId, range, values, valueInputOption = "USER_ENTERED" as const }: WriteRangeArgs
-): Promise<any> {
+  { spreadsheetId, range, values, valueInputOption = "USER_ENTERED" as const }: WriteRangeArgs,
+): Promise<sheets_v4.Schema$UpdateValuesResponse> {
   const sheets = google.sheets({ version: "v4", auth: client });
   const res = await sheets.spreadsheets.values.update({
     spreadsheetId,
@@ -84,8 +84,8 @@ export async function writeSheetRange(
 
 export async function appendSheetRange(
   client: Auth.OAuth2Client,
-  { spreadsheetId, range, values, valueInputOption = "USER_ENTERED" as const }: AppendRangeArgs
-): Promise<any> {
+  { spreadsheetId, range, values, valueInputOption = "USER_ENTERED" as const }: AppendRangeArgs,
+): Promise<sheets_v4.Schema$AppendValuesResponse> {
   const sheets = google.sheets({ version: "v4", auth: client });
   const res = await sheets.spreadsheets.values.append({
     spreadsheetId,
@@ -98,8 +98,8 @@ export async function appendSheetRange(
 
 export async function createSpreadsheet(
   client: Auth.OAuth2Client,
-  { title, sheets }: CreateSpreadsheetArgs
-): Promise<any> {
+  { title, sheets }: CreateSpreadsheetArgs,
+): Promise<sheets_v4.Schema$Spreadsheet> {
   const api = google.sheets({ version: "v4", auth: client });
   const requestBody: sheets_v4.Schema$Spreadsheet = { properties: { title } };
   if (sheets?.length) {
@@ -111,8 +111,8 @@ export async function createSpreadsheet(
 
 export async function batchUpdateSheet(
   client: Auth.OAuth2Client,
-  { spreadsheetId, requests }: BatchUpdateArgs
-): Promise<any> {
+  { spreadsheetId, requests }: BatchUpdateArgs,
+): Promise<sheets_v4.Schema$BatchUpdateSpreadsheetResponse> {
   const sheets = google.sheets({ version: "v4", auth: client });
   const res = await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } });
   return res.data;

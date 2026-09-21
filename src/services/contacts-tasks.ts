@@ -1,4 +1,4 @@
-import type { Auth } from "googleapis";
+import type { Auth, people_v1, tasks_v1 } from "googleapis";
 import { google } from "googleapis";
 
 export interface ListContactsOptions {
@@ -48,7 +48,10 @@ export interface TaskSummary {
 }
 
 /** List the signed-in user's contacts. */
-export async function listContacts(client: Auth.OAuth2Client, opts: ListContactsOptions): Promise<ContactSummary[]> {
+export async function listContacts(
+  client: Auth.OAuth2Client,
+  opts: ListContactsOptions,
+): Promise<ContactSummary[]> {
   const people = google.people({ version: "v1", auth: client });
   const res = await people.people.connections.list({
     resourceName: "people/me",
@@ -64,7 +67,10 @@ export async function listContacts(client: Auth.OAuth2Client, opts: ListContacts
 }
 
 /** Search all contacts (including not-connected ones) by name/email/phone. */
-export async function searchContacts(client: Auth.OAuth2Client, opts: SearchContactsOptions): Promise<ContactSummary[]> {
+export async function searchContacts(
+  client: Auth.OAuth2Client,
+  opts: SearchContactsOptions,
+): Promise<ContactSummary[]> {
   const people = google.people({ version: "v1", auth: client });
   const res = await people.otherContacts.search({
     query: opts.query,
@@ -83,9 +89,12 @@ export async function searchContacts(client: Auth.OAuth2Client, opts: SearchCont
 }
 
 /** Create a new contact. */
-export async function createContact(client: Auth.OAuth2Client, opts: CreateContactOptions): Promise<{ resourceName: string }> {
+export async function createContact(
+  client: Auth.OAuth2Client,
+  opts: CreateContactOptions,
+): Promise<{ resourceName: string }> {
   const people = google.people({ version: "v1", auth: client });
-  const requestBody: any = {
+  const requestBody: people_v1.Schema$Person = {
     names: [{ displayName: opts.name, givenName: opts.name }],
   };
   if (opts.email) requestBody.emailAddresses = [{ value: opts.email }];
@@ -98,14 +107,22 @@ export async function createContact(client: Auth.OAuth2Client, opts: CreateConta
 }
 
 /** List the user's task lists. */
-export async function listTaskLists(client: Auth.OAuth2Client): Promise<Array<{ id: string; title?: string }>> {
+export async function listTaskLists(
+  client: Auth.OAuth2Client,
+): Promise<Array<{ id: string; title?: string }>> {
   const tasks = google.tasks({ version: "v1", auth: client });
   const res = await tasks.tasklists.list();
-  return (res.data.items ?? []).map((l) => ({ id: l.id as string, title: l.title as string | undefined }));
+  return (res.data.items ?? []).map((l) => ({
+    id: l.id as string,
+    title: l.title as string | undefined,
+  }));
 }
 
 /** List tasks in a task list. */
-export async function listTasks(client: Auth.OAuth2Client, opts: ListTasksOptions): Promise<TaskSummary[]> {
+export async function listTasks(
+  client: Auth.OAuth2Client,
+  opts: ListTasksOptions,
+): Promise<TaskSummary[]> {
   const tasks = google.tasks({ version: "v1", auth: client });
   const res = await tasks.tasks.list({ tasklist: opts.tasklistId ?? "@default" });
   return (res.data.items ?? []).map((t) => ({
@@ -118,9 +135,12 @@ export async function listTasks(client: Auth.OAuth2Client, opts: ListTasksOption
 }
 
 /** Create a task. */
-export async function createTask(client: Auth.OAuth2Client, opts: CreateTaskOptions): Promise<TaskSummary> {
+export async function createTask(
+  client: Auth.OAuth2Client,
+  opts: CreateTaskOptions,
+): Promise<TaskSummary> {
   const tasks = google.tasks({ version: "v1", auth: client });
-  const requestBody: any = { title: opts.title };
+  const requestBody: tasks_v1.Schema$Task = { title: opts.title };
   if (opts.notes) requestBody.notes = opts.notes;
   if (opts.due) requestBody.due = opts.due;
   const res = await tasks.tasks.insert({ tasklist: opts.tasklistId ?? "@default", requestBody });
@@ -132,7 +152,10 @@ export async function createTask(client: Auth.OAuth2Client, opts: CreateTaskOpti
 }
 
 /** Mark a task as completed. */
-export async function completeTask(client: Auth.OAuth2Client, opts: TaskRefOptions): Promise<TaskSummary> {
+export async function completeTask(
+  client: Auth.OAuth2Client,
+  opts: TaskRefOptions,
+): Promise<TaskSummary> {
   const tasks = google.tasks({ version: "v1", auth: client });
   const res = await tasks.tasks.patch({
     tasklist: opts.tasklistId ?? "@default",

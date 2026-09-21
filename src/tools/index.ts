@@ -1,104 +1,100 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { Auth } from "googleapis";
 import { z } from "zod";
-import { ok, err } from "../util/result.js";
 import { authManager } from "../auth/manager.js";
 import {
-  sendGmail,
-  listGmailMessages,
-  getGmailMessage,
-  modifyGmailMessage,
-  replyGmail,
-  listGmailAttachments,
-  getGmailAttachment,
-  createGmailDraft,
-  listGmailDrafts,
-  getGmailDraft,
-  sendGmailDraft,
-  deleteGmailDraft,
-  listGmailLabels,
-  createGmailLabel,
-  deleteGmailLabel,
-  trashGmailMessage,
-  untrashGmailMessage,
-  deleteGmailMessage,
-} from "../services/gmail.js";
-import {
+  createEvent,
+  createMeetLink,
+  deleteEvent,
+  getEvent,
   listCalendars,
   listEvents,
-  createEvent,
-  getEvent,
   updateEvent,
-  deleteEvent,
-  createMeetLink,
 } from "../services/calendar.js";
 import {
-  listDriveFiles,
-  getDriveFile,
-  uploadDriveFile,
-  updateDriveFile,
-  deleteDriveFile,
-  shareDriveFile,
-  downloadDriveFile,
-  exportDriveFile,
-  createDriveFolder,
-  copyDriveFile,
-} from "../services/drive.js";
-import {
-  listContacts,
-  searchContacts,
+  completeTask,
   createContact,
+  createTask,
+  deleteTask,
+  listContacts,
   listTaskLists,
   listTasks,
-  createTask,
-  completeTask,
-  deleteTask,
+  searchContacts,
 } from "../services/contacts-tasks.js";
 import {
+  batchUpdateDocument,
+  createDocument,
+  getDocument,
+  getDocumentText,
+  insertText,
+  replaceAllText,
+} from "../services/docs.js";
+import {
+  copyDriveFile,
+  createDriveFolder,
+  deleteDriveFile,
+  downloadDriveFile,
+  exportDriveFile,
+  getDriveFile,
+  listDriveFiles,
+  shareDriveFile,
+  updateDriveFile,
+  uploadDriveFile,
+} from "../services/drive.js";
+import { addQuestion, createForm, getForm, getFormResponses } from "../services/forms.js";
+import {
+  createGmailDraft,
+  createGmailLabel,
+  deleteGmailDraft,
+  deleteGmailLabel,
+  deleteGmailMessage,
+  getGmailAttachment,
+  getGmailDraft,
+  getGmailMessage,
+  listGmailAttachments,
+  listGmailDrafts,
+  listGmailLabels,
+  listGmailMessages,
+  modifyGmailMessage,
+  replyGmail,
+  sendGmail,
+  sendGmailDraft,
+  trashGmailMessage,
+  untrashGmailMessage,
+} from "../services/gmail.js";
+import {
+  appendSheetRange,
+  batchUpdateSheet,
+  createSpreadsheet,
   getSpreadsheet,
   readSheetRange,
   writeSheetRange,
-  appendSheetRange,
-  createSpreadsheet,
-  batchUpdateSheet,
 } from "../services/sheets.js";
 import {
-  getDocument,
-  getDocumentText,
-  createDocument,
-  insertText,
-  replaceAllText,
-  batchUpdateDocument,
-} from "../services/docs.js";
-import {
-  getPresentation,
-  getSlidePage,
+  batchUpdatePresentation,
   createPresentation,
-  replaceAllText as replaceSlidesText,
   createSlide,
   deleteSlide,
-  batchUpdatePresentation,
+  getPresentation,
+  getSlidePage,
+  replaceAllText as replaceSlidesText,
 } from "../services/slides.js";
 import {
-  searchVideos,
-  getVideo,
-  getMyVideos,
-  listPlaylists,
+  addVideoToPlaylist,
   createPlaylist,
   deletePlaylist,
-  addVideoToPlaylist,
+  getMyVideos,
+  getVideo,
+  listPlaylists,
   listSubscriptions,
+  searchVideos,
 } from "../services/youtube.js";
-import {
-  getForm,
-  getFormResponses,
-  createForm,
-  addQuestion,
-} from "../services/forms.js";
+import { err, ok } from "../util/result.js";
 
 /** Wrap a service call that resolves its own auth client. */
 async function withClient<T>(
   account: string | undefined,
-  fn: (client: any) => Promise<T>
+  fn: (client: Auth.OAuth2Client) => Promise<T>,
 ): Promise<{ content: { type: "text"; text: string }[] }> {
   try {
     const client = await authManager.getClient(account);
@@ -114,10 +110,14 @@ export function registerTools(server: McpServer): void {
     "google_account_add",
     {
       title: "Add a Google account",
-      description: "Start the OAuth consent flow to connect a new Google account. Opens a browser for sign-in.",
+      description:
+        "Start the OAuth consent flow to connect a new Google account. Opens a browser for sign-in.",
       inputSchema: {
         name: z.string().describe("Nickname for the account (e.g. personal, work)."),
-        openBrowser: z.boolean().optional().describe("Open a browser automatically (default true)."),
+        openBrowser: z
+          .boolean()
+          .optional()
+          .describe("Open a browser automatically (default true)."),
       },
     },
     async ({ name, openBrowser }) => {
@@ -127,7 +127,7 @@ export function registerTools(server: McpServer): void {
       } catch (error) {
         return err(error);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -148,7 +148,7 @@ export function registerTools(server: McpServer): void {
       } catch (error) {
         return err(error);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -167,7 +167,7 @@ export function registerTools(server: McpServer): void {
       } catch (error) {
         return err(error);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -186,14 +186,15 @@ export function registerTools(server: McpServer): void {
       } catch (error) {
         return err(error);
       }
-    }
+    },
   );
 
   server.registerTool(
     "google_account_status",
     {
       title: "Google services status",
-      description: "Show credential configuration, data directory, connected accounts and token health.",
+      description:
+        "Show credential configuration, data directory, connected accounts and token health.",
       inputSchema: {},
     },
     async () => {
@@ -202,7 +203,7 @@ export function registerTools(server: McpServer): void {
       } catch (error) {
         return err(error);
       }
-    }
+    },
   );
 
   // ---- Gmail --------------------------------------------------------------
@@ -215,16 +216,30 @@ export function registerTools(server: McpServer): void {
         to: z.union([z.string(), z.array(z.string())]).describe("Recipient email(s)."),
         subject: z.string().describe("Subject line."),
         body: z.string().describe("Message body."),
-        cc: z.union([z.string(), z.array(z.string())]).optional().describe("CC recipient(s)."),
-        bcc: z.union([z.string(), z.array(z.string())]).optional().describe("BCC recipient(s)."),
+        cc: z
+          .union([z.string(), z.array(z.string())])
+          .optional()
+          .describe("CC recipient(s)."),
+        bcc: z
+          .union([z.string(), z.array(z.string())])
+          .optional()
+          .describe("BCC recipient(s)."),
         bodyType: z.enum(["text", "html"]).optional().describe("Body format (default text)."),
         attachments: z
           .array(
             z.object({
               path: z.string().describe("Local filesystem path of the file to attach."),
-              filename: z.string().optional().describe("Attachment filename shown to recipients (defaults to the basename of path)."),
-              mimeType: z.string().optional().describe("MIME type override (defaults to a guess from the filename)."),
-            })
+              filename: z
+                .string()
+                .optional()
+                .describe(
+                  "Attachment filename shown to recipients (defaults to the basename of path).",
+                ),
+              mimeType: z
+                .string()
+                .optional()
+                .describe("MIME type override (defaults to a guess from the filename)."),
+            }),
           )
           .optional()
           .describe("Local files to attach to the email."),
@@ -232,21 +247,25 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ to, subject, body, cc, bcc, bodyType, attachments, account }) =>
-      withClient(account, (client) => sendGmail(client, { to, subject, body, cc, bcc, bodyType, attachments }))
+      withClient(account, (client) =>
+        sendGmail(client, { to, subject, body, cc, bcc, bodyType, attachments }),
+      ),
   );
 
   server.registerTool(
     "google_gmail_list",
     {
       title: "List emails",
-      description: "List messages from the inbox, newest first, with an optional Gmail search query.",
+      description:
+        "List messages from the inbox, newest first, with an optional Gmail search query.",
       inputSchema: {
         query: z.string().optional().describe("Gmail search query (e.g. from:bob, newer_than:2d)."),
         maxResults: z.number().min(1).max(100).optional().describe("Max messages (default 25)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ query, maxResults, account }) => withClient(account, (client) => listGmailMessages(client, { query, maxResults }))
+    async ({ query, maxResults, account }) =>
+      withClient(account, (client) => listGmailMessages(client, { query, maxResults })),
   );
 
   server.registerTool(
@@ -259,7 +278,7 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ id, account }) => withClient(account, (client) => getGmailMessage(client, { id }))
+    async ({ id, account }) => withClient(account, (client) => getGmailMessage(client, { id })),
   );
 
   server.registerTool(
@@ -269,13 +288,16 @@ export function registerTools(server: McpServer): void {
       description: "Add or remove labels on a message (e.g. mark read/unread, star, archive).",
       inputSchema: {
         id: z.string().describe("Message ID."),
-        addLabels: z.array(z.string()).optional().describe("Labels to add (e.g. STARRED, INBOX, TRASH)."),
+        addLabels: z
+          .array(z.string())
+          .optional()
+          .describe("Labels to add (e.g. STARRED, INBOX, TRASH)."),
         removeLabels: z.array(z.string()).optional().describe("Labels to remove (e.g. UNREAD)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
     async ({ id, addLabels, removeLabels, account }) =>
-      withClient(account, (client) => modifyGmailMessage(client, { id, addLabels, removeLabels }))
+      withClient(account, (client) => modifyGmailMessage(client, { id, addLabels, removeLabels })),
   );
 
   server.registerTool(
@@ -292,9 +314,17 @@ export function registerTools(server: McpServer): void {
           .array(
             z.object({
               path: z.string().describe("Local filesystem path of the file to attach."),
-              filename: z.string().optional().describe("Attachment filename shown to recipients (defaults to the basename of path)."),
-              mimeType: z.string().optional().describe("MIME type override (defaults to a guess from the filename)."),
-            })
+              filename: z
+                .string()
+                .optional()
+                .describe(
+                  "Attachment filename shown to recipients (defaults to the basename of path).",
+                ),
+              mimeType: z
+                .string()
+                .optional()
+                .describe("MIME type override (defaults to a guess from the filename)."),
+            }),
           )
           .optional()
           .describe("Local files to attach to the reply."),
@@ -302,7 +332,9 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ threadId, messageId, body, bodyType, attachments, account }) =>
-      withClient(account, (client) => replyGmail(client, { threadId, messageId, body, bodyType, attachments }))
+      withClient(account, (client) =>
+        replyGmail(client, { threadId, messageId, body, bodyType, attachments }),
+      ),
   );
 
   server.registerTool(
@@ -315,23 +347,30 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ id, account }) => withClient(account, (client) => listGmailAttachments(client, { id }))
+    async ({ id, account }) =>
+      withClient(account, (client) => listGmailAttachments(client, { id })),
   );
 
   server.registerTool(
     "google_gmail_get_attachment",
     {
       title: "Get email attachment",
-      description: "Download a single attachment by message ID and attachment ID. Text-like files are returned decoded as text; binary files as base64.",
+      description:
+        "Download a single attachment by message ID and attachment ID. Text-like files are returned decoded as text; binary files as base64.",
       inputSchema: {
         id: z.string().describe("Message ID."),
         attachmentId: z.string().describe("Attachment ID (from list_attachments)."),
-        partId: z.string().optional().describe("Stable part ID (from list_attachments); preferred over attachmentId for lookup."),
+        partId: z
+          .string()
+          .optional()
+          .describe(
+            "Stable part ID (from list_attachments); preferred over attachmentId for lookup.",
+          ),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
     async ({ id, attachmentId, partId, account }) =>
-      withClient(account, (client) => getGmailAttachment(client, { id, attachmentId, partId }))
+      withClient(account, (client) => getGmailAttachment(client, { id, attachmentId, partId })),
   );
 
   server.registerTool(
@@ -343,16 +382,30 @@ export function registerTools(server: McpServer): void {
         to: z.union([z.string(), z.array(z.string())]).describe("Recipient email(s)."),
         subject: z.string().describe("Subject line."),
         body: z.string().describe("Message body."),
-        cc: z.union([z.string(), z.array(z.string())]).optional().describe("CC recipient(s)."),
-        bcc: z.union([z.string(), z.array(z.string())]).optional().describe("BCC recipient(s)."),
+        cc: z
+          .union([z.string(), z.array(z.string())])
+          .optional()
+          .describe("CC recipient(s)."),
+        bcc: z
+          .union([z.string(), z.array(z.string())])
+          .optional()
+          .describe("BCC recipient(s)."),
         bodyType: z.enum(["text", "html"]).optional().describe("Body format (default text)."),
         attachments: z
           .array(
             z.object({
               path: z.string().describe("Local filesystem path of the file to attach."),
-              filename: z.string().optional().describe("Attachment filename shown to recipients (defaults to the basename of path)."),
-              mimeType: z.string().optional().describe("MIME type override (defaults to a guess from the filename)."),
-            })
+              filename: z
+                .string()
+                .optional()
+                .describe(
+                  "Attachment filename shown to recipients (defaults to the basename of path).",
+                ),
+              mimeType: z
+                .string()
+                .optional()
+                .describe("MIME type override (defaults to a guess from the filename)."),
+            }),
           )
           .optional()
           .describe("Local files to attach to the draft."),
@@ -360,7 +413,9 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ to, subject, body, cc, bcc, bodyType, attachments, account }) =>
-      withClient(account, (client) => createGmailDraft(client, { to, subject, body, cc, bcc, bodyType, attachments }))
+      withClient(account, (client) =>
+        createGmailDraft(client, { to, subject, body, cc, bcc, bodyType, attachments }),
+      ),
   );
 
   server.registerTool(
@@ -373,7 +428,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ maxResults, account }) => withClient(account, (client) => listGmailDrafts(client, { maxResults }))
+    async ({ maxResults, account }) =>
+      withClient(account, (client) => listGmailDrafts(client, { maxResults })),
   );
 
   server.registerTool(
@@ -386,7 +442,7 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ id, account }) => withClient(account, (client) => getGmailDraft(client, { id }))
+    async ({ id, account }) => withClient(account, (client) => getGmailDraft(client, { id })),
   );
 
   server.registerTool(
@@ -399,7 +455,7 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ id, account }) => withClient(account, (client) => sendGmailDraft(client, { id }))
+    async ({ id, account }) => withClient(account, (client) => sendGmailDraft(client, { id })),
   );
 
   server.registerTool(
@@ -419,7 +475,7 @@ export function registerTools(server: McpServer): void {
       } catch (error) {
         return err(error);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -431,7 +487,7 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ account }) => withClient(account, (client) => listGmailLabels(client))
+    async ({ account }) => withClient(account, (client) => listGmailLabels(client)),
   );
 
   server.registerTool(
@@ -447,7 +503,9 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ name, messageListVisibility, labelListVisibility, account }) =>
-      withClient(account, (client) => createGmailLabel(client, { name, messageListVisibility, labelListVisibility }))
+      withClient(account, (client) =>
+        createGmailLabel(client, { name, messageListVisibility, labelListVisibility }),
+      ),
   );
 
   server.registerTool(
@@ -467,7 +525,7 @@ export function registerTools(server: McpServer): void {
       } catch (error) {
         return err(error);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -480,7 +538,7 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ id, account }) => withClient(account, (client) => trashGmailMessage(client, { id }))
+    async ({ id, account }) => withClient(account, (client) => trashGmailMessage(client, { id })),
   );
 
   server.registerTool(
@@ -493,7 +551,7 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ id, account }) => withClient(account, (client) => untrashGmailMessage(client, { id }))
+    async ({ id, account }) => withClient(account, (client) => untrashGmailMessage(client, { id })),
   );
 
   server.registerTool(
@@ -513,7 +571,7 @@ export function registerTools(server: McpServer): void {
       } catch (error) {
         return err(error);
       }
-    }
+    },
   );
 
   // ---- Calendar -----------------------------------------------------------
@@ -526,14 +584,15 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ account }) => withClient(account, (client) => listCalendars(client))
+    async ({ account }) => withClient(account, (client) => listCalendars(client)),
   );
 
   server.registerTool(
     "google_calendar_list_events",
     {
       title: "List calendar events",
-      description: "List upcoming events in a calendar, optionally filtered by time range or query.",
+      description:
+        "List upcoming events in a calendar, optionally filtered by time range or query.",
       inputSchema: {
         timeMin: z.string().optional().describe("Start of range (ISO 8601, default now)."),
         timeMax: z.string().optional().describe("End of range (ISO 8601)."),
@@ -544,7 +603,9 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ timeMin, timeMax, maxResults, q, calendarId, account }) =>
-      withClient(account, (client) => listEvents(client, { timeMin, timeMax, maxResults, q, calendarId }))
+      withClient(account, (client) =>
+        listEvents(client, { timeMin, timeMax, maxResults, q, calendarId }),
+      ),
   );
 
   server.registerTool(
@@ -564,7 +625,9 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ summary, start, end, description, location, attendees, calendarId, account }) =>
-      withClient(account, (client) => createEvent(client, { summary, start, end, description, location, attendees, calendarId }))
+      withClient(account, (client) =>
+        createEvent(client, { summary, start, end, description, location, attendees, calendarId }),
+      ),
   );
 
   server.registerTool(
@@ -583,7 +646,9 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ summary, start, end, description, attendees, calendarId, account }) =>
-      withClient(account, (client) => createMeetLink(client, { summary, start, end, description, attendees, calendarId }))
+      withClient(account, (client) =>
+        createMeetLink(client, { summary, start, end, description, attendees, calendarId }),
+      ),
   );
 
   server.registerTool(
@@ -597,7 +662,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ eventId, calendarId, account }) => withClient(account, (client) => getEvent(client, { eventId, calendarId }))
+    async ({ eventId, calendarId, account }) =>
+      withClient(account, (client) => getEvent(client, { eventId, calendarId })),
   );
 
   server.registerTool(
@@ -617,8 +683,29 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ eventId, summary, description, location, start, end, attendees, calendarId, account }) =>
-      withClient(account, (client) => updateEvent(client, { eventId, summary, description, location, start, end, attendees, calendarId }))
+    async ({
+      eventId,
+      summary,
+      description,
+      location,
+      start,
+      end,
+      attendees,
+      calendarId,
+      account,
+    }) =>
+      withClient(account, (client) =>
+        updateEvent(client, {
+          eventId,
+          summary,
+          description,
+          location,
+          start,
+          end,
+          attendees,
+          calendarId,
+        }),
+      ),
   );
 
   server.registerTool(
@@ -640,7 +727,7 @@ export function registerTools(server: McpServer): void {
       } catch (error) {
         return err(error);
       }
-    }
+    },
   );
 
   // ---- Drive --------------------------------------------------------------
@@ -655,7 +742,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ query, pageSize, account }) => withClient(account, (client) => listDriveFiles(client, { query, pageSize }))
+    async ({ query, pageSize, account }) =>
+      withClient(account, (client) => listDriveFiles(client, { query, pageSize })),
   );
 
   server.registerTool(
@@ -668,24 +756,30 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ fileId, account }) => withClient(account, (client) => getDriveFile(client, { fileId }))
+    async ({ fileId, account }) =>
+      withClient(account, (client) => getDriveFile(client, { fileId })),
   );
 
   server.registerTool(
     "google_drive_upload",
     {
       title: "Create/upload Drive file",
-      description: "Create a file in Drive, optionally with text content (blank Google-native file if omitted).",
+      description:
+        "Create a file in Drive, optionally with text content (blank Google-native file if omitted).",
       inputSchema: {
         name: z.string().describe("File name."),
-        mimeType: z.string().describe("MIME type (e.g. text/plain, application/vnd.google-apps.document)."),
+        mimeType: z
+          .string()
+          .describe("MIME type (e.g. text/plain, application/vnd.google-apps.document)."),
         content: z.string().optional().describe("Text content to upload."),
         parentFolderId: z.string().optional().describe("Parent folder ID."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
     async ({ name, mimeType, content, parentFolderId, account }) =>
-      withClient(account, (client) => uploadDriveFile(client, { name, mimeType, content, parentFolderId }))
+      withClient(account, (client) =>
+        uploadDriveFile(client, { name, mimeType, content, parentFolderId }),
+      ),
   );
 
   server.registerTool(
@@ -702,7 +796,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ fileId, name, mimeType, content, account }) =>
-      withClient(account, (client) => updateDriveFile(client, { fileId, name, mimeType, content }))
+      withClient(account, (client) => updateDriveFile(client, { fileId, name, mimeType, content })),
   );
 
   server.registerTool(
@@ -723,7 +817,7 @@ export function registerTools(server: McpServer): void {
       } catch (error) {
         return err(error);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -735,32 +829,40 @@ export function registerTools(server: McpServer): void {
         fileId: z.string().describe("Drive file ID."),
         email: z.string().email().describe("Recipient email."),
         role: z.enum(["reader", "writer", "commenter"]).describe("Access role."),
-        sendNotificationEmail: z.boolean().optional().describe("Email the recipient (default true)."),
+        sendNotificationEmail: z
+          .boolean()
+          .optional()
+          .describe("Email the recipient (default true)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
     async ({ fileId, email, role, sendNotificationEmail, account }) =>
-      withClient(account, (client) => shareDriveFile(client, { fileId, email, role, sendNotificationEmail }))
+      withClient(account, (client) =>
+        shareDriveFile(client, { fileId, email, role, sendNotificationEmail }),
+      ),
   );
 
   server.registerTool(
     "google_drive_download",
     {
       title: "Download Drive file",
-      description: "Download a file's raw bytes (non-Google-native files). Text content returns decoded text; binary returns base64.",
+      description:
+        "Download a file's raw bytes (non-Google-native files). Text content returns decoded text; binary returns base64.",
       inputSchema: {
         fileId: z.string().describe("Drive file ID."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ fileId, account }) => withClient(account, (client) => downloadDriveFile(client, { fileId }))
+    async ({ fileId, account }) =>
+      withClient(account, (client) => downloadDriveFile(client, { fileId })),
   );
 
   server.registerTool(
     "google_drive_export",
     {
       title: "Export Drive file",
-      description: "Export a Google-native file (Docs/Sheets/Slides/Drawings) to another format (e.g. application/pdf, text/plain, application/vnd.openxmlformats-officedocument.wordprocessingml.document).",
+      description:
+        "Export a Google-native file (Docs/Sheets/Slides/Drawings) to another format (e.g. application/pdf, text/plain, application/vnd.openxmlformats-officedocument.wordprocessingml.document).",
       inputSchema: {
         fileId: z.string().describe("Drive file ID."),
         mimeType: z.string().describe("Target MIME type (e.g. application/pdf)."),
@@ -768,7 +870,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ fileId, mimeType, account }) =>
-      withClient(account, (client) => exportDriveFile(client, { fileId, mimeType }))
+      withClient(account, (client) => exportDriveFile(client, { fileId, mimeType })),
   );
 
   server.registerTool(
@@ -783,7 +885,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ name, parentFolderId, account }) =>
-      withClient(account, (client) => createDriveFolder(client, { name, parentFolderId }))
+      withClient(account, (client) => createDriveFolder(client, { name, parentFolderId })),
   );
 
   server.registerTool(
@@ -797,7 +899,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ fileId, name, account }) => withClient(account, (client) => copyDriveFile(client, { fileId, name }))
+    async ({ fileId, name, account }) =>
+      withClient(account, (client) => copyDriveFile(client, { fileId, name })),
   );
 
   // ---- Contacts -----------------------------------------------------------
@@ -811,7 +914,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ pageSize, account }) => withClient(account, (client) => listContacts(client, { pageSize }))
+    async ({ pageSize, account }) =>
+      withClient(account, (client) => listContacts(client, { pageSize })),
   );
 
   server.registerTool(
@@ -824,7 +928,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ query, account }) => withClient(account, (client) => searchContacts(client, { query }))
+    async ({ query, account }) =>
+      withClient(account, (client) => searchContacts(client, { query })),
   );
 
   server.registerTool(
@@ -839,7 +944,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ name, email, phone, account }) => withClient(account, (client) => createContact(client, { name, email, phone }))
+    async ({ name, email, phone, account }) =>
+      withClient(account, (client) => createContact(client, { name, email, phone })),
   );
 
   // ---- Tasks --------------------------------------------------------------
@@ -852,7 +958,7 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ account }) => withClient(account, (client) => listTaskLists(client))
+    async ({ account }) => withClient(account, (client) => listTaskLists(client)),
   );
 
   server.registerTool(
@@ -865,7 +971,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ tasklistId, account }) => withClient(account, (client) => listTasks(client, { tasklistId }))
+    async ({ tasklistId, account }) =>
+      withClient(account, (client) => listTasks(client, { tasklistId })),
   );
 
   server.registerTool(
@@ -882,7 +989,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ title, notes, due, tasklistId, account }) =>
-      withClient(account, (client) => createTask(client, { title, notes, due, tasklistId }))
+      withClient(account, (client) => createTask(client, { title, notes, due, tasklistId })),
   );
 
   server.registerTool(
@@ -896,7 +1003,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ taskId, tasklistId, account }) => withClient(account, (client) => completeTask(client, { taskId, tasklistId }))
+    async ({ taskId, tasklistId, account }) =>
+      withClient(account, (client) => completeTask(client, { taskId, tasklistId })),
   );
 
   server.registerTool(
@@ -918,7 +1026,7 @@ export function registerTools(server: McpServer): void {
       } catch (error) {
         return err(error);
       }
-    }
+    },
   );
 
   // ---- Sheets --------------------------------------------------------------
@@ -929,12 +1037,15 @@ export function registerTools(server: McpServer): void {
       description: "Get spreadsheet metadata and optionally cell values from a range.",
       inputSchema: {
         spreadsheetId: z.string().describe("Spreadsheet ID (from the URL)."),
-        range: z.string().optional().describe("A1 range to also read values from, e.g. Sheet1!A1:B5."),
+        range: z
+          .string()
+          .optional()
+          .describe("A1 range to also read values from, e.g. Sheet1!A1:B5."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
     async ({ spreadsheetId, range, account }) =>
-      withClient(account, (client) => getSpreadsheet(client, { spreadsheetId, range }))
+      withClient(account, (client) => getSpreadsheet(client, { spreadsheetId, range })),
   );
 
   server.registerTool(
@@ -945,12 +1056,17 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         spreadsheetId: z.string().describe("Spreadsheet ID."),
         range: z.string().describe("A1 notation, e.g. Sheet1!A1:C10."),
-        majorDimension: z.enum(["ROWS", "COLUMNS"]).optional().describe("Read direction (default ROWS)."),
+        majorDimension: z
+          .enum(["ROWS", "COLUMNS"])
+          .optional()
+          .describe("Read direction (default ROWS)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
     async ({ spreadsheetId, range, majorDimension, account }) =>
-      withClient(account, (client) => readSheetRange(client, { spreadsheetId, range, majorDimension }))
+      withClient(account, (client) =>
+        readSheetRange(client, { spreadsheetId, range, majorDimension }),
+      ),
   );
 
   server.registerTool(
@@ -962,12 +1078,17 @@ export function registerTools(server: McpServer): void {
         spreadsheetId: z.string().describe("Spreadsheet ID."),
         range: z.string().describe("A1 notation of the top-left cell, e.g. Sheet1!A1."),
         values: z.array(z.array(z.string())).describe("Rows of values to write."),
-        valueInputOption: z.enum(["RAW", "USER_ENTERED"]).optional().describe("How to interpret values (default USER_ENTERED)."),
+        valueInputOption: z
+          .enum(["RAW", "USER_ENTERED"])
+          .optional()
+          .describe("How to interpret values (default USER_ENTERED)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
     async ({ spreadsheetId, range, values, valueInputOption, account }) =>
-      withClient(account, (client) => writeSheetRange(client, { spreadsheetId, range, values, valueInputOption }))
+      withClient(account, (client) =>
+        writeSheetRange(client, { spreadsheetId, range, values, valueInputOption }),
+      ),
   );
 
   server.registerTool(
@@ -979,12 +1100,17 @@ export function registerTools(server: McpServer): void {
         spreadsheetId: z.string().describe("Spreadsheet ID."),
         range: z.string().describe("A1 range of the table to append to, e.g. Sheet1!A1."),
         values: z.array(z.array(z.string())).describe("Rows of values to append."),
-        valueInputOption: z.enum(["RAW", "USER_ENTERED"]).optional().describe("How to interpret values (default USER_ENTERED)."),
+        valueInputOption: z
+          .enum(["RAW", "USER_ENTERED"])
+          .optional()
+          .describe("How to interpret values (default USER_ENTERED)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
     async ({ spreadsheetId, range, values, valueInputOption, account }) =>
-      withClient(account, (client) => appendSheetRange(client, { spreadsheetId, range, values, valueInputOption }))
+      withClient(account, (client) =>
+        appendSheetRange(client, { spreadsheetId, range, values, valueInputOption }),
+      ),
   );
 
   server.registerTool(
@@ -998,7 +1124,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ title, sheets, account }) => withClient(account, (client) => createSpreadsheet(client, { title, sheets }))
+    async ({ title, sheets, account }) =>
+      withClient(account, (client) => createSpreadsheet(client, { title, sheets })),
   );
 
   server.registerTool(
@@ -1008,12 +1135,14 @@ export function registerTools(server: McpServer): void {
       description: "Send raw Sheets batchUpdate requests (add/delete sheets, formatting, etc.).",
       inputSchema: {
         spreadsheetId: z.string().describe("Spreadsheet ID."),
-        requests: z.array(z.record(z.string(), z.any())).describe("Sheets API batchUpdate requests."),
+        requests: z
+          .array(z.record(z.string(), z.any()))
+          .describe("Sheets API batchUpdate requests."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
     async ({ spreadsheetId, requests, account }) =>
-      withClient(account, (client) => batchUpdateSheet(client, { spreadsheetId, requests }))
+      withClient(account, (client) => batchUpdateSheet(client, { spreadsheetId, requests })),
   );
 
   // ---- Docs ---------------------------------------------------------------
@@ -1027,7 +1156,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ documentId, account }) => withClient(account, (client) => getDocument(client, { documentId }))
+    async ({ documentId, account }) =>
+      withClient(account, (client) => getDocument(client, { documentId })),
   );
 
   server.registerTool(
@@ -1040,7 +1170,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ documentId, account }) => withClient(account, (client) => getDocumentText(client, { documentId }))
+    async ({ documentId, account }) =>
+      withClient(account, (client) => getDocumentText(client, { documentId })),
   );
 
   server.registerTool(
@@ -1053,7 +1184,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ title, account }) => withClient(account, (client) => createDocument(client, { title }))
+    async ({ title, account }) =>
+      withClient(account, (client) => createDocument(client, { title })),
   );
 
   server.registerTool(
@@ -1064,12 +1196,17 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         documentId: z.string().describe("Document ID."),
         text: z.string().describe("Text to insert."),
-        index: z.number().int().min(0).optional().describe("Character index to insert at (default end of document)."),
+        index: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe("Character index to insert at (default end of document)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
     async ({ documentId, text, index, account }) =>
-      withClient(account, (client) => insertText(client, { documentId, text, index }))
+      withClient(account, (client) => insertText(client, { documentId, text, index })),
   );
 
   server.registerTool(
@@ -1086,7 +1223,9 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ documentId, find, replace, matchCase, account }) =>
-      withClient(account, (client) => replaceAllText(client, { documentId, find, replace, matchCase }))
+      withClient(account, (client) =>
+        replaceAllText(client, { documentId, find, replace, matchCase }),
+      ),
   );
 
   server.registerTool(
@@ -1101,7 +1240,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ documentId, requests, account }) =>
-      withClient(account, (client) => batchUpdateDocument(client, { documentId, requests }))
+      withClient(account, (client) => batchUpdateDocument(client, { documentId, requests })),
   );
 
   // ---- Slides -------------------------------------------------------------
@@ -1115,7 +1254,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ presentationId, account }) => withClient(account, (client) => getPresentation(client, { presentationId }))
+    async ({ presentationId, account }) =>
+      withClient(account, (client) => getPresentation(client, { presentationId })),
   );
 
   server.registerTool(
@@ -1128,7 +1268,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ title, account }) => withClient(account, (client) => createPresentation(client, { title }))
+    async ({ title, account }) =>
+      withClient(account, (client) => createPresentation(client, { title })),
   );
 
   server.registerTool(
@@ -1145,7 +1286,9 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ presentationId, find, replace, matchCase, account }) =>
-      withClient(account, (client) => replaceSlidesText(client, { presentationId, find, replace, matchCase }))
+      withClient(account, (client) =>
+        replaceSlidesText(client, { presentationId, find, replace, matchCase }),
+      ),
   );
 
   server.registerTool(
@@ -1158,7 +1301,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ presentationId, account }) => withClient(account, (client) => createSlide(client, { presentationId }))
+    async ({ presentationId, account }) =>
+      withClient(account, (client) => createSlide(client, { presentationId })),
   );
 
   server.registerTool(
@@ -1173,7 +1317,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ presentationId, slideObjectId, account }) =>
-      withClient(account, (client) => deleteSlide(client, { presentationId, slideObjectId }))
+      withClient(account, (client) => deleteSlide(client, { presentationId, slideObjectId })),
   );
 
   server.registerTool(
@@ -1188,14 +1332,15 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ presentationId, pageObjectId, account }) =>
-      withClient(account, (client) => getSlidePage(client, { presentationId, pageObjectId }))
+      withClient(account, (client) => getSlidePage(client, { presentationId, pageObjectId })),
   );
 
   server.registerTool(
     "google_slides_batch_update",
     {
       title: "Batch update presentation",
-      description: "Send raw Slides batchUpdate requests (create textboxes, shapes, images, style elements, etc.).",
+      description:
+        "Send raw Slides batchUpdate requests (create textboxes, shapes, images, style elements, etc.).",
       inputSchema: {
         presentationId: z.string().describe("Presentation ID."),
         requests: z.array(z.any()).describe("Slides API batchUpdate requests array."),
@@ -1203,7 +1348,9 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ presentationId, requests, account }) =>
-      withClient(account, (client) => batchUpdatePresentation(client, { presentationId, requests }))
+      withClient(account, (client) =>
+        batchUpdatePresentation(client, { presentationId, requests }),
+      ),
   );
 
   // ---- YouTube ------------------------------------------------------------
@@ -1218,7 +1365,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ query, maxResults, account }) => withClient(account, (client) => searchVideos(client, { query, maxResults }))
+    async ({ query, maxResults, account }) =>
+      withClient(account, (client) => searchVideos(client, { query, maxResults })),
   );
 
   server.registerTool(
@@ -1231,7 +1379,7 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ videoId, account }) => withClient(account, (client) => getVideo(client, { videoId }))
+    async ({ videoId, account }) => withClient(account, (client) => getVideo(client, { videoId })),
   );
 
   server.registerTool(
@@ -1244,7 +1392,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ maxResults, account }) => withClient(account, (client) => getMyVideos(client, { maxResults }))
+    async ({ maxResults, account }) =>
+      withClient(account, (client) => getMyVideos(client, { maxResults })),
   );
 
   server.registerTool(
@@ -1257,7 +1406,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ maxResults, account }) => withClient(account, (client) => listPlaylists(client, { maxResults }))
+    async ({ maxResults, account }) =>
+      withClient(account, (client) => listPlaylists(client, { maxResults })),
   );
 
   server.registerTool(
@@ -1268,12 +1418,17 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         title: z.string().describe("Playlist title."),
         description: z.string().optional().describe("Playlist description."),
-        privacyStatus: z.enum(["private", "public", "unlisted"]).optional().describe("Privacy (default private)."),
+        privacyStatus: z
+          .enum(["private", "public", "unlisted"])
+          .optional()
+          .describe("Privacy (default private)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
     async ({ title, description, privacyStatus, account }) =>
-      withClient(account, (client) => createPlaylist(client, { title, description, privacyStatus }))
+      withClient(account, (client) =>
+        createPlaylist(client, { title, description, privacyStatus }),
+      ),
   );
 
   server.registerTool(
@@ -1286,7 +1441,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ playlistId, account }) => withClient(account, (client) => deletePlaylist(client, { playlistId }))
+    async ({ playlistId, account }) =>
+      withClient(account, (client) => deletePlaylist(client, { playlistId })),
   );
 
   server.registerTool(
@@ -1301,7 +1457,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ playlistId, videoId, account }) =>
-      withClient(account, (client) => addVideoToPlaylist(client, { playlistId, videoId }))
+      withClient(account, (client) => addVideoToPlaylist(client, { playlistId, videoId })),
   );
 
   server.registerTool(
@@ -1314,7 +1470,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ maxResults, account }) => withClient(account, (client) => listSubscriptions(client, { maxResults }))
+    async ({ maxResults, account }) =>
+      withClient(account, (client) => listSubscriptions(client, { maxResults })),
   );
 
   // ---- Forms --------------------------------------------------------------
@@ -1328,7 +1485,7 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ formId, account }) => withClient(account, (client) => getForm(client, { formId }))
+    async ({ formId, account }) => withClient(account, (client) => getForm(client, { formId })),
   );
 
   server.registerTool(
@@ -1342,7 +1499,8 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ formId, pageSize, account }) => withClient(account, (client) => getFormResponses(client, { formId, pageSize }))
+    async ({ formId, pageSize, account }) =>
+      withClient(account, (client) => getFormResponses(client, { formId, pageSize })),
   );
 
   server.registerTool(
@@ -1355,7 +1513,7 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ title, account }) => withClient(account, (client) => createForm(client, { title }))
+    async ({ title, account }) => withClient(account, (client) => createForm(client, { title })),
   );
 
   server.registerTool(
@@ -1367,13 +1525,21 @@ export function registerTools(server: McpServer): void {
         formId: z.string().describe("Form ID."),
         title: z.string().describe("Question text."),
         description: z.string().optional().describe("Optional help text."),
-        type: z.enum(["text", "multiple_choice"]).optional().describe("Question type (default text)."),
+        type: z
+          .enum(["text", "multiple_choice"])
+          .optional()
+          .describe("Question type (default text)."),
         options: z.array(z.string()).optional().describe("Choices for multiple_choice."),
-        required: z.boolean().optional().describe("Whether the question is required (default false)."),
+        required: z
+          .boolean()
+          .optional()
+          .describe("Whether the question is required (default false)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
     async ({ formId, title, description, type, options, required, account }) =>
-      withClient(account, (client) => addQuestion(client, { formId, title, description, type, options, required }))
+      withClient(account, (client) =>
+        addQuestion(client, { formId, title, description, type, options, required }),
+      ),
   );
 }

@@ -1,4 +1,4 @@
-import type { Auth } from "googleapis";
+import type { Auth, drive_v3 } from "googleapis";
 import { google } from "googleapis";
 
 export interface ListDriveOptions {
@@ -49,25 +49,30 @@ export interface DownloadDriveResult {
   mimeType?: string;
 }
 
-async function mapDownload(res: any): Promise<DownloadDriveResult> {
+async function mapDownload(res: { data: unknown }): Promise<DownloadDriveResult> {
   let data = res.data;
   // googleapis returns a Blob (not Buffer/string) for alt=media and binary
   // exports. Its Blob comes from gaxios' bundled fetch implementation, which
   // is NOT an instanceof the global Blob class — so duck-type via arrayBuffer()
   // instead of `instanceof Blob` (that check silently fails and the blob gets
   // String()-ified to "[object Blob]").
-  if (data && typeof data === "object" && typeof data.arrayBuffer === "function") {
-    data = Buffer.from(await data.arrayBuffer());
+  if (data && typeof data === "object") {
+    const blobish = data as { arrayBuffer?: () => Promise<ArrayBuffer> };
+    if (typeof blobish.arrayBuffer === "function") {
+      data = Buffer.from(await blobish.arrayBuffer());
+    }
   }
-  const binary = Buffer.isBuffer(data);
-  return {
-    data: binary ? data.toString("base64") : String(data ?? ""),
-    binary,
-  };
+  if (Buffer.isBuffer(data)) {
+    return { data: data.toString("base64"), binary: true };
+  }
+  return { data: String(data ?? ""), binary: false };
 }
 
 /** List files, optionally filtered by a Drive query (e.g. "'<folderId>' in parents"). */
-export async function listDriveFiles(client: Auth.OAuth2Client, opts: ListDriveOptions): Promise<DriveFile[]> {
+export async function listDriveFiles(
+  client: Auth.OAuth2Client,
+  opts: ListDriveOptions,
+): Promise<DriveFile[]> {
   const drive = google.drive({ version: "v3", auth: client });
   const res = await drive.files.list({
     q: opts.query || undefined,
@@ -79,7 +84,10 @@ export async function listDriveFiles(client: Auth.OAuth2Client, opts: ListDriveO
 }
 
 /** Get metadata for a single file. */
-export async function getDriveFile(client: Auth.OAuth2Client, opts: GetDriveOptions): Promise<DriveFile> {
+export async function getDriveFile(
+  client: Auth.OAuth2Client,
+  opts: GetDriveOptions,
+): Promise<DriveFile> {
   const drive = google.drive({ version: "v3", auth: client });
   const res = await drive.files.get({
     fileId: opts.fileId,
@@ -89,11 +97,14 @@ export async function getDriveFile(client: Auth.OAuth2Client, opts: GetDriveOpti
 }
 
 /** Create a file (text content) or a blank Google-native file (Doc/Sheet/Slides). */
-export async function uploadDriveFile(client: Auth.OAuth2Client, opts: UploadDriveOptions): Promise<DriveFile> {
+export async function uploadDriveFile(
+  client: Auth.OAuth2Client,
+  opts: UploadDriveOptions,
+): Promise<DriveFile> {
   const drive = google.drive({ version: "v3", auth: client });
-  const requestBody: any = { name: opts.name, mimeType: opts.mimeType };
+  const requestBody: drive_v3.Schema$File = { name: opts.name, mimeType: opts.mimeType };
   if (opts.parentFolderId) requestBody.parents = [opts.parentFolderId];
-  const params: any = { requestBody };
+  const params: drive_v3.Params$Resource$Files$Create = { requestBody };
   if (opts.content !== undefined) {
     params.media = { mimeType: opts.mimeType, body: opts.content };
   }
@@ -102,12 +113,15 @@ export async function uploadDriveFile(client: Auth.OAuth2Client, opts: UploadDri
 }
 
 /** Update a file's metadata and/or content. */
-export async function updateDriveFile(client: Auth.OAuth2Client, opts: UpdateDriveOptions): Promise<DriveFile> {
+export async function updateDriveFile(
+  client: Auth.OAuth2Client,
+  opts: UpdateDriveOptions,
+): Promise<DriveFile> {
   const drive = google.drive({ version: "v3", auth: client });
-  const requestBody: any = {};
+  const requestBody: drive_v3.Schema$File = {};
   if (opts.name !== undefined) requestBody.name = opts.name;
   if (opts.mimeType !== undefined) requestBody.mimeType = opts.mimeType;
-  const params: any = { fileId: opts.fileId, requestBody };
+  const params: drive_v3.Params$Resource$Files$Update = { fileId: opts.fileId, requestBody };
   if (opts.content !== undefined) {
     params.media = { mimeType: opts.mimeType ?? "text/plain", body: opts.content };
   }
@@ -116,13 +130,19 @@ export async function updateDriveFile(client: Auth.OAuth2Client, opts: UpdateDri
 }
 
 /** Permanently delete a file. */
-export async function deleteDriveFile(client: Auth.OAuth2Client, opts: GetDriveOptions): Promise<void> {
+export async function deleteDriveFile(
+  client: Auth.OAuth2Client,
+  opts: GetDriveOptions,
+): Promise<void> {
   const drive = google.drive({ version: "v3", auth: client });
   await drive.files.delete({ fileId: opts.fileId });
 }
 
 /** Share a file with a user by email. */
-export async function shareDriveFile(client: Auth.OAuth2Client, opts: ShareDriveOptions): Promise<{ id: string }> {
+export async function shareDriveFile(
+  client: Auth.OAuth2Client,
+  opts: ShareDriveOptions,
+): Promise<{ id: string }> {
   const drive = google.drive({ version: "v3", auth: client });
   const res = await drive.permissions.create({
     fileId: opts.fileId,
@@ -136,7 +156,7 @@ export async function shareDriveFile(client: Auth.OAuth2Client, opts: ShareDrive
   return { id: (res.data.id ?? "") as string };
 }
 
-function mapFile(f: any): DriveFile {
+function mapFile(f: drive_v3.Schema$File): DriveFile {
   return {
     id: f.id as string,
     name: f.name as string | undefined,
@@ -149,7 +169,10 @@ function mapFile(f: any): DriveFile {
 }
 
 /** Download a file's raw bytes (non-Google-native files). */
-export async function downloadDriveFile(client: Auth.OAuth2Client, opts: GetDriveOptions): Promise<DownloadDriveResult> {
+export async function downloadDriveFile(
+  client: Auth.OAuth2Client,
+  opts: GetDriveOptions,
+): Promise<DownloadDriveResult> {
   const drive = google.drive({ version: "v3", auth: client });
   const res = await drive.files.get({ fileId: opts.fileId, alt: "media" });
   return mapDownload(res);
@@ -158,7 +181,7 @@ export async function downloadDriveFile(client: Auth.OAuth2Client, opts: GetDriv
 /** Export a Google-native file (Docs/Sheets/Slides) to another format. */
 export async function exportDriveFile(
   client: Auth.OAuth2Client,
-  opts: GetDriveOptions & { mimeType: string }
+  opts: GetDriveOptions & { mimeType: string },
 ): Promise<DownloadDriveResult> {
   const drive = google.drive({ version: "v3", auth: client });
   const res = await drive.files.export({ fileId: opts.fileId, mimeType: opts.mimeType });
@@ -168,10 +191,13 @@ export async function exportDriveFile(
 /** Create a folder. */
 export async function createDriveFolder(
   client: Auth.OAuth2Client,
-  opts: { name: string; parentFolderId?: string }
+  opts: { name: string; parentFolderId?: string },
 ): Promise<DriveFile> {
   const drive = google.drive({ version: "v3", auth: client });
-  const requestBody: any = { name: opts.name, mimeType: "application/vnd.google-apps.folder" };
+  const requestBody: drive_v3.Schema$File = {
+    name: opts.name,
+    mimeType: "application/vnd.google-apps.folder",
+  };
   if (opts.parentFolderId) requestBody.parents = [opts.parentFolderId];
   const res = await drive.files.create({ requestBody });
   return mapFile(res.data);
@@ -180,10 +206,10 @@ export async function createDriveFolder(
 /** Copy a file. */
 export async function copyDriveFile(
   client: Auth.OAuth2Client,
-  opts: GetDriveOptions & { name?: string }
+  opts: GetDriveOptions & { name?: string },
 ): Promise<DriveFile> {
   const drive = google.drive({ version: "v3", auth: client });
-  const requestBody: any = {};
+  const requestBody: drive_v3.Schema$File = {};
   if (opts.name) requestBody.name = opts.name;
   const res = await drive.files.copy({ fileId: opts.fileId, requestBody });
   return mapFile(res.data);

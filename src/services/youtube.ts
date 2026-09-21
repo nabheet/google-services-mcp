@@ -1,4 +1,4 @@
-import type { Auth } from "googleapis";
+import type { Auth, youtube_v3 } from "googleapis";
 import { google } from "googleapis";
 
 export interface SearchVideosArgs {
@@ -12,7 +12,7 @@ export interface GetVideoArgs {
 
 export async function searchVideos(
   client: Auth.OAuth2Client,
-  { query, maxResults = 10 }: SearchVideosArgs
+  { query, maxResults = 10 }: SearchVideosArgs,
 ): Promise<Array<{ id: string; type: string; title?: string; channelTitle?: string }>> {
   const yt = google.youtube({ version: "v3", auth: client });
   const res = await yt.search.list({
@@ -23,13 +23,22 @@ export async function searchVideos(
   });
   return (res.data.items ?? []).map((item) => ({
     id: item.id?.videoId ?? item.id?.channelId ?? item.id?.playlistId ?? "",
-    type: item.id?.videoId ? "video" : item.id?.channelId ? "channel" : item.id?.playlistId ? "playlist" : "unknown",
+    type: item.id?.videoId
+      ? "video"
+      : item.id?.channelId
+        ? "channel"
+        : item.id?.playlistId
+          ? "playlist"
+          : "unknown",
     title: item.snippet?.title ?? undefined,
     channelTitle: item.snippet?.channelTitle ?? undefined,
   }));
 }
 
-export async function getVideo(client: Auth.OAuth2Client, { videoId }: GetVideoArgs): Promise<any> {
+export async function getVideo(
+  client: Auth.OAuth2Client,
+  { videoId }: GetVideoArgs,
+): Promise<youtube_v3.Schema$Video | null> {
   const yt = google.youtube({ version: "v3", auth: client });
   const res = await yt.videos.list({
     part: ["snippet", "contentDetails", "statistics"],
@@ -40,8 +49,8 @@ export async function getVideo(client: Auth.OAuth2Client, { videoId }: GetVideoA
 
 export async function getMyVideos(
   client: Auth.OAuth2Client,
-  { maxResults = 25 }: { maxResults?: number }
-): Promise<any> {
+  { maxResults = 25 }: { maxResults?: number },
+): Promise<{ uploadsPlaylistId: string | null; videos: youtube_v3.Schema$PlaylistItem[] }> {
   // Find the uploads playlist for the signed-in channel, then list its items.
   const yt = google.youtube({ version: "v3", auth: client });
   const playlists = await yt.playlists.list({
@@ -49,7 +58,9 @@ export async function getMyVideos(
     mine: true,
     maxResults: 50,
   });
-  const uploadsPlaylist = (playlists.data.items ?? []).find((p) => p.id && p.snippet?.title === "Uploads");
+  const uploadsPlaylist = (playlists.data.items ?? []).find(
+    (p) => p.id && p.snippet?.title === "Uploads",
+  );
   if (!uploadsPlaylist?.id) {
     return { videos: [], uploadsPlaylistId: null };
   }
@@ -63,8 +74,8 @@ export async function getMyVideos(
 
 export async function listPlaylists(
   client: Auth.OAuth2Client,
-  { maxResults = 25 }: { maxResults?: number }
-): Promise<any[]> {
+  { maxResults = 25 }: { maxResults?: number },
+): Promise<youtube_v3.Schema$Playlist[]> {
   const yt = google.youtube({ version: "v3", auth: client });
   const res = await yt.playlists.list({
     part: ["snippet", "contentDetails"],
@@ -76,8 +87,12 @@ export async function listPlaylists(
 
 export async function createPlaylist(
   client: Auth.OAuth2Client,
-  { title, description, privacyStatus = "private" as const }: { title: string; description?: string; privacyStatus?: string }
-): Promise<any> {
+  {
+    title,
+    description,
+    privacyStatus = "private" as const,
+  }: { title: string; description?: string; privacyStatus?: string },
+): Promise<youtube_v3.Schema$Playlist> {
   const yt = google.youtube({ version: "v3", auth: client });
   const res = await yt.playlists.insert({
     part: ["snippet", "status"],
@@ -91,8 +106,8 @@ export async function createPlaylist(
 
 export async function deletePlaylist(
   client: Auth.OAuth2Client,
-  { playlistId }: { playlistId: string }
-): Promise<any> {
+  { playlistId }: { playlistId: string },
+): Promise<{ deleted: boolean }> {
   const yt = google.youtube({ version: "v3", auth: client });
   await yt.playlists.delete({ id: playlistId });
   return { deleted: true };
@@ -100,8 +115,8 @@ export async function deletePlaylist(
 
 export async function addVideoToPlaylist(
   client: Auth.OAuth2Client,
-  { playlistId, videoId }: { playlistId: string; videoId: string }
-): Promise<any> {
+  { playlistId, videoId }: { playlistId: string; videoId: string },
+): Promise<youtube_v3.Schema$PlaylistItem> {
   const yt = google.youtube({ version: "v3", auth: client });
   const res = await yt.playlistItems.insert({
     part: ["snippet"],
@@ -114,7 +129,7 @@ export async function addVideoToPlaylist(
 
 export async function listSubscriptions(
   client: Auth.OAuth2Client,
-  { maxResults = 50 }: { maxResults?: number }
+  { maxResults = 50 }: { maxResults?: number },
 ): Promise<Array<{ title?: string; channelId?: string }>> {
   const yt = google.youtube({ version: "v3", auth: client });
   const res = await yt.subscriptions.list({

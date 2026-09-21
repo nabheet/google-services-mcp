@@ -1,4 +1,4 @@
-import type { Auth } from "googleapis";
+import type { Auth, calendar_v3 } from "googleapis";
 import { google } from "googleapis";
 
 export interface ListEventsOptions {
@@ -82,7 +82,10 @@ export async function listCalendars(client: Auth.OAuth2Client): Promise<Calendar
 }
 
 /** List events in a calendar, optionally filtered by time range / free-text query. */
-export async function listEvents(client: Auth.OAuth2Client, opts: ListEventsOptions): Promise<EventSummary[]> {
+export async function listEvents(
+  client: Auth.OAuth2Client,
+  opts: ListEventsOptions,
+): Promise<EventSummary[]> {
   const calendar = google.calendar({ version: "v3", auth: client });
   const res = await calendar.events.list({
     calendarId: opts.calendarId ?? "primary",
@@ -106,14 +109,17 @@ export async function listEvents(client: Auth.OAuth2Client, opts: ListEventsOpti
 }
 
 /** Create an event. Returns the created event. */
-export async function createEvent(client: Auth.OAuth2Client, opts: CreateEventOptions): Promise<EventSummary> {
+export async function createEvent(
+  client: Auth.OAuth2Client,
+  opts: CreateEventOptions,
+): Promise<EventSummary> {
   const startMs = Date.parse(opts.start.replace(" ", "T"));
   const endMs = Date.parse(opts.end.replace(" ", "T"));
   if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs <= startMs) {
     throw new Error("Event end must not be before start.");
   }
   const calendar = google.calendar({ version: "v3", auth: client });
-  const requestBody: any = {
+  const requestBody: calendar_v3.Schema$Event = {
     summary: opts.summary,
     description: opts.description,
     location: opts.location,
@@ -128,7 +134,10 @@ export async function createEvent(client: Auth.OAuth2Client, opts: CreateEventOp
 }
 
 /** Get a single event. */
-export async function getEvent(client: Auth.OAuth2Client, opts: GetEventOptions): Promise<EventSummary> {
+export async function getEvent(
+  client: Auth.OAuth2Client,
+  opts: GetEventOptions,
+): Promise<EventSummary> {
   const calendar = google.calendar({ version: "v3", auth: client });
   const res = await calendar.events.get({
     calendarId: opts.calendarId ?? "primary",
@@ -138,13 +147,17 @@ export async function getEvent(client: Auth.OAuth2Client, opts: GetEventOptions)
 }
 
 /** Update an existing event (partial). */
-export async function updateEvent(client: Auth.OAuth2Client, opts: UpdateEventOptions): Promise<EventSummary> {
+export async function updateEvent(
+  client: Auth.OAuth2Client,
+  opts: UpdateEventOptions,
+): Promise<EventSummary> {
   const calendar = google.calendar({ version: "v3", auth: client });
-  const requestBody: any = {};
+  const requestBody: calendar_v3.Schema$Event = {};
   if (opts.summary !== undefined) requestBody.summary = opts.summary;
   if (opts.description !== undefined) requestBody.description = opts.description;
   if (opts.location !== undefined) requestBody.location = opts.location;
-  if (opts.attendees !== undefined) requestBody.attendees = opts.attendees.map((email) => ({ email }));
+  if (opts.attendees !== undefined)
+    requestBody.attendees = opts.attendees.map((email) => ({ email }));
   if (opts.start !== undefined && opts.end !== undefined) {
     Object.assign(requestBody, buildStartEnd(opts.start, opts.end));
   }
@@ -157,7 +170,10 @@ export async function updateEvent(client: Auth.OAuth2Client, opts: UpdateEventOp
 }
 
 /** Delete an event. */
-export async function deleteEvent(client: Auth.OAuth2Client, opts: DeleteEventOptions): Promise<void> {
+export async function deleteEvent(
+  client: Auth.OAuth2Client,
+  opts: DeleteEventOptions,
+): Promise<void> {
   const calendar = google.calendar({ version: "v3", auth: client });
   await calendar.events.delete({
     calendarId: opts.calendarId ?? "primary",
@@ -166,9 +182,12 @@ export async function deleteEvent(client: Auth.OAuth2Client, opts: DeleteEventOp
 }
 
 /** Create an event with an attached Google Meet conference. Returns the hangout link. */
-export async function createMeetLink(client: Auth.OAuth2Client, opts: CreateEventOptions): Promise<EventSummary> {
+export async function createMeetLink(
+  client: Auth.OAuth2Client,
+  opts: CreateEventOptions,
+): Promise<EventSummary> {
   const calendar = google.calendar({ version: "v3", auth: client });
-  const requestBody: any = {
+  const requestBody: calendar_v3.Schema$Event = {
     summary: opts.summary,
     description: opts.description,
     location: opts.location,
@@ -189,7 +208,7 @@ export async function createMeetLink(client: Auth.OAuth2Client, opts: CreateEven
   return mapEvent(res.data);
 }
 
-function mapEvent(data: any): EventSummary {
+function mapEvent(data: calendar_v3.Schema$Event): EventSummary {
   return {
     id: data.id as string,
     summary: data.summary as string | undefined,

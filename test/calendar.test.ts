@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockEvents = {
   list: vi.fn(),
@@ -16,13 +16,13 @@ vi.mock("googleapis", () => ({
 }));
 
 import {
+  createEvent,
+  createMeetLink,
+  deleteEvent,
+  getEvent,
   listCalendars,
   listEvents,
-  createEvent,
-  getEvent,
   updateEvent,
-  deleteEvent,
-  createMeetLink,
 } from "../src/services/calendar.js";
 
 const client = {} as never;
@@ -74,7 +74,7 @@ describe("listEvents", () => {
         timeMax: "2026-08-10T23:59:59Z",
         singleEvents: true,
         orderBy: "startTime",
-      })
+      }),
     );
     expect(result[0]).toMatchObject({ id: "e1", summary: "Standup" });
   });
@@ -106,7 +106,12 @@ describe("createEvent", () => {
 
   it("creates an all-day event", async () => {
     mockEvents.insert.mockResolvedValue({ data: { id: "e2" } });
-    await createEvent(client, { calendarId: "primary", summary: "Holiday", start: "2026-12-25", end: "2026-12-26" });
+    await createEvent(client, {
+      calendarId: "primary",
+      summary: "Holiday",
+      start: "2026-12-25",
+      end: "2026-12-26",
+    });
     expect(mockEvents.insert).toHaveBeenCalledWith({
       calendarId: "primary",
       requestBody: {
@@ -119,7 +124,12 @@ describe("createEvent", () => {
 
   it("throws a helpful error when end is before start", async () => {
     await expect(
-      createEvent(client, { calendarId: "primary", summary: "Bad", start: "2026-08-12T14:00:00-07:00", end: "2026-08-12T13:00:00-07:00" })
+      createEvent(client, {
+        calendarId: "primary",
+        summary: "Bad",
+        start: "2026-08-12T14:00:00-07:00",
+        end: "2026-08-12T13:00:00-07:00",
+      }),
     ).rejects.toThrow(/end.*before start|start.*after end/i);
   });
 });
@@ -136,7 +146,11 @@ describe("getEvent", () => {
 describe("updateEvent", () => {
   it("updates summary and returns the updated event", async () => {
     mockEvents.update.mockResolvedValue({ data: { id: "e1", summary: "Updated" } });
-    const result = await updateEvent(client, { calendarId: "primary", eventId: "e1", summary: "Updated" });
+    const result = await updateEvent(client, {
+      calendarId: "primary",
+      eventId: "e1",
+      summary: "Updated",
+    });
     expect(mockEvents.update).toHaveBeenCalledWith({
       calendarId: "primary",
       eventId: "e1",
@@ -160,13 +174,25 @@ describe("createMeetLink", () => {
       data: {
         id: "e1",
         summary: "Call",
-        conferenceData: { entryPoints: [{ entryPointType: "video", uri: "https://meet.google.com/abc-defg-hij" }] },
+        conferenceData: {
+          entryPoints: [{ entryPointType: "video", uri: "https://meet.google.com/abc-defg-hij" }],
+        },
         hangoutLink: "https://meet.google.com/abc-defg-hij",
       },
     });
-    const result = await createMeetLink(client, { calendarId: "primary", summary: "Call", start: "2026-08-13T10:00:00-07:00", end: "2026-08-13T10:30:00-07:00" });
+    const result = await createMeetLink(client, {
+      calendarId: "primary",
+      summary: "Call",
+      start: "2026-08-13T10:00:00-07:00",
+      end: "2026-08-13T10:30:00-07:00",
+    });
     const body = mockEvents.insert.mock.calls[0][0].requestBody;
-    expect(body.conferenceData).toEqual({ createRequest: { requestId: expect.any(String), conferenceSolutionKey: { type: "hangoutsMeet" } } });
+    expect(body.conferenceData).toEqual({
+      createRequest: {
+        requestId: expect.any(String),
+        conferenceSolutionKey: { type: "hangoutsMeet" },
+      },
+    });
     expect(result.hangoutLink).toContain("meet.google.com");
   });
 });

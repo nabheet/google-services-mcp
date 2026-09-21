@@ -1,5 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { google } from "googleapis";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockYouTube = {
   search: { list: vi.fn() },
@@ -18,14 +17,14 @@ vi.mock("googleapis", () => ({
 const client = {} as never;
 
 import {
-  searchVideos,
-  getVideo,
-  getMyVideos,
-  listPlaylists,
+  addVideoToPlaylist,
   createPlaylist,
   deletePlaylist,
-  addVideoToPlaylist,
+  getMyVideos,
+  getVideo,
+  listPlaylists,
   listSubscriptions,
+  searchVideos,
 } from "../src/services/youtube.js";
 
 beforeEach(() => {
@@ -59,12 +58,14 @@ describe("youtube service", () => {
     mockYouTube.search.list.mockResolvedValue({ data: { items: [] } });
     await searchVideos(client, { query: "dogs" });
     expect(mockYouTube.search.list).toHaveBeenCalledWith(
-      expect.objectContaining({ maxResults: 10 })
+      expect.objectContaining({ maxResults: 10 }),
     );
   });
 
   it("getVideo fetches video details", async () => {
-    mockYouTube.videos.list.mockResolvedValue({ data: { items: [{ id: "v1", snippet: { title: "T" } }] } });
+    mockYouTube.videos.list.mockResolvedValue({
+      data: { items: [{ id: "v1", snippet: { title: "T" } }] },
+    });
     const result = await getVideo(client, { videoId: "v1" });
     expect(result.id).toBe("v1");
     expect(mockYouTube.videos.list).toHaveBeenCalledWith({
@@ -86,12 +87,14 @@ describe("youtube service", () => {
     const playlistCall = mockYouTube.playlists.list.mock.calls[0][0];
     expect(playlistCall.mine).toBe(true);
     expect(mockYouTube.playlistItems.list).toHaveBeenCalledWith(
-      expect.objectContaining({ playlistId: "uploads1", maxResults: 25 })
+      expect.objectContaining({ playlistId: "uploads1", maxResults: 25 }),
     );
   });
 
   it("listPlaylists lists playlists", async () => {
-    mockYouTube.playlists.list.mockResolvedValue({ data: { items: [{ id: "pl1", snippet: { title: "P" } }] } });
+    mockYouTube.playlists.list.mockResolvedValue({
+      data: { items: [{ id: "pl1", snippet: { title: "P" } }] },
+    });
     const result = await listPlaylists(client, {});
     expect(result).toEqual([{ id: "pl1", snippet: { title: "P" } }]);
     expect(mockYouTube.playlists.list).toHaveBeenCalledWith({
@@ -102,12 +105,17 @@ describe("youtube service", () => {
   });
 
   it("createPlaylist creates a playlist", async () => {
-    mockYouTube.playlists.insert.mockResolvedValue({ data: { id: "pl2", snippet: { title: "New" } } });
+    mockYouTube.playlists.insert.mockResolvedValue({
+      data: { id: "pl2", snippet: { title: "New" } },
+    });
     const result = await createPlaylist(client, { title: "New", description: "d" });
     expect(result.id).toBe("pl2");
     expect(mockYouTube.playlists.insert).toHaveBeenCalledWith({
       part: ["snippet", "status"],
-      requestBody: { snippet: { title: "New", description: "d" }, status: { privacyStatus: "private" } },
+      requestBody: {
+        snippet: { title: "New", description: "d" },
+        status: { privacyStatus: "private" },
+      },
     });
   });
 
@@ -124,7 +132,9 @@ describe("youtube service", () => {
     expect(result.id).toBe("pi1");
     expect(mockYouTube.playlistItems.insert).toHaveBeenCalledWith({
       part: ["snippet"],
-      requestBody: { snippet: { playlistId: "pl1", resourceId: { kind: "youtube#video", videoId: "v1" } } },
+      requestBody: {
+        snippet: { playlistId: "pl1", resourceId: { kind: "youtube#video", videoId: "v1" } },
+      },
     });
   });
 

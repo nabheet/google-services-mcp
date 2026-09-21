@@ -1,5 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { google } from "googleapis";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockPresentations = {
   get: vi.fn(),
@@ -17,12 +16,12 @@ vi.mock("googleapis", () => ({
 const client = {} as never;
 
 import {
-  getPresentation,
-  getSlidePage,
   createPresentation,
-  replaceAllText,
   createSlide,
   deleteSlide,
+  getPresentation,
+  getSlidePage,
+  replaceAllText,
 } from "../src/services/slides.js";
 
 beforeEach(() => {
@@ -44,7 +43,9 @@ describe("slides service", () => {
   });
 
   it("createPresentation creates with title", async () => {
-    mockPresentations.create.mockResolvedValue({ data: { presentationId: "p2", title: "New deck" } });
+    mockPresentations.create.mockResolvedValue({
+      data: { presentationId: "p2", title: "New deck" },
+    });
     const result = await createPresentation(client, { title: "New deck" });
     expect(result.presentationId).toBe("p2");
     expect(mockPresentations.create).toHaveBeenCalledWith({ requestBody: { title: "New deck" } });
@@ -54,7 +55,11 @@ describe("slides service", () => {
     mockPresentations.batchUpdate.mockResolvedValue({
       data: { replies: [{ replaceAllText: { occurrencesChanged: 3 } }] },
     });
-    const result = await replaceAllText(client, { presentationId: "p1", find: "{{x}}", replace: "Y" });
+    const result = await replaceAllText(client, {
+      presentationId: "p1",
+      find: "{{x}}",
+      replace: "Y",
+    });
     expect(result.occurrencesChanged).toBe(3);
     const body = mockPresentations.batchUpdate.mock.calls[0][0].requestBody;
     expect(body.requests[0].replaceAllText).toEqual({
@@ -70,7 +75,9 @@ describe("slides service", () => {
     const result = await createSlide(client, { presentationId: "p1" });
     expect(result.objectId).toBe("newslide1");
     const body = mockPresentations.batchUpdate.mock.calls[0][0].requestBody;
-    expect(body.requests[0].createSlide).toEqual({ slideLayoutReference: { predefinedLayout: "BLANK" } });
+    expect(body.requests[0].createSlide).toEqual({
+      slideLayoutReference: { predefinedLayout: "BLANK" },
+    });
   });
 
   it("deleteSlide removes a slide", async () => {
