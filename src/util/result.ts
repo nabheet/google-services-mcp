@@ -21,6 +21,6 @@ export function noAccountsHint(): { content: { type: "text"; text: string }[] } 
     "No Google accounts configured. Add one first:\n" +
       "  - In the AI client: run the `account_add` tool with a name (e.g. account_add personal).\n" +
       "  - Or on the command line: google-services-mcp add personal\n" +
-      "A browser window will open for Google sign-in."
+      "A browser window will open for Google sign-in.",
   );
 }

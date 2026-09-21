@@ -1,6 +1,6 @@
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -122,8 +122,12 @@ export async function saveConfig(config: Config): Promise<void> {
   const { clientId, clientSecret, redirectPort, redirectUri, defaultAccount, scopes } = config;
   await fs.writeFile(
     getConfigPath(),
-    JSON.stringify({ clientId, clientSecret, redirectPort, redirectUri, defaultAccount, scopes }, null, 2),
-    "utf8"
+    JSON.stringify(
+      { clientId, clientSecret, redirectPort, redirectUri, defaultAccount, scopes },
+      null,
+      2,
+    ),
+    "utf8",
   );
 }
 

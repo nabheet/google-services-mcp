@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import fs from "node:fs/promises";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { authManager } from "../../src/auth/manager.js";
-import { saveAccount, type StoredAccount } from "../../src/auth/store.js";
+import { type StoredAccount, saveAccount } from "../../src/auth/store.js";
 
 const oauth = await import("../../src/auth/oauth.js");
 
@@ -35,7 +35,10 @@ vi.mock("googleapis", () => ({
     auth: {
       OAuth2: class FakeOAuth2 {
         creds: Record<string, unknown> = {};
-        constructor(public id: string, public secret: string) {}
+        constructor(
+          public id: string,
+          public secret: string,
+        ) {}
         setCredentials(creds: Record<string, unknown>) {
           this.creds = creds;
         }
@@ -117,14 +120,18 @@ describe("resolveAccount", () => {
 describe("getClient", () => {
   it("sets credentials on the OAuth2 client", async () => {
     await saveAccount(account("personal"));
-    const client: { creds: Record<string, unknown> } = (await authManager.getClient("personal")) as never;
+    const client: { creds: Record<string, unknown> } = (await authManager.getClient(
+      "personal",
+    )) as never;
     expect(client.creds.access_token).toBe("at-personal");
     expect(client.creds.refresh_token).toBe("rt-personal");
   });
 
   it("refreshes and persists a new token when the access token is expired", async () => {
     await saveAccount(account("stale", { expiryDate: Date.now() - 1000 }));
-    const client: { creds: Record<string, unknown> } = (await authManager.getClient("stale")) as never;
+    const client: { creds: Record<string, unknown> } = (await authManager.getClient(
+      "stale",
+    )) as never;
     expect(client.creds.access_token).toBe("at-refreshed");
     expect(oauth.refreshAccessToken).toHaveBeenCalledOnce();
     const persisted = await authManager.resolveAccount("stale");
@@ -162,7 +169,9 @@ describe("addAccount", () => {
     await fs.rm(path.join(tmp, "config.json"), { force: true });
     vi.stubEnv("GOOGLE_MCP_CLIENT_ID", undefined);
     vi.stubEnv("GOOGLE_MCP_CLIENT_SECRET", undefined);
-    await expect(authManager.addAccount("x", { openBrowser: false })).rejects.toThrow(/credentials/i);
+    await expect(authManager.addAccount("x", { openBrowser: false })).rejects.toThrow(
+      /credentials/i,
+    );
     vi.stubEnv("GOOGLE_MCP_CLIENT_ID", "client-id-test");
     vi.stubEnv("GOOGLE_MCP_CLIENT_SECRET", "client-secret-test");
   });

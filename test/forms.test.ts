@@ -1,14 +1,13 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { google } from "googleapis";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockForms = {
   forms: {
     get: vi.fn(),
     create: vi.fn(),
     batchUpdate: vi.fn(),
-  },
-  forms_responses: {
-    list: vi.fn(),
+    responses: {
+      list: vi.fn(),
+    },
   },
 };
 
@@ -20,12 +19,7 @@ vi.mock("googleapis", () => ({
 
 const client = {} as never;
 
-import {
-  getForm,
-  getFormResponses,
-  createForm,
-  addQuestion,
-} from "../src/services/forms.js";
+import { addQuestion, createForm, getForm, getFormResponses } from "../src/services/forms.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -40,20 +34,22 @@ describe("forms service", () => {
   });
 
   it("getFormResponses lists responses with flatten", async () => {
-    mockForms.forms_responses.list.mockResolvedValue({
+    mockForms.forms.responses.list.mockResolvedValue({
       data: {
-        responses: [{ responseId: "r1", answers: { q1: { textAnswers: { answers: [{ value: "yes" }] } } } }],
+        responses: [
+          { responseId: "r1", answers: { q1: { textAnswers: { answers: [{ value: "yes" }] } } } },
+        ],
       },
     });
     const result = await getFormResponses(client, { formId: "f1" });
     expect(result).toEqual([
       { responseId: "r1", answers: { q1: { textAnswers: { answers: [{ value: "yes" }] } } } },
     ]);
-    expect(mockForms.forms_responses.list).toHaveBeenCalledWith({ formId: "f1", pageSize: 100 });
+    expect(mockForms.forms.responses.list).toHaveBeenCalledWith({ formId: "f1", pageSize: 100 });
   });
 
   it("getFormResponses returns empty array when none", async () => {
-    mockForms.forms_responses.list.mockResolvedValue({ data: {} });
+    mockForms.forms.responses.list.mockResolvedValue({ data: {} });
     const result = await getFormResponses(client, { formId: "f1" });
     expect(result).toEqual([]);
   });
