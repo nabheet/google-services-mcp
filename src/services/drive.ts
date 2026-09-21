@@ -52,8 +52,11 @@ export interface DownloadDriveResult {
 async function mapDownload(res: any): Promise<DownloadDriveResult> {
   let data = res.data;
   // googleapis returns a Blob (not Buffer/string) for alt=media and binary
-  // exports — convert so Buffer.isBuffer works below.
-  if (typeof Blob !== "undefined" && data instanceof Blob) {
+  // exports. Its Blob comes from gaxios' bundled fetch implementation, which
+  // is NOT an instanceof the global Blob class — so duck-type via arrayBuffer()
+  // instead of `instanceof Blob` (that check silently fails and the blob gets
+  // String()-ified to "[object Blob]").
+  if (data && typeof data === "object" && typeof data.arrayBuffer === "function") {
     data = Buffer.from(await data.arrayBuffer());
   }
   const binary = Buffer.isBuffer(data);
