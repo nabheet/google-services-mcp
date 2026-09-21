@@ -134,7 +134,7 @@ function quotedPrintableEncode(input: string): string {
     } else if (code === 32) {
       enc = " "; // trailing spaces are trimmed by flush
     } else {
-      enc = "=" + code.toString(16).toUpperCase().padStart(2, "0");
+      enc = `=${code.toString(16).toUpperCase().padStart(2, "0")}`;
     }
     if (line.length + enc.length > MAX_LINE - 1) {
       line += "="; // soft break
@@ -144,7 +144,7 @@ function quotedPrintableEncode(input: string): string {
   }
   flush();
   // Trailing space would be stripped by receivers; encode it.
-  return out.map((l) => (l.endsWith(" ") ? l.slice(0, -1) + "=20" : l)).join(CRLF);
+  return out.map((l) => (l.endsWith(" ") ? `${l.slice(0, -1)}=20` : l)).join(CRLF);
 }
 
 function sanitizeFilename(name: string): string {
