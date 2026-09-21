@@ -218,11 +218,21 @@ export function registerTools(server: McpServer): void {
         cc: z.union([z.string(), z.array(z.string())]).optional().describe("CC recipient(s)."),
         bcc: z.union([z.string(), z.array(z.string())]).optional().describe("BCC recipient(s)."),
         bodyType: z.enum(["text", "html"]).optional().describe("Body format (default text)."),
+        attachments: z
+          .array(
+            z.object({
+              path: z.string().describe("Local filesystem path of the file to attach."),
+              filename: z.string().optional().describe("Attachment filename shown to recipients (defaults to the basename of path)."),
+              mimeType: z.string().optional().describe("MIME type override (defaults to a guess from the filename)."),
+            })
+          )
+          .optional()
+          .describe("Local files to attach to the email."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ to, subject, body, cc, bcc, bodyType, account }) =>
-      withClient(account, (client) => sendGmail(client, { to, subject, body, cc, bcc, bodyType }))
+    async ({ to, subject, body, cc, bcc, bodyType, attachments, account }) =>
+      withClient(account, (client) => sendGmail(client, { to, subject, body, cc, bcc, bodyType, attachments }))
   );
 
   server.registerTool(
@@ -278,11 +288,21 @@ export function registerTools(server: McpServer): void {
         messageId: z.string().describe("ID of the message being replied to."),
         body: z.string().describe("Reply body."),
         bodyType: z.enum(["text", "html"]).optional().describe("Body format (default text)."),
+        attachments: z
+          .array(
+            z.object({
+              path: z.string().describe("Local filesystem path of the file to attach."),
+              filename: z.string().optional().describe("Attachment filename shown to recipients (defaults to the basename of path)."),
+              mimeType: z.string().optional().describe("MIME type override (defaults to a guess from the filename)."),
+            })
+          )
+          .optional()
+          .describe("Local files to attach to the reply."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ threadId, messageId, body, bodyType, account }) =>
-      withClient(account, (client) => replyGmail(client, { threadId, messageId, body, bodyType }))
+    async ({ threadId, messageId, body, bodyType, attachments, account }) =>
+      withClient(account, (client) => replyGmail(client, { threadId, messageId, body, bodyType, attachments }))
   );
 
   server.registerTool(
@@ -326,11 +346,21 @@ export function registerTools(server: McpServer): void {
         cc: z.union([z.string(), z.array(z.string())]).optional().describe("CC recipient(s)."),
         bcc: z.union([z.string(), z.array(z.string())]).optional().describe("BCC recipient(s)."),
         bodyType: z.enum(["text", "html"]).optional().describe("Body format (default text)."),
+        attachments: z
+          .array(
+            z.object({
+              path: z.string().describe("Local filesystem path of the file to attach."),
+              filename: z.string().optional().describe("Attachment filename shown to recipients (defaults to the basename of path)."),
+              mimeType: z.string().optional().describe("MIME type override (defaults to a guess from the filename)."),
+            })
+          )
+          .optional()
+          .describe("Local files to attach to the draft."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ to, subject, body, cc, bcc, bodyType, account }) =>
-      withClient(account, (client) => createGmailDraft(client, { to, subject, body, cc, bcc, bodyType }))
+    async ({ to, subject, body, cc, bcc, bodyType, attachments, account }) =>
+      withClient(account, (client) => createGmailDraft(client, { to, subject, body, cc, bcc, bodyType, attachments }))
   );
 
   server.registerTool(
