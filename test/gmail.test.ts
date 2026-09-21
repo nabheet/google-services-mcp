@@ -665,4 +665,90 @@ describe("gmail attachments", () => {
     expect(raw).toContain('filename="d.txt"');
     expect(result).toEqual({ id: "d1", messageId: "m1", threadId: "t1" });
   });
+
+  it("sanitizes CRLF in mimeType (no header injection)", async () => {
+    const filePath = join(tmpDir, "x.bin");
+    writeFileSync(filePath, "data", "utf8");
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "S",
+      body: "B",
+      attachments: [
+        { path: filePath, mimeType: 'text/plain\r\nBcc: evil@example.com\r\nX-Evil: 1' },
+      ],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).not.toContain("Bcc: evil@example.com");
+    expect(raw).not.toContain("X-Evil: 1");
+    // Invalid mimeType falls back to a guess, never to an injection.
+    expect(raw).toContain("Content-Type: text/plain;");
+  });
+
+  it("falls back when mimeType is an empty string", async () => {
+    const filePath = join(tmpDir, "x.pdf");
+    writeFileSync(filePath, "%PDF", "utf8");
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "S",
+      body: "B",
+      attachments: [{ path: filePath, mimeType: "" }],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain("Content-Type: application/pdf;");
+  });
+
+  it("quoted-printable encodes the body so = is not corrupted", async () => {
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "QP",
+      body: "token=41&next=x",
+    });
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain("token=3D41&next=3Dx");
+    expect(raw).not.toContain("token=41&next=x");
+  });
+
+  it("folds base64 attachment bodies at 76 columns", async () => {
+    const big = Buffer.alloc(4096, 0x61); // 4 KiB of 'a' -> ~5.5 KiB base64
+    const filePath = join(tmpDir, "big.bin");
+    writeFileSync(filePath, big);
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "S",
+      body: "B",
+      attachments: [{ path: filePath }],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    for (const line of raw.split(/\r?\n/)) {
+      if (/^[A-Za-z0-9+/=]+$/.test(line) && line.length > 76) {
+        throw new Error(`base64 line exceeds 76 chars: ${line.length}`);
+      }
+    }
+    expect(raw).toContain(Buffer.from("a".repeat(4096)).toString("base64").slice(0, 76));
+  });
+
+  it("rejects attachments over the Gmail size guard", async () => {
+    const filePath = join(tmpDir, "huge.bin");
+    writeFileSync(filePath, Buffer.alloc(19 * 1024 * 1024));
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await expect(
+      sendGmail(client, {
+        to: "bob@example.com",
+        subject: "S",
+        body: "B",
+        attachments: [{ path: filePath }],
+      })
+    ).rejects.toThrow(/too large/i);
+  });
 });

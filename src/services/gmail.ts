@@ -66,6 +66,14 @@ export interface GmailMessageDetail extends GmailMessageSummary {
 
 const CRLF = "\r\n";
 
+/** Gmail rejects messages over this size (raw RFC2822 bytes). */
+const GMAIL_MESSAGE_LIMIT_BYTES = 25 * 1024 * 1024;
+
+/** A per-attachment cap so a single huge file fails with a clear error. */
+const MAX_ATTACHMENT_BYTES = 18 * 1024 * 1024;
+
+const MIME_TYPE_RE = /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/;
+
 function headerValue(headers: Array<{ name: string; value: string }> | undefined, name: string): string {
   const h = headers?.find((x) => x.name.toLowerCase() === name.toLowerCase());
   return h ? h.value : "";
@@ -95,12 +103,56 @@ export function buildRawMessage(opts: SendGmailOptions): string {
   lines.push(`Content-Type: ${contentType}; charset=UTF-8`);
   lines.push("Content-Transfer-Encoding: quoted-printable");
   lines.push("");
-  lines.push(opts.body.replace(/\r?\n/g, CRLF));
+  lines.push(quotedPrintableEncode(opts.body));
   return lines.join(CRLF);
+}
+
+/** RFC 2045 quoted-printable encoding with 76-char soft line breaks. */
+function quotedPrintableEncode(input: string): string {
+  const MAX_LINE = 76;
+  const out: string[] = [];
+  let line = "";
+  const flush = () => {
+    out.push(line);
+    line = "";
+  };
+  for (let i = 0; i < input.length; i++) {
+    const code = input.charCodeAt(i);
+    if (code === 0x0d) continue; // normalize CRLF to LF below
+    if (code === 0x0a) {
+      flush();
+      continue;
+    }
+    let enc: string;
+    if (code === 0x3d) {
+      enc = "=3D";
+    } else if (code >= 33 && code <= 126) {
+      enc = input[i];
+    } else if (code === 32) {
+      enc = " "; // trailing spaces are trimmed by flush
+    } else {
+      enc = "=" + code.toString(16).toUpperCase().padStart(2, "0");
+    }
+    if (line.length + enc.length > MAX_LINE - 1) {
+      line += "="; // soft break
+      flush();
+    }
+    line += enc;
+  }
+  flush();
+  // Trailing space would be stripped by receivers; encode it.
+  return out
+    .map((l) => (l.endsWith(" ") ? l.slice(0, -1) + "=20" : l))
+    .join(CRLF);
 }
 
 function sanitizeFilename(name: string): string {
   return name.replace(/["\r\n]/g, "").trim() || "attachment";
+}
+
+/** Reject CR/LF and other control characters that would break headers. */
+function sanitizeMimeType(mimeType: string): string {
+  return MIME_TYPE_RE.test(mimeType) ? mimeType : "";
 }
 
 /** Best-effort MIME type guess by extension; binary fallback when unknown. */
@@ -140,6 +192,15 @@ function guessMimeType(filename: string): string {
 
 function generateBoundary(): string {
   return `----=_Part_${randomBytes(12).toString("hex")}`;
+}
+
+/** RFC 2045: base64 bodies are wrapped at 76 columns with CRLF. */
+function foldBase64(b64: string): string {
+  const chunks: string[] = [];
+  for (let i = 0; i < b64.length; i += 76) {
+    chunks.push(b64.slice(i, i + 76));
+  }
+  return chunks.join(CRLF);
 }
 
 async function readAttachment(path: string): Promise<Buffer> {
@@ -186,7 +247,7 @@ async function buildRawEmail(
     lines.push(`Content-Type: ${contentType}; charset=UTF-8`);
     lines.push("Content-Transfer-Encoding: quoted-printable");
     lines.push("");
-    lines.push(opts.body.replace(/\r?\n/g, CRLF));
+    lines.push(quotedPrintableEncode(opts.body));
     return lines.join(CRLF);
   }
 
@@ -199,18 +260,23 @@ async function buildRawEmail(
   lines.push(`Content-Type: ${contentType}; charset=UTF-8`);
   lines.push("Content-Transfer-Encoding: quoted-printable");
   lines.push("");
-  lines.push(opts.body.replace(/\r?\n/g, CRLF));
+  lines.push(quotedPrintableEncode(opts.body));
   // Attachment parts (base64 always — safe for text and binary)
   for (const att of attachments) {
     const buf = await readAttachment(att.path);
+    if (buf.length > MAX_ATTACHMENT_BYTES) {
+      throw new Error(
+        `Attachment too large: ${att.path} (${buf.length} bytes); Gmail limit is ${GMAIL_MESSAGE_LIMIT_BYTES} bytes total`
+      );
+    }
     const filename = sanitizeFilename(att.filename ?? basename(att.path));
-    const mimeType = att.mimeType ?? guessMimeType(filename);
+    const mimeType = sanitizeMimeType(att.mimeType || guessMimeType(filename)) || guessMimeType(filename);
     lines.push(`--${boundary}`);
     lines.push(`Content-Type: ${mimeType}; name="${filename}"`);
     lines.push(`Content-Disposition: attachment; filename="${filename}"`);
     lines.push("Content-Transfer-Encoding: base64");
     lines.push("");
-    lines.push(buf.toString("base64"));
+    lines.push(foldBase64(buf.toString("base64")));
   }
   lines.push(`--${boundary}--`);
   return lines.join(CRLF);
