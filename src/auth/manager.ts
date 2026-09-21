@@ -12,6 +12,7 @@ import {
   DEFAULT_AUTH_TIMEOUT_MS,
   exchangeCode,
   fetchUserInfo,
+  generatePkce,
   generateState,
   openBrowser,
   refreshAccessToken,
@@ -130,7 +131,8 @@ class AuthManager {
     }
 
     const state = generateState();
-    const authUrl = buildAuthUrl(config, state);
+    const { codeVerifier, codeChallenge } = generatePkce();
+    const authUrl = buildAuthUrl(config, state, codeChallenge);
     const timeoutMs = options.timeoutMs ?? DEFAULT_AUTH_TIMEOUT_MS;
     // The callback owns its timeout so an aborted flow always closes the
     // loopback listener (no stale port left behind).
@@ -149,7 +151,7 @@ class AuthManager {
 
     const callback = await callbackPromise;
 
-    const tokens = await exchangeCode(config, callback.code);
+    const tokens = await exchangeCode(config, callback.code, codeVerifier);
     const user = await fetchUserInfo(tokens.accessToken);
 
     const account: StoredAccount = {

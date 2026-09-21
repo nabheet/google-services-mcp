@@ -4,6 +4,7 @@ import {
   buildAuthUrl,
   exchangeCode,
   fetchUserInfo,
+  generatePkce,
   refreshAccessToken,
   waitForOAuthCallback,
 } from "../../src/auth/oauth.js";
@@ -32,13 +33,12 @@ function config(overrides: Partial<Config> = {}): Config {
     ],
     ...overrides,
   };
-  cfg.clientSecret = "secret-abc";
   return cfg;
 }
 
 describe("buildAuthUrl", () => {
   it("includes all OAuth params for an offline desktop flow", () => {
-    const url = new URL(buildAuthUrl(config(), "state-123"));
+    const url = new URL(buildAuthUrl(config(), "state-123", "challenge-abc"));
     expect(url.origin).toBe("https://accounts.google.com");
     expect(url.searchParams.get("client_id")).toBe("client-id-123");
     expect(url.searchParams.get("redirect_uri")).toBe("http://127.0.0.1:8787");
@@ -46,19 +46,23 @@ describe("buildAuthUrl", () => {
     expect(url.searchParams.get("access_type")).toBe("offline");
     expect(url.searchParams.get("prompt")).toBe("consent");
     expect(url.searchParams.get("state")).toBe("state-123");
+    expect(url.searchParams.get("code_challenge")).toBe("challenge-abc");
+    expect(url.searchParams.get("code_challenge_method")).toBe("S256");
     expect(url.searchParams.get("scope")).toContain("gmail.modify");
     expect(url.searchParams.get("scope")).toContain("/auth/calendar");
   });
 
   it("honors a custom redirect port and scopes", () => {
-    const url = new URL(buildAuthUrl(config({ redirectPort: 9999, scopes: ["s1", "s2"] }), "s"));
+    const url = new URL(
+      buildAuthUrl(config({ redirectPort: 9999, scopes: ["s1", "s2"] }), "s", "ch"),
+    );
     expect(url.searchParams.get("redirect_uri")).toBe("http://127.0.0.1:9999");
     expect(url.searchParams.get("scope")).toBe("s1 s2");
   });
 
   it("uses a configured redirectUri verbatim", () => {
     const url = new URL(
-      buildAuthUrl(config({ redirectUri: "http://localhost:9000/custom-callback" }), "s"),
+      buildAuthUrl(config({ redirectUri: "http://localhost:9000/custom-callback" }), "s", "ch"),
     );
     expect(url.searchParams.get("redirect_uri")).toBe("http://localhost:9000/custom-callback");
   });
@@ -67,11 +71,11 @@ describe("buildAuthUrl", () => {
 describe("exchangeCode", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("posts the code and returns a token set", async () => {
+  it("posts the code and verifier, returning a token set", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => tokenResponse() });
     vi.stubGlobal("fetch", fetchMock);
 
-    const tokens = await exchangeCode(config(), "the-code");
+    const tokens = await exchangeCode(config(), "the-code", "verifier-xyz");
     expect(tokens.accessToken).toBe("at-1");
     expect(tokens.refreshToken).toBe("rt-1");
     expect(tokens.expiryDate).toBeGreaterThan(Date.now() + 3590_000);
@@ -81,6 +85,7 @@ describe("exchangeCode", () => {
     const body = init.body as URLSearchParams;
     expect(body.get("grant_type")).toBe("authorization_code");
     expect(body.get("code")).toBe("the-code");
+    expect(body.get("code_verifier")).toBe("verifier-xyz");
     expect(body.get("client_id")).toBe("client-id-123");
     expect(body.get("redirect_uri")).toBe("http://127.0.0.1:8787");
   });
@@ -93,7 +98,7 @@ describe("exchangeCode", () => {
         json: async () => ({ error: "invalid_grant" }),
       }),
     );
-    await expect(exchangeCode(config(), "bad")).rejects.toThrow(/invalid_grant/);
+    await expect(exchangeCode(config(), "bad", "verifier")).rejects.toThrow(/invalid_grant/);
   });
 
   it("throws when the response has no access token", async () => {
@@ -104,7 +109,28 @@ describe("exchangeCode", () => {
         json: async () => ({ [K.refresh]: "rt-only" }),
       }),
     );
-    await expect(exchangeCode(config(), "c")).rejects.toThrow(/failed/i);
+    await expect(exchangeCode(config(), "c", "verifier")).rejects.toThrow(/failed/i);
+  });
+});
+
+describe("generatePkce", () => {
+  it("produces a verifier and a matching S256 challenge", async () => {
+    const { codeVerifier, codeChallenge } = generatePkce();
+    expect(codeVerifier.length).toBeGreaterThanOrEqual(43);
+    expect(codeVerifier).toMatch(/^[A-Za-z0-9\-._~]+$/);
+    const expected = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(codeVerifier));
+    const expectedB64 = btoa(String.fromCharCode(...new Uint8Array(expected)))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    expect(codeChallenge).toBe(expectedB64);
+  });
+
+  it("generates unique pairs", () => {
+    const a = generatePkce();
+    const b = generatePkce();
+    expect(a.codeVerifier).not.toBe(b.codeVerifier);
+    expect(a.codeChallenge).not.toBe(b.codeChallenge);
   });
 });
 
