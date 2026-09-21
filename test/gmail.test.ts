@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const mockMessages = {
   send: vi.fn(),
@@ -54,12 +57,19 @@ import {
 
 const client = {} as never;
 
+let tmpDir: string;
+
 function decodeRaw(base64url: string): string {
   return Buffer.from(base64url, "base64url").toString("utf8");
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  tmpDir = mkdtempSync(join(tmpdir(), "gmail-att-"));
+});
+
+afterEach(() => {
+  rmSync(tmpDir, { recursive: true, force: true });
 });
 
 describe("sendGmail", () => {
@@ -547,5 +557,257 @@ describe("gmail trash and delete", () => {
     const result = await deleteGmailMessage(client, { id: "m1" });
     expect(mockMessages.delete).toHaveBeenCalledWith({ userId: "me", id: "m1" });
     expect(result).toEqual({ deleted: true, id: "m1" });
+  });
+});
+
+describe("gmail attachments", () => {
+  it("sends a multipart/mixed message with a single attachment", async () => {
+    const filePath = join(tmpDir, "report.txt");
+    writeFileSync(filePath, "hello attachment", "utf8");
+    mockMessages.send.mockResolvedValue({ data: { id: "m-att", threadId: "thr-att" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "With attachment",
+      body: "See attached",
+      attachments: [{ path: filePath }],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain("Content-Type: multipart/mixed;");
+    const boundary = /boundary="([^"]+)"/.exec(raw)![1];
+    expect(raw).toContain(`--${boundary}`);
+    expect(raw).toContain(`--${boundary}--`);
+    expect(raw).toContain("Content-Type: text/plain; charset=UTF-8");
+    expect(raw).toContain('Content-Type: text/plain; name="report.txt"');
+    expect(raw).toContain('Content-Disposition: attachment; filename="report.txt"');
+    expect(raw).toContain("Content-Transfer-Encoding: base64");
+    expect(raw).toContain(Buffer.from("hello attachment").toString("base64"));
+    expect(mockMessages.send).toHaveBeenCalledWith({
+      userId: "me",
+      requestBody: { raw: expect.any(String) },
+    });
+  });
+
+  it("attaches multiple files with guessed mime types", async () => {
+    const f1 = join(tmpDir, "a.txt");
+    const f2 = join(tmpDir, "b.pdf");
+    writeFileSync(f1, "AAA", "utf8");
+    writeFileSync(f2, Buffer.from([0x25, 0x50, 0x44, 0x46]));
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "two files",
+      body: "body",
+      attachments: [{ path: f1 }, { path: f2 }],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain('name="a.txt"');
+    expect(raw).toContain('name="b.pdf"');
+    expect(raw).toContain("Content-Type: application/pdf");
+    expect(raw).toContain(Buffer.from("AAA").toString("base64"));
+    expect(raw).toContain(Buffer.from([0x25, 0x50, 0x44, 0x46]).toString("base64"));
+  });
+
+  it("supports an html body alongside an attachment", async () => {
+    const filePath = join(tmpDir, "img.png");
+    writeFileSync(filePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "html",
+      body: "<h1>Hi</h1>",
+      bodyType: "html",
+      attachments: [{ path: filePath }],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain("Content-Type: text/html; charset=UTF-8");
+    expect(raw).toContain("<h1>Hi</h1>");
+    expect(raw).toContain("Content-Type: image/png");
+    expect(raw).toContain('Content-Disposition: attachment; filename="img.png"');
+  });
+
+  it("honors filename and mimeType overrides", async () => {
+    const filePath = join(tmpDir, "data.bin");
+    writeFileSync(filePath, "custom", "utf8");
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "S",
+      body: "B",
+      attachments: [{ path: filePath, filename: "renamed.dat", mimeType: "application/x-custom" }],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain('name="renamed.dat"');
+    expect(raw).toContain('filename="renamed.dat"');
+    expect(raw).toContain("Content-Type: application/x-custom");
+  });
+
+  it("errors with a clear message when an attachment file is missing", async () => {
+    await expect(
+      sendGmail(client, {
+        to: "bob@example.com",
+        subject: "S",
+        body: "B",
+        attachments: [{ path: join(tmpDir, "nope.txt") }],
+      })
+    ).rejects.toThrow(/attachment/i);
+  });
+
+  it("keeps the single-part shape when no attachments are given (regression guard)", async () => {
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "Plain",
+      body: "Body",
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).not.toContain("multipart");
+    expect(raw).toContain("Content-Type: text/plain; charset=UTF-8");
+    expect(raw).toContain("Content-Transfer-Encoding: quoted-printable");
+  });
+
+  it("reply keeps threading headers and attaches files", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        id: "orig-1",
+        payload: {
+          headers: [
+            { name: "From", value: "Bob <bob@example.com>" },
+            { name: "Subject", value: "Meeting" },
+            { name: "Message-ID", value: "<abc@mail.gmail.com>" },
+            { name: "References", value: "<prev@mail.gmail.com>" },
+          ],
+        },
+      },
+    });
+    mockMessages.send.mockResolvedValue({ data: { id: "r1", threadId: "thr-1" } });
+    const filePath = join(tmpDir, "notes.txt");
+    writeFileSync(filePath, "notes", "utf8");
+
+    await replyGmail(client, {
+      threadId: "thr-1",
+      messageId: "orig-1",
+      body: "Here",
+      attachments: [{ path: filePath }],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain("In-Reply-To: <abc@mail.gmail.com>");
+    expect(raw).toContain("References: <prev@mail.gmail.com>");
+    expect(raw).toContain("Content-Type: multipart/mixed;");
+    expect(raw).toContain('filename="notes.txt"');
+  });
+
+  it("creates a draft with an attachment", async () => {
+    mockDrafts.create.mockResolvedValue({ data: { id: "d1", message: { id: "m1", threadId: "t1" } } });
+    const filePath = join(tmpDir, "d.txt");
+    writeFileSync(filePath, "draft att", "utf8");
+
+    const result = await createGmailDraft(client, {
+      to: "bob@example.com",
+      subject: "Draft",
+      body: "Body",
+      attachments: [{ path: filePath }],
+    });
+
+    const raw = decodeRaw(mockDrafts.create.mock.calls[0][0].requestBody.message.raw);
+    expect(raw).toContain("Content-Type: multipart/mixed;");
+    expect(raw).toContain('filename="d.txt"');
+    expect(result).toEqual({ id: "d1", messageId: "m1", threadId: "t1" });
+  });
+
+  it("sanitizes CRLF in mimeType (no header injection)", async () => {
+    const filePath = join(tmpDir, "x.bin");
+    writeFileSync(filePath, "data", "utf8");
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "S",
+      body: "B",
+      attachments: [
+        { path: filePath, mimeType: 'text/plain\r\nBcc: evil@example.com\r\nX-Evil: 1' },
+      ],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).not.toContain("Bcc: evil@example.com");
+    expect(raw).not.toContain("X-Evil: 1");
+    // Invalid mimeType falls back to a guess, never to an injection.
+    expect(raw).toContain("Content-Type: text/plain;");
+  });
+
+  it("falls back when mimeType is an empty string", async () => {
+    const filePath = join(tmpDir, "x.pdf");
+    writeFileSync(filePath, "%PDF", "utf8");
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "S",
+      body: "B",
+      attachments: [{ path: filePath, mimeType: "" }],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain("Content-Type: application/pdf;");
+  });
+
+  it("quoted-printable encodes the body so = is not corrupted", async () => {
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "QP",
+      body: "token=41&next=x",
+    });
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain("token=3D41&next=3Dx");
+    expect(raw).not.toContain("token=41&next=x");
+  });
+
+  it("folds base64 attachment bodies at 76 columns", async () => {
+    const big = Buffer.alloc(4096, 0x61); // 4 KiB of 'a' -> ~5.5 KiB base64
+    const filePath = join(tmpDir, "big.bin");
+    writeFileSync(filePath, big);
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "S",
+      body: "B",
+      attachments: [{ path: filePath }],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    for (const line of raw.split(/\r?\n/)) {
+      if (/^[A-Za-z0-9+/=]+$/.test(line) && line.length > 76) {
+        throw new Error(`base64 line exceeds 76 chars: ${line.length}`);
+      }
+    }
+    expect(raw).toContain(Buffer.from("a".repeat(4096)).toString("base64").slice(0, 76));
+  });
+
+  it("rejects attachments over the Gmail size guard", async () => {
+    const filePath = join(tmpDir, "huge.bin");
+    writeFileSync(filePath, Buffer.alloc(19 * 1024 * 1024));
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await expect(
+      sendGmail(client, {
+        to: "bob@example.com",
+        subject: "S",
+        body: "B",
+        attachments: [{ path: filePath }],
+      })
+    ).rejects.toThrow(/too large/i);
   });
 });
