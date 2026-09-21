@@ -1,14 +1,14 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import fs from "node:fs/promises";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  saveAccount,
+  deleteAccount,
   loadAccount,
   loadAllAccounts,
-  deleteAccount,
   type StoredAccount,
+  saveAccount,
 } from "../../src/auth/store.js";
 
 let tmp: string;
@@ -84,7 +84,9 @@ describe("store", () => {
       saveAccount(makeAccount("two")),
       saveAccount(makeAccount("three")),
     ]);
-    const names = (await loadAllAccounts()).map((a) => a.name).filter((n) => ["one", "two", "three"].includes(n));
+    const names = (await loadAllAccounts())
+      .map((a) => a.name)
+      .filter((n) => ["one", "two", "three"].includes(n));
     expect(names.sort()).toEqual(["one", "three", "two"]);
   });
 });

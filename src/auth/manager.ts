@@ -1,23 +1,29 @@
-import { google, Auth } from "googleapis";
+import { type Auth, google } from "googleapis";
 import {
-  loadConfig,
-  saveConfig,
-  saveClientCredentials,
-  hasCredentials,
-  getDataDir,
   type Config,
+  getDataDir,
+  hasCredentials,
+  loadConfig,
+  saveClientCredentials,
+  saveConfig,
 } from "./config.js";
-import { loadAccount, loadAllAccounts, saveAccount, deleteAccount, type StoredAccount } from "./store.js";
 import {
   buildAuthUrl,
-  waitForOAuthCallback,
-  exchangeCode,
-  refreshAccessToken,
-  fetchUserInfo,
-  openBrowser,
-  generateState,
   DEFAULT_AUTH_TIMEOUT_MS,
+  exchangeCode,
+  fetchUserInfo,
+  generateState,
+  openBrowser,
+  refreshAccessToken,
+  waitForOAuthCallback,
 } from "./oauth.js";
+import {
+  deleteAccount,
+  loadAccount,
+  loadAllAccounts,
+  type StoredAccount,
+  saveAccount,
+} from "./store.js";
 
 export interface AddAccountOptions {
   /** Set to false to skip opening the browser (headless). */
@@ -70,7 +76,7 @@ class AuthManager {
     }
     if (accounts.length === 0) {
       throw new Error(
-        "No Google accounts configured. Add one with the account_add tool or run: google-services-mcp add <name>"
+        "No Google accounts configured. Add one with the account_add tool or run: google-services-mcp add <name>",
       );
     }
     const config = await this.getConfig();
@@ -80,7 +86,7 @@ class AuthManager {
     }
     if (accounts.length === 1) return accounts[0];
     throw new Error(
-      `Multiple accounts configured but no default set. Pass account="..." or run: google-services-mcp set-default <name>`
+      `Multiple accounts configured but no default set. Pass account="..." or run: google-services-mcp set-default <name>`,
     );
   }
 
@@ -119,7 +125,7 @@ class AuthManager {
     if (!hasCredentials(config)) {
       throw new Error(
         "Google OAuth credentials are not configured. Set GOOGLE_MCP_CLIENT_ID and " +
-          "GOOGLE_MCP_CLIENT_SECRET (or add them to config.json) first."
+          "GOOGLE_MCP_CLIENT_SECRET (or add them to config.json) first.",
       );
     }
 
@@ -136,7 +142,7 @@ class AuthManager {
       } catch {
         // Browser unavailable (headless server) — the error message carries the URL.
         throw new Error(
-          `Could not open a browser. Open this URL manually to authorize "${name}": ${authUrl}`
+          `Could not open a browser. Open this URL manually to authorize "${name}": ${authUrl}`,
         );
       }
     }

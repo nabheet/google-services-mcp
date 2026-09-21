@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockMessages = {
   send: vi.fn(),
@@ -25,29 +25,31 @@ const mockLabels = {
 
 vi.mock("googleapis", () => ({
   google: {
-    gmail: vi.fn(() => ({ users: { messages: mockMessages, drafts: mockDrafts, labels: mockLabels } })),
+    gmail: vi.fn(() => ({
+      users: { messages: mockMessages, drafts: mockDrafts, labels: mockLabels },
+    })),
   },
 }));
 
 import {
-  sendGmail,
-  listGmailMessages,
+  createGmailDraft,
+  createGmailLabel,
+  deleteGmailDraft,
+  deleteGmailLabel,
+  deleteGmailMessage,
+  getGmailAttachment,
+  getGmailDraft,
   getGmailMessage,
+  listGmailAttachments,
+  listGmailDrafts,
+  listGmailLabels,
+  listGmailMessages,
   modifyGmailMessage,
   replyGmail,
-  listGmailAttachments,
-  getGmailAttachment,
-  createGmailDraft,
-  listGmailDrafts,
-  getGmailDraft,
+  sendGmail,
   sendGmailDraft,
-  deleteGmailDraft,
-  listGmailLabels,
-  createGmailLabel,
-  deleteGmailLabel,
   trashGmailMessage,
   untrashGmailMessage,
-  deleteGmailMessage,
 } from "../src/services/gmail.js";
 
 const client = {} as never;
@@ -98,11 +100,15 @@ describe("sendGmail", () => {
   });
 
   it("throws a helpful error when no recipient is given", async () => {
-    await expect(sendGmail(client, { to: "", subject: "S", body: "B" })).rejects.toThrow(/recipient/i);
+    await expect(sendGmail(client, { to: "", subject: "S", body: "B" })).rejects.toThrow(
+      /recipient/i,
+    );
   });
 
   it("throws when subject and body are both empty", async () => {
-    await expect(sendGmail(client, { to: "bob@example.com", subject: "", body: "" })).rejects.toThrow(/subject.*body/i);
+    await expect(
+      sendGmail(client, { to: "bob@example.com", subject: "", body: "" }),
+    ).rejects.toThrow(/subject.*body/i);
   });
 });
 
@@ -200,7 +206,11 @@ describe("getGmailMessage", () => {
 describe("modifyGmailMessage", () => {
   it("applies add/remove labels", async () => {
     mockMessages.modify.mockResolvedValue({ data: { id: "m1", labelIds: ["INBOX"] } });
-    const result = await modifyGmailMessage(client, { id: "m1", addLabels: ["STARRED"], removeLabels: ["UNREAD"] });
+    const result = await modifyGmailMessage(client, {
+      id: "m1",
+      addLabels: ["STARRED"],
+      removeLabels: ["UNREAD"],
+    });
     expect(mockMessages.modify).toHaveBeenCalledWith({
       userId: "me",
       id: "m1",
@@ -227,7 +237,11 @@ describe("replyGmail", () => {
     });
     mockMessages.send.mockResolvedValue({ data: { id: "r1", threadId: "thr-1" } });
 
-    const result = await replyGmail(client, { threadId: "thr-1", messageId: "orig-1", body: "Sure, see you." });
+    const result = await replyGmail(client, {
+      threadId: "thr-1",
+      messageId: "orig-1",
+      body: "Sure, see you.",
+    });
 
     expect(mockMessages.get).toHaveBeenCalledWith({ userId: "me", id: "orig-1" });
     expect(mockMessages.send).toHaveBeenCalledWith({
@@ -237,7 +251,7 @@ describe("replyGmail", () => {
     const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
     expect(raw).toContain("To: Bob <bob@example.com>");
     expect(raw).toContain("Subject: Re: Meeting");
-    expect(raw).toContain('In-Reply-To: <abc@mail.gmail.com>');
+    expect(raw).toContain("In-Reply-To: <abc@mail.gmail.com>");
     expect(raw).toContain("References: <prev@mail.gmail.com>");
     expect(raw).toContain("Sure, see you.");
     expect(result).toEqual({ id: "r1", threadId: "thr-1" });
@@ -292,7 +306,9 @@ describe("getGmailAttachment", () => {
         },
       },
     });
-    mockMessages.attachments.get.mockResolvedValue({ data: { data: Buffer.from("# Hi").toString("base64url"), size: 5 } });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: Buffer.from("# Hi").toString("base64url"), size: 5 },
+    });
     const result = await getGmailAttachment(client, { id: "m1", attachmentId: "ATT1" });
     expect(mockMessages.attachments.get).toHaveBeenCalledWith({
       userId: "me",
@@ -311,7 +327,18 @@ describe("getGmailAttachment", () => {
 
   it("returns base64 only for binary mime types", async () => {
     mockMessages.get.mockResolvedValue({
-      data: { payload: { parts: [{ partId: "0.1", filename: "x.pdf", mimeType: "application/pdf", body: { attachmentId: "ATT9", size: 3 } }] } },
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "0.1",
+              filename: "x.pdf",
+              mimeType: "application/pdf",
+              body: { attachmentId: "ATT9", size: 3 },
+            },
+          ],
+        },
+      },
     });
     mockMessages.attachments.get.mockResolvedValue({ data: { data: "aGVsbG8=", size: 3 } });
     const result = await getGmailAttachment(client, { id: "m1", attachmentId: "ATT9" });
@@ -335,9 +362,19 @@ describe("getGmailAttachment", () => {
         },
       },
     });
-    mockMessages.attachments.get.mockResolvedValue({ data: { data: Buffer.from("# Hi").toString("base64url"), size: 5 } });
-    const result = await getGmailAttachment(client, { id: "m1", attachmentId: "STALE", partId: "0.1" });
-    expect(mockMessages.attachments.get).toHaveBeenCalledWith({ userId: "me", messageId: "m1", id: "FRESH" });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: Buffer.from("# Hi").toString("base64url"), size: 5 },
+    });
+    const result = await getGmailAttachment(client, {
+      id: "m1",
+      attachmentId: "STALE",
+      partId: "0.1",
+    });
+    expect(mockMessages.attachments.get).toHaveBeenCalledWith({
+      userId: "me",
+      messageId: "m1",
+      id: "FRESH",
+    });
     expect(result).toMatchObject({
       id: "FRESH",
       partId: "0.1",
@@ -352,21 +389,34 @@ describe("getGmailAttachment", () => {
       data: {
         payload: {
           parts: [
-            { partId: "0.1", filename: "old.md", mimeType: "text/markdown", body: { attachmentId: "ATT1", size: 3 } },
+            {
+              partId: "0.1",
+              filename: "old.md",
+              mimeType: "text/markdown",
+              body: { attachmentId: "ATT1", size: 3 },
+            },
           ],
         },
       },
     });
-    mockMessages.attachments.get.mockResolvedValue({ data: { data: Buffer.from("old").toString("base64url"), size: 3 } });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: Buffer.from("old").toString("base64url"), size: 3 },
+    });
     const result = await getGmailAttachment(client, { id: "m1", attachmentId: "ATT1" });
-    expect(mockMessages.attachments.get).toHaveBeenCalledWith({ userId: "me", messageId: "m1", id: "ATT1" });
+    expect(mockMessages.attachments.get).toHaveBeenCalledWith({
+      userId: "me",
+      messageId: "m1",
+      id: "ATT1",
+    });
     expect(result).toMatchObject({ filename: "old.md", mimeType: "text/markdown", text: "old" });
   });
 });
 
 describe("createGmailDraft", () => {
   it("builds a raw message and creates a draft", async () => {
-    mockDrafts.create.mockResolvedValue({ data: { id: "d1", message: { id: "m1", threadId: "t1" } } });
+    mockDrafts.create.mockResolvedValue({
+      data: { id: "d1", message: { id: "m1", threadId: "t1" } },
+    });
     const result = await createGmailDraft(client, {
       to: "bob@example.com",
       subject: "Draft",
@@ -418,7 +468,12 @@ describe("getGmailDraft", () => {
     });
     const result = await getGmailDraft(client, { id: "d1" });
     expect(mockDrafts.get).toHaveBeenCalledWith({ userId: "me", id: "d1", format: "full" });
-    expect(result).toMatchObject({ draftId: "d1", id: "m1", subject: "Draft subject", body: "draft body" });
+    expect(result).toMatchObject({
+      draftId: "d1",
+      id: "m1",
+      subject: "Draft subject",
+      body: "draft body",
+    });
   });
 });
 
@@ -455,7 +510,11 @@ describe("gmail labels", () => {
     const result = await createGmailLabel(client, { name: "Projects" });
     expect(mockLabels.create).toHaveBeenCalledWith({
       userId: "me",
-      requestBody: { name: "Projects", messageListVisibility: undefined, labelListVisibility: undefined },
+      requestBody: {
+        name: "Projects",
+        messageListVisibility: undefined,
+        labelListVisibility: undefined,
+      },
     });
     expect(result).toMatchObject({ id: "L2", name: "Projects" });
   });

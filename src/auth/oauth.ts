@@ -1,8 +1,8 @@
+import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createServer, type Server } from "node:http";
-import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { DEFAULT_REDIRECT_PORT, DEFAULT_SCOPES, type Config } from "./config.js";
+import { type Config, DEFAULT_REDIRECT_PORT, DEFAULT_SCOPES } from "./config.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -94,7 +94,7 @@ export interface AuthCallback {
 export function waitForOAuthCallback(
   config: Config,
   expectedState: string,
-  options: { timeoutMs?: number } = {}
+  options: { timeoutMs?: number } = {},
 ): Promise<AuthCallback> {
   return new Promise((resolve, reject) => {
     const target = parseCallbackTarget(config);
@@ -164,8 +164,8 @@ export function waitForOAuthCallback(
           new Error(
             `Could not start the OAuth callback server: port ${target.port} (host ${target.host}) is already in use. ` +
               `Set GOOGLE_MCP_REDIRECT_URI (or redirectUri in config.json, GOOGLE_MCP_REDIRECT_PORT, ` +
-              `or redirectPort) to a free loopback endpoint and retry.`
-          )
+              `or redirectPort) to a free loopback endpoint and retry.`,
+          ),
         );
       } else {
         reject(new Error(`OAuth callback server failed: ${e.message}`));
@@ -177,8 +177,8 @@ export function waitForOAuthCallback(
       reject(
         new Error(
           `Timed out waiting for the OAuth callback after ${Math.round(timeoutMs / 1000)}s. ` +
-            `Open the authorization URL in a browser and approve the prompt.`
-        )
+            `Open the authorization URL in a browser and approve the prompt.`,
+        ),
       );
     }, timeoutMs);
     timer.unref?.();
@@ -234,7 +234,9 @@ export async function refreshAccessToken(config: Config, refreshToken: string): 
 }
 
 /** Best-effort fetch of the signed-in user's profile (email/name). Never throws. */
-export async function fetchUserInfo(accessToken: string): Promise<{ email?: string; name?: string }> {
+export async function fetchUserInfo(
+  accessToken: string,
+): Promise<{ email?: string; name?: string }> {
   try {
     const response = await fetch(USERINFO_ENDPOINT, {
       headers: { Authorization: `Bearer ${accessToken}` },

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { createServer } from "./server.js";
 import { dispatchCommand } from "./cli.js";
+import { createServer } from "./server.js";
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);

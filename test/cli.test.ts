@@ -1,12 +1,14 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { addAccount, listAccounts, removeAccount, setDefaultAccount, getStatus } = vi.hoisted(() => ({
-  addAccount: vi.fn(),
-  listAccounts: vi.fn(),
-  removeAccount: vi.fn(),
-  setDefaultAccount: vi.fn(),
-  getStatus: vi.fn(),
-}));
+const { addAccount, listAccounts, removeAccount, setDefaultAccount, getStatus } = vi.hoisted(
+  () => ({
+    addAccount: vi.fn(),
+    listAccounts: vi.fn(),
+    removeAccount: vi.fn(),
+    setDefaultAccount: vi.fn(),
+    getStatus: vi.fn(),
+  }),
+);
 
 vi.mock("../src/auth/manager.js", () => ({
   authManager: {

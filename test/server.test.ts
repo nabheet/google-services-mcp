@@ -1,6 +1,6 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGmailMessages = { send: vi.fn(), list: vi.fn(), get: vi.fn(), modify: vi.fn() };
 const mockEvents = { list: vi.fn(), insert: vi.fn() };
@@ -16,15 +16,26 @@ const mockFormsResponses = { list: vi.fn() };
 vi.mock("googleapis", () => ({
   google: {
     gmail: vi.fn(() => ({ users: { messages: mockGmailMessages } })),
-    calendar: vi.fn(() => ({ events: mockEvents, calendarList: { list: vi.fn().mockResolvedValue({ data: {} }) } })),
+    calendar: vi.fn(() => ({
+      events: mockEvents,
+      calendarList: { list: vi.fn().mockResolvedValue({ data: {} }) },
+    })),
     drive: vi.fn(() => ({ files: mockFiles, permissions: { create: vi.fn(), delete: vi.fn() } })),
     people: vi.fn(() => ({
       people: { connections: { list: vi.fn().mockResolvedValue({ data: {} }), create: vi.fn() } },
       otherContacts: { search: vi.fn().mockResolvedValue({ data: {} }) },
     })),
-    tasks: vi.fn(() => ({ tasklists: { list: vi.fn().mockResolvedValue({ data: {} }) }, tasks: mockTaskItems })),
+    tasks: vi.fn(() => ({
+      tasklists: { list: vi.fn().mockResolvedValue({ data: {} }) },
+      tasks: mockTaskItems,
+    })),
     sheets: vi.fn(() => ({
-      spreadsheets: { get: vi.fn(), create: vi.fn(), batchUpdate: vi.fn(), values: mockSheetValues },
+      spreadsheets: {
+        get: vi.fn(),
+        create: vi.fn(),
+        batchUpdate: vi.fn(),
+        values: mockSheetValues,
+      },
     })),
     docs: vi.fn(() => ({ documents: mockDocsDocuments })),
     slides: vi.fn(() => ({ presentations: mockSlidesPresentations, pages: { get: vi.fn() } })),
@@ -73,7 +84,7 @@ async function setup() {
 
 async function callTool(name: string, args: Record<string, unknown>) {
   const res = await client.callTool({ name, arguments: args });
-  return JSON.parse((res.content as Array<{ text: string }>)[0].text) as any;
+  return JSON.parse((res.content as Array<{ text: string }>)[0].text);
 }
 
 beforeEach(() => {
@@ -175,13 +186,15 @@ describe("end-to-end tool calls", () => {
     });
     expect(result).toEqual({ id: "m1", threadId: "t1" });
     expect(mockGmailMessages.send).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: "me", requestBody: { raw: expect.any(String) } })
+      expect.objectContaining({ userId: "me", requestBody: { raw: expect.any(String) } }),
     );
   });
 
   it("google_gmail_list maps results", async () => {
     await setup();
-    mockGmailMessages.list.mockResolvedValue({ data: { messages: [{ id: "m1", threadId: "t1", snippet: "s" }] } });
+    mockGmailMessages.list.mockResolvedValue({
+      data: { messages: [{ id: "m1", threadId: "t1", snippet: "s" }] },
+    });
     const result = await callTool("google_gmail_list", { query: "from:bob", maxResults: 5 });
     expect(result).toEqual([{ id: "m1", threadId: "t1", snippet: "s" }]);
   });
@@ -224,9 +237,19 @@ describe("end-to-end tool calls", () => {
 
   it("google_sheets_read reads values", async () => {
     await setup();
-    mockSheetValues.get.mockResolvedValue({ data: { values: [["a", "b"], ["c", "d"]] } });
+    mockSheetValues.get.mockResolvedValue({
+      data: {
+        values: [
+          ["a", "b"],
+          ["c", "d"],
+        ],
+      },
+    });
     const result = await callTool("google_sheets_read", { spreadsheetId: "s1", range: "A1:B2" });
-    expect(result).toEqual([["a", "b"], ["c", "d"]]);
+    expect(result).toEqual([
+      ["a", "b"],
+      ["c", "d"],
+    ]);
   });
 
   it("google_docs_replace_text fills templates", async () => {

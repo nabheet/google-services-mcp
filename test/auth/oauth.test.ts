@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_REDIRECT_PORT, type Config } from "../../src/auth/config.js";
+import { type Config, DEFAULT_REDIRECT_PORT } from "../../src/auth/config.js";
 import {
   buildAuthUrl,
   exchangeCode,
-  refreshAccessToken,
   fetchUserInfo,
+  refreshAccessToken,
   waitForOAuthCallback,
 } from "../../src/auth/oauth.js";
 
@@ -26,7 +26,10 @@ function config(overrides: Partial<Config> = {}): Config {
   const cfg: Config = {
     clientId: "client-id-123",
     redirectPort: DEFAULT_REDIRECT_PORT,
-    scopes: ["https://www.googleapis.com/auth/gmail.modify", "https://www.googleapis.com/auth/calendar"],
+    scopes: [
+      "https://www.googleapis.com/auth/gmail.modify",
+      "https://www.googleapis.com/auth/calendar",
+    ],
     ...overrides,
   };
   cfg.clientSecret = "secret-abc";
@@ -55,7 +58,7 @@ describe("buildAuthUrl", () => {
 
   it("uses a configured redirectUri verbatim", () => {
     const url = new URL(
-      buildAuthUrl(config({ redirectUri: "http://localhost:9000/custom-callback" }), "s")
+      buildAuthUrl(config({ redirectUri: "http://localhost:9000/custom-callback" }), "s"),
     );
     expect(url.searchParams.get("redirect_uri")).toBe("http://localhost:9000/custom-callback");
   });
@@ -83,18 +86,24 @@ describe("exchangeCode", () => {
   });
 
   it("throws a descriptive error when the exchange fails", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: false,
-      json: async () => ({ error: "invalid_grant" }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ error: "invalid_grant" }),
+      }),
+    );
     await expect(exchangeCode(config(), "bad")).rejects.toThrow(/invalid_grant/);
   });
 
   it("throws when the response has no access token", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ [K.refresh]: "rt-only" }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ [K.refresh]: "rt-only" }),
+      }),
+    );
     await expect(exchangeCode(config(), "c")).rejects.toThrow(/failed/i);
   });
 });
@@ -103,29 +112,38 @@ describe("refreshAccessToken", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("refreshes and keeps the same refresh token when none is returned", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ [K.access]: "at-new", expires_in: 1800 }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ [K.access]: "at-new", expires_in: 1800 }),
+      }),
+    );
     const tokens = await refreshAccessToken(config(), "rt-old");
     expect(tokens.accessToken).toBe("at-new");
     expect(tokens.refreshToken).toBe("rt-old");
   });
 
   it("replaces the refresh token when the provider rotates it", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ [K.access]: "at", [K.refresh]: "rt-rotated" }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ [K.access]: "at", [K.refresh]: "rt-rotated" }),
+      }),
+    );
     const tokens = await refreshAccessToken(config(), "rt-old");
     expect(tokens.refreshToken).toBe("rt-rotated");
   });
 
   it("throws on refresh failure", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: false,
-      json: async () => ({ error: "invalid_client" }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ error: "invalid_client" }),
+      }),
+    );
     await expect(refreshAccessToken(config(), "rt")).rejects.toThrow(/invalid_client/);
   });
 });
@@ -134,10 +152,13 @@ describe("fetchUserInfo", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("returns email and name", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ email: "alice@example.com", name: "Alice Example" }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ email: "alice@example.com", name: "Alice Example" }),
+      }),
+    );
     expect(await fetchUserInfo("at")).toEqual({
       email: "alice@example.com",
       name: "Alice Example",
@@ -168,9 +189,11 @@ describe("waitForOAuthCallback", () => {
   it("serves a fully custom redirect URI (host, port and path)", async () => {
     const promise = waitForOAuthCallback(
       config({ redirectUri: "http://127.0.0.1:8796/oauth2callback-custom" }),
-      "state-custom"
+      "state-custom",
     );
-    const resp = await fetch("http://127.0.0.1:8796/oauth2callback-custom?code=custom-code&state=state-custom");
+    const resp = await fetch(
+      "http://127.0.0.1:8796/oauth2callback-custom?code=custom-code&state=state-custom",
+    );
     expect(resp.status).toBe(200);
     await expect(promise).resolves.toEqual({ code: "custom-code", state: "state-custom" });
   });
@@ -179,7 +202,7 @@ describe("waitForOAuthCallback", () => {
     const port = 8797;
     // The first flow times out and must free the port...
     await expect(
-      waitForOAuthCallback(config({ redirectPort: port }), "s1", { timeoutMs: 60 })
+      waitForOAuthCallback(config({ redirectPort: port }), "s1", { timeoutMs: 60 }),
     ).rejects.toThrow(/timed out/i);
 
     // ...so a second flow on the same port must be able to bind and complete.

@@ -1,5 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { google } from "googleapis";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockForms = {
   forms: {
@@ -20,12 +19,7 @@ vi.mock("googleapis", () => ({
 
 const client = {} as never;
 
-import {
-  getForm,
-  getFormResponses,
-  createForm,
-  addQuestion,
-} from "../src/services/forms.js";
+import { addQuestion, createForm, getForm, getFormResponses } from "../src/services/forms.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -42,7 +36,9 @@ describe("forms service", () => {
   it("getFormResponses lists responses with flatten", async () => {
     mockForms.forms_responses.list.mockResolvedValue({
       data: {
-        responses: [{ responseId: "r1", answers: { q1: { textAnswers: { answers: [{ value: "yes" }] } } } }],
+        responses: [
+          { responseId: "r1", answers: { q1: { textAnswers: { answers: [{ value: "yes" }] } } } },
+        ],
       },
     });
     const result = await getFormResponses(client, { formId: "f1" });

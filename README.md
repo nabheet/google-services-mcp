@@ -20,7 +20,8 @@ create documents and spreadsheets, and more — using your real Google data.
 - **Slides** — create presentations, add/delete slides, find-and-replace text
 - **YouTube** — search videos, manage uploads/playlists/subscriptions
 - **Forms** — create forms, add questions, read responses
-- **Multi-account** — connect several Google accounts, set a default, or pass an `account` argument to any tool
+- **Multi-account** — connect several Google accounts, set a default, or pass
+  an `account` argument to any tool
 - **OAuth 2.0** — one-time browser authorization; tokens are stored locally and refreshed automatically
 
 > **60 tools** across 11 services, all prefixed `google_`. Full reference:
@@ -194,14 +195,14 @@ Open the [Google Cloud Console](https://console.cloud.google.com/), choose
 Set these environment variables (or put them in your MCP client config as
 above):
 
-```
+```text
 GOOGLE_MCP_CLIENT_ID=<your-oauth-client-id>
 GOOGLE_MCP_CLIENT_SECRET=<your-oauth-client-secret>
 ```
 
 Optional:
 
-```
+```text
 GOOGLE_MCP_DIR=~/.google-services-mcp   # where config and tokens live (default ~/.google-services-mcp)
 GOOGLE_MCP_REDIRECT_PORT=8787          # local loopback port for OAuth (default 8787)
 # Full redirect URI override. Takes precedence over REDIRECT_PORT and must
@@ -221,7 +222,7 @@ different name (e.g. `work`) to connect more accounts.
 
 ## CLI reference
 
-```
+```bash
 npx -y google-services-mcp                     # run the MCP server over stdio
 npx -y google-services-mcp add <name>          # add a Google account (opens browser)
 npx -y google-services-mcp list                # list connected accounts
@@ -254,12 +255,12 @@ npx -y google-services-mcp --help              # show help
 ## Troubleshooting
 
 | Symptom | Cause / fix |
-|---|---|
+| --- | --- |
 | `access blocked` on consent | Account not in **Test users** (setup step 2.3) — add it and retry |
-| `redirect_uri_mismatch` | Redirect URI must be exactly `http://localhost:8787` — no trailing slash — and match what your OAuth client allows |
-| Tokens stop working after ~7 days | App is in **Testing** mode — re-run `add`, or **Publish app** on the consent screen |
-| `npx: command not found` in the MCP client | GUI clients (Claude Desktop, Cursor) may not inherit your shell PATH — use the absolute path to `npx` (e.g. `/usr/local/bin/npx`) or install globally |
-| `Google hasn't verified this app` | Normal for unverified apps — click **Advanced → Continue** for personal use |
+| `redirect_uri_mismatch` | URI must exactly match `http://localhost:8787` (no trailing slash) |
+| Tokens stop after ~7 days | App in **Testing** mode — re-run `add` or **Publish app** |
+| `npx` not found | GUI clients may lack your PATH — use absolute `npx` or install globally |
+| `Google hasn't verified this app` | Normal — click **Advanced → Continue** for personal use |
 
 ## Local development
 

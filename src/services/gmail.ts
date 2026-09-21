@@ -1,4 +1,4 @@
-import type { Auth } from "googleapis";
+import type { Auth, gmail_v1 } from "googleapis";
 import { google } from "googleapis";
 
 export interface SendGmailOptions {
@@ -51,9 +51,12 @@ export interface GmailMessageDetail extends GmailMessageSummary {
 
 const CRLF = "\r\n";
 
-function headerValue(headers: Array<{ name: string; value: string }> | undefined, name: string): string {
-  const h = headers?.find((x) => x.name.toLowerCase() === name.toLowerCase());
-  return h ? h.value : "";
+function headerValue(
+  headers: Array<{ name?: string | null; value?: string | null }> | undefined,
+  name: string,
+): string {
+  const h = headers?.find((x) => x.name?.toLowerCase() === name.toLowerCase());
+  return h?.value ? h.value : "";
 }
 
 function joinRecipients(r: string | string[] | undefined): string {
@@ -89,20 +92,22 @@ function toBase64Url(raw: string): string {
 }
 
 /** Extract the best body (prefer text/plain) from a Gmail payload tree. */
-function extractBody(payload: any): string {
+function extractBody(payload: gmail_v1.Schema$MessagePart | null | undefined): string {
   if (!payload) return "";
   if (payload.body?.data) {
     return Buffer.from(payload.body.data, "base64url").toString("utf8");
   }
   if (Array.isArray(payload.parts)) {
-    const plain = payload.parts.find((p: any) => p.mimeType === "text/plain");
+    const plain = payload.parts.find(
+      (p: gmail_v1.Schema$MessagePart) => p.mimeType === "text/plain",
+    );
     const chosen = plain ?? payload.parts[0];
     return extractBody(chosen);
   }
   return "";
 }
 
-function parseHeaders(headers: Array<{ name: string; value: string }> | undefined) {
+function parseHeaders(headers: Array<{ name?: string | null; value?: string | null }> | undefined) {
   return {
     from: headerValue(headers, "From"),
     to: headerValue(headers, "To"),
@@ -122,14 +127,17 @@ export async function sendGmail(client: Auth.OAuth2Client, opts: SendGmailOption
 }
 
 /** List messages, newest first, optionally filtered by a Gmail query. */
-export async function listGmailMessages(client: Auth.OAuth2Client, opts: ListGmailOptions): Promise<GmailMessageSummary[]> {
+export async function listGmailMessages(
+  client: Auth.OAuth2Client,
+  opts: ListGmailOptions,
+): Promise<GmailMessageSummary[]> {
   const gmail = google.gmail({ version: "v1", auth: client });
   const res = await gmail.users.messages.list({
     userId: "me",
     q: opts.query || undefined,
     maxResults: opts.maxResults ?? 25,
   });
-  return (res.data.messages ?? []).map((m: any) => ({
+  return (res.data.messages ?? []).map((m: gmail_v1.Schema$Message) => ({
     id: m.id as string,
     threadId: m.threadId as string | undefined,
     snippet: m.snippet as string | undefined,
@@ -137,21 +145,28 @@ export async function listGmailMessages(client: Auth.OAuth2Client, opts: ListGma
 }
 
 /** Get a single message with parsed headers, body and attachment flags. */
-export async function getGmailMessage(client: Auth.OAuth2Client, opts: GetGmailOptions): Promise<GmailMessageDetail> {
+export async function getGmailMessage(
+  client: Auth.OAuth2Client,
+  opts: GetGmailOptions,
+): Promise<GmailMessageDetail> {
   const gmail = google.gmail({ version: "v1", auth: client });
-  const res = await gmail.users.messages.get({ userId: "me", id: opts.id, format: opts.format ?? "full" });
-  const msg = res.data as any;
-  const payload = msg.payload ?? {};
+  const res = await gmail.users.messages.get({
+    userId: "me",
+    id: opts.id,
+    format: opts.format ?? "full",
+  });
+  const msg = res.data;
+  const payload = msg.payload ?? ({} as gmail_v1.Schema$MessagePart);
   const headers = payload.headers ?? [];
   const parsed = parseHeaders(headers);
   const hasAttachments =
     Array.isArray(payload.parts) &&
-    payload.parts.some((p: any) => p.filename && p.filename.length > 0);
+    payload.parts.some((p: gmail_v1.Schema$MessagePart) => p.filename && p.filename.length > 0);
   return {
-    id: msg.id,
-    threadId: msg.threadId,
+    id: msg.id ?? "",
+    threadId: msg.threadId ?? undefined,
     labelIds: msg.labelIds ?? [],
-    snippet: msg.snippet,
+    snippet: msg.snippet ?? undefined,
     from: parsed.from,
     to: parsed.to,
     subject: parsed.subject,
@@ -178,7 +193,7 @@ export async function modifyGmailMessage(client: Auth.OAuth2Client, opts: Modify
 /** Reply to an existing message inside its thread, using proper In-Reply-To/References. */
 export async function replyGmail(client: Auth.OAuth2Client, opts: ReplyGmailOptions) {
   const gmail = google.gmail({ version: "v1", auth: client });
-  const orig = (await gmail.users.messages.get({ userId: "me", id: opts.messageId })).data as any;
+  const orig = (await gmail.users.messages.get({ userId: "me", id: opts.messageId })).data;
   const headers = orig.payload?.headers ?? [];
   const parsed = parseHeaders(headers);
 
@@ -193,7 +208,7 @@ export async function replyGmail(client: Auth.OAuth2Client, opts: ReplyGmailOpti
       "Content-Transfer-Encoding: quoted-printable",
       "",
       opts.body.replace(/\r?\n/g, CRLF),
-    ].join(CRLF)
+    ].join(CRLF),
   );
 
   const res = await gmail.users.messages.send({
@@ -222,16 +237,18 @@ export interface GmailAttachmentData extends GmailAttachmentInfo {
 }
 
 /** Walk a Gmail payload tree collecting attachment parts. */
-function collectAttachments(payload: any): GmailAttachmentInfo[] {
+function collectAttachments(
+  payload: gmail_v1.Schema$MessagePart | null | undefined,
+): GmailAttachmentInfo[] {
   const out: GmailAttachmentInfo[] = [];
-  const walk = (p: any) => {
+  const walk = (p: gmail_v1.Schema$MessagePart | null | undefined) => {
     if (!p) return;
     if (p.filename && p.body?.attachmentId) {
       out.push({
         id: p.body.attachmentId,
         partId: p.partId as string | undefined,
-        filename: p.filename,
-        mimeType: p.mimeType,
+        filename: p.filename as string,
+        mimeType: p.mimeType ?? "application/octet-stream",
         size: p.body.size as number | undefined,
       });
     }
@@ -253,20 +270,20 @@ function isTextMime(mime: string): boolean {
 /** List attachments on a message (metadata only, no bytes). */
 export async function listGmailAttachments(
   client: Auth.OAuth2Client,
-  opts: GetGmailOptions
+  opts: GetGmailOptions,
 ): Promise<GmailAttachmentInfo[]> {
   const gmail = google.gmail({ version: "v1", auth: client });
   const res = await gmail.users.messages.get({ userId: "me", id: opts.id, format: "full" });
-  return collectAttachments((res.data as any).payload);
+  return collectAttachments(res.data.payload);
 }
 
 /** Download a single attachment by messageId + attachmentId (or stable partId). */
 export async function getGmailAttachment(
   client: Auth.OAuth2Client,
-  opts: GetGmailOptions & { attachmentId: string; partId?: string }
+  opts: GetGmailOptions & { attachmentId: string; partId?: string },
 ): Promise<GmailAttachmentData> {
   const gmail = google.gmail({ version: "v1", auth: client });
-  const msg = (await gmail.users.messages.get({ userId: "me", id: opts.id, format: "full" })).data as any;
+  const msg = (await gmail.users.messages.get({ userId: "me", id: opts.id, format: "full" })).data;
   const atts = collectAttachments(msg.payload);
   // Gmail rotates body.attachmentId on every messages.get call, so a caller's
   // stored attachmentId may no longer match. Match by the stable partId first,
@@ -312,7 +329,10 @@ export interface DraftDetail extends GmailMessageDetail {
 }
 
 /** Create a draft (same options as send, but nothing is delivered). */
-export async function createGmailDraft(client: Auth.OAuth2Client, opts: SendGmailOptions): Promise<DraftSummary> {
+export async function createGmailDraft(
+  client: Auth.OAuth2Client,
+  opts: SendGmailOptions,
+): Promise<DraftSummary> {
   const raw = toBase64Url(buildRawMessage(opts));
   const gmail = google.gmail({ version: "v1", auth: client });
   const res = await gmail.users.drafts.create({
@@ -329,11 +349,11 @@ export async function createGmailDraft(client: Auth.OAuth2Client, opts: SendGmai
 /** List drafts, newest first. */
 export async function listGmailDrafts(
   client: Auth.OAuth2Client,
-  opts: { maxResults?: number }
+  opts: { maxResults?: number },
 ): Promise<DraftSummary[]> {
   const gmail = google.gmail({ version: "v1", auth: client });
   const res = await gmail.users.drafts.list({ userId: "me", maxResults: opts.maxResults ?? 25 });
-  return (res.data.drafts ?? []).map((d: any) => ({
+  return (res.data.drafts ?? []).map((d: gmail_v1.Schema$Draft) => ({
     id: d.id as string,
     messageId: d.message?.id as string | undefined,
     threadId: d.message?.threadId as string | undefined,
@@ -342,22 +362,26 @@ export async function listGmailDrafts(
 }
 
 /** Get a single draft with parsed headers and body. */
-export async function getGmailDraft(client: Auth.OAuth2Client, opts: GetGmailOptions): Promise<DraftDetail> {
+export async function getGmailDraft(
+  client: Auth.OAuth2Client,
+  opts: GetGmailOptions,
+): Promise<DraftDetail> {
   const gmail = google.gmail({ version: "v1", auth: client });
   const res = await gmail.users.drafts.get({ userId: "me", id: opts.id, format: "full" });
-  const draft = res.data as any;
-  const msg = draft.message ?? {};
-  const payload = msg.payload ?? {};
+  const draft = res.data;
+  const msg = draft.message ?? ({} as gmail_v1.Schema$Message);
+  const payload = msg.payload ?? ({} as gmail_v1.Schema$MessagePart);
   const headers = payload.headers ?? [];
   const parsed = parseHeaders(headers);
   const hasAttachments =
-    Array.isArray(payload.parts) && payload.parts.some((p: any) => p.filename && p.filename.length > 0);
+    Array.isArray(payload.parts) &&
+    payload.parts.some((p: gmail_v1.Schema$MessagePart) => p.filename && p.filename.length > 0);
   return {
-    draftId: draft.id,
-    id: msg.id,
-    threadId: msg.threadId,
+    draftId: draft.id ?? "",
+    id: msg.id ?? "",
+    threadId: msg.threadId ?? undefined,
     labelIds: msg.labelIds ?? [],
-    snippet: msg.snippet,
+    snippet: msg.snippet ?? undefined,
     from: parsed.from,
     to: parsed.to,
     subject: parsed.subject,
@@ -401,7 +425,7 @@ export interface CreateGmailLabelOptions {
 export async function listGmailLabels(client: Auth.OAuth2Client): Promise<GmailLabel[]> {
   const gmail = google.gmail({ version: "v1", auth: client });
   const res = await gmail.users.labels.list({ userId: "me" });
-  return (res.data.labels ?? []).map((l: any) => ({
+  return (res.data.labels ?? []).map((l: gmail_v1.Schema$Label) => ({
     id: l.id as string,
     name: l.name as string,
     type: l.type as string | undefined,
@@ -411,7 +435,10 @@ export async function listGmailLabels(client: Auth.OAuth2Client): Promise<GmailL
 }
 
 /** Create a custom label. */
-export async function createGmailLabel(client: Auth.OAuth2Client, opts: CreateGmailLabelOptions): Promise<GmailLabel> {
+export async function createGmailLabel(
+  client: Auth.OAuth2Client,
+  opts: CreateGmailLabelOptions,
+): Promise<GmailLabel> {
   const gmail = google.gmail({ version: "v1", auth: client });
   const res = await gmail.users.labels.create({
     userId: "me",
