@@ -150,7 +150,8 @@ function quotedPrintableEncode(input: string): string {
 /** RFC 2047 encoded-word for non-ASCII subjects; ASCII passes through. */
 function encodeSubject(subject: string): string {
   const cleaned = subject.replace(/[\r\n]+/g, " ");
-  return /^[\x00-\x7F]*$/.test(cleaned)
+  // Byte length equals char length iff the string is pure ASCII.
+  return cleaned.length === Buffer.byteLength(cleaned, "utf8")
     ? cleaned
     : `=?UTF-8?B?${Buffer.from(cleaned, "utf8").toString("base64")}?=`;
 }
