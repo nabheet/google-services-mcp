@@ -778,7 +778,7 @@ describe("gmail attachments", () => {
 
   it("encodes non-ASCII body chars as UTF-8 quoted-printable bytes", async () => {
     mockMessages.send.mockResolvedValue({ data: { id: "m" } });
-    const body = "A — B é € 日本語";
+    const body = "A — B é € 日本語 😀";
     await sendGmail(client, {
       to: "bob@example.com",
       subject: "QP",
@@ -793,6 +793,10 @@ describe("gmail attachments", () => {
     expect(raw).toContain("=E2=82=AC");
     expect(raw).toContain("=E6=97=A5");
     expect(raw).toContain("=E6=9C=AC");
+    // 😀 (U+1F600) is a surrogate pair → F0 9F 98 80 as one code point,
+    // never the replacement char =EF=BF=BD from a lone surrogate.
+    expect(raw).toContain("=F0=9F=98=80");
+    expect(raw).not.toContain("=EF=BF=BD");
     // Round-trips through a QP decoder back to the original text.
     const bodyPart = raw.split(/\r?\n\r?\n/)[1] ?? "";
     const qpDecoded = bodyPart

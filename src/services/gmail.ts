@@ -119,8 +119,10 @@ function quotedPrintableEncode(input: string): string {
     out.push(line);
     line = "";
   };
-  for (let i = 0; i < input.length; i++) {
-    const code = input.charCodeAt(i);
+  // Iterate code points, not UTF-16 code units: surrogate pairs (emoji, rare
+  // CJK) must encode as one codepoint, never as two lone surrogates.
+  for (const ch of input) {
+    const code = ch.codePointAt(0)!;
     if (code === 0x0d) continue; // normalize CRLF to LF below
     if (code === 0x0a) {
       flush();
@@ -130,13 +132,13 @@ function quotedPrintableEncode(input: string): string {
     if (code === 0x3d) {
       enc = "=3D";
     } else if (code >= 33 && code <= 126) {
-      enc = input[i];
+      enc = ch;
     } else if (code === 32) {
       enc = " "; // trailing spaces are trimmed by flush
     } else {
       // Encode UTF-8 bytes, not UTF-16 code units: RFC 2045 allows exactly
       // 2 hex digits per =XX escape. U+2014 (—) is E2 80 94 in UTF-8.
-      enc = Buffer.from(input[i], "utf8")
+      enc = Buffer.from(ch, "utf8")
         .toString("hex")
         .match(/../g)!
         .map((b) => `=${b.toUpperCase()}`)
