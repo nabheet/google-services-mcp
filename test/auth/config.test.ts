@@ -162,4 +162,18 @@ describe("ensureDirs", () => {
     const stat = await fs.stat(path.join(tmp, "accounts"));
     expect(stat.isDirectory()).toBe(true);
   });
+
+  it("restricts the data dir and accounts dir to the owner (0700)", async () => {
+    await ensureDirs();
+    const dataStat = await fs.stat(tmp);
+    const accountsStat = await fs.stat(path.join(tmp, "accounts"));
+    expect(dataStat.mode & 0o777).toBe(0o700);
+    expect(accountsStat.mode & 0o777).toBe(0o700);
+  });
+
+  it("writes config.json with owner-only permissions (0600)", async () => {
+    await saveConfig({ clientId: "id", clientSecret: "", redirectPort: 8787 });
+    const stat = await fs.stat(path.join(tmp, "config.json"));
+    expect(stat.mode & 0o777).toBe(0o600);
+  });
 });

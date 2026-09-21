@@ -20,7 +20,12 @@ export async function saveAccount(account: StoredAccount): Promise<void> {
   await ensureDirs();
   const safeName = sanitizeName(account.name);
   const toWrite: StoredAccount = { ...account, name: safeName };
-  await fs.writeFile(getAccountPath(safeName), JSON.stringify(toWrite, null, 2), "utf8");
+  await fs.writeFile(getAccountPath(safeName), JSON.stringify(toWrite, null, 2), {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  // writeFile's mode only applies on create; harden pre-existing files.
+  await fs.chmod(getAccountPath(safeName), 0o600).catch(() => {});
 }
 
 export async function loadAccount(name: string): Promise<StoredAccount | null> {
