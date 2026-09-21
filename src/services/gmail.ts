@@ -1,8 +1,8 @@
-import type { Auth, gmail_v1 } from "googleapis";
-import { google } from "googleapis";
+import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
-import { randomBytes } from "node:crypto";
+import type { Auth, gmail_v1 } from "googleapis";
+import { google } from "googleapis";
 
 /** A local file to attach to an outgoing message. */
 export interface GmailAttachmentInput {
@@ -144,9 +144,7 @@ function quotedPrintableEncode(input: string): string {
   }
   flush();
   // Trailing space would be stripped by receivers; encode it.
-  return out
-    .map((l) => (l.endsWith(" ") ? l.slice(0, -1) + "=20" : l))
-    .join(CRLF);
+  return out.map((l) => (l.endsWith(" ") ? l.slice(0, -1) + "=20" : l)).join(CRLF);
 }
 
 function sanitizeFilename(name: string): string {
@@ -224,7 +222,7 @@ async function readAttachment(path: string): Promise<Buffer> {
 async function buildRawEmail(
   opts: SendGmailOptions,
   extraHeaders?: string[],
-  skipValidation = false
+  skipValidation = false,
 ): Promise<string> {
   const to = joinRecipients(opts.to);
   if (!skipValidation) {
@@ -269,11 +267,12 @@ async function buildRawEmail(
     const buf = await readAttachment(att.path);
     if (buf.length > MAX_ATTACHMENT_BYTES) {
       throw new Error(
-        `Attachment too large: ${att.path} (${buf.length} bytes); Gmail limit is ${GMAIL_MESSAGE_LIMIT_BYTES} bytes total`
+        `Attachment too large: ${att.path} (${buf.length} bytes); Gmail limit is ${GMAIL_MESSAGE_LIMIT_BYTES} bytes total`,
       );
     }
     const filename = sanitizeFilename(att.filename ?? basename(att.path));
-    const mimeType = sanitizeMimeType(att.mimeType || guessMimeType(filename)) || guessMimeType(filename);
+    const mimeType =
+      sanitizeMimeType(att.mimeType || guessMimeType(filename)) || guessMimeType(filename);
     lines.push(`--${boundary}`);
     lines.push(`Content-Type: ${mimeType}; name="${filename}"`);
     lines.push(`Content-Disposition: attachment; filename="${filename}"`);
@@ -395,10 +394,9 @@ export async function replyGmail(client: Auth.OAuth2Client, opts: ReplyGmailOpti
   const headers = orig.payload?.headers ?? [];
   const parsed = parseHeaders(headers);
 
-  const subject = (parsed.subject.startsWith("Re:") ? parsed.subject : `Re: ${parsed.subject}`).replace(
-    /[\r\n]+/g,
-    " "
-  );
+  const subject = (
+    parsed.subject.startsWith("Re:") ? parsed.subject : `Re: ${parsed.subject}`
+  ).replace(/[\r\n]+/g, " ");
   const raw = toBase64Url(
     await buildRawEmail(
       {
@@ -412,8 +410,8 @@ export async function replyGmail(client: Auth.OAuth2Client, opts: ReplyGmailOpti
         `In-Reply-To: ${parsed.messageId}`,
         `References: ${[parsed.references, parsed.messageId].filter(Boolean).join(" ")}`,
       ],
-      true
-    )
+      true,
+    ),
   );
 
   const res = await gmail.users.messages.send({

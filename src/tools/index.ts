@@ -229,17 +229,27 @@ export function registerTools(server: McpServer): void {
           .array(
             z.object({
               path: z.string().describe("Local filesystem path of the file to attach."),
-              filename: z.string().optional().describe("Attachment filename shown to recipients (defaults to the basename of path)."),
-              mimeType: z.string().optional().describe("MIME type override (defaults to a guess from the filename)."),
-            })
+              filename: z
+                .string()
+                .optional()
+                .describe(
+                  "Attachment filename shown to recipients (defaults to the basename of path).",
+                ),
+              mimeType: z
+                .string()
+                .optional()
+                .describe("MIME type override (defaults to a guess from the filename)."),
+            }),
           )
           .optional()
           .describe("Local files to attach to the email."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-async ({ to, subject, body, cc, bcc, bodyType, attachments, account }) =>
-      withClient(account, (client) => sendGmail(client, { to, subject, body, cc, bcc, bodyType, attachments }))
+    async ({ to, subject, body, cc, bcc, bodyType, attachments, account }) =>
+      withClient(account, (client) =>
+        sendGmail(client, { to, subject, body, cc, bcc, bodyType, attachments }),
+      ),
   );
 
   server.registerTool(
@@ -304,17 +314,27 @@ async ({ to, subject, body, cc, bcc, bodyType, attachments, account }) =>
           .array(
             z.object({
               path: z.string().describe("Local filesystem path of the file to attach."),
-              filename: z.string().optional().describe("Attachment filename shown to recipients (defaults to the basename of path)."),
-              mimeType: z.string().optional().describe("MIME type override (defaults to a guess from the filename)."),
-            })
+              filename: z
+                .string()
+                .optional()
+                .describe(
+                  "Attachment filename shown to recipients (defaults to the basename of path).",
+                ),
+              mimeType: z
+                .string()
+                .optional()
+                .describe("MIME type override (defaults to a guess from the filename)."),
+            }),
           )
           .optional()
           .describe("Local files to attach to the reply."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-async ({ threadId, messageId, body, bodyType, attachments, account }) =>
-      withClient(account, (client) => replyGmail(client, { threadId, messageId, body, bodyType, attachments }))
+    async ({ threadId, messageId, body, bodyType, attachments, account }) =>
+      withClient(account, (client) =>
+        replyGmail(client, { threadId, messageId, body, bodyType, attachments }),
+      ),
   );
 
   server.registerTool(
@@ -375,17 +395,27 @@ async ({ threadId, messageId, body, bodyType, attachments, account }) =>
           .array(
             z.object({
               path: z.string().describe("Local filesystem path of the file to attach."),
-              filename: z.string().optional().describe("Attachment filename shown to recipients (defaults to the basename of path)."),
-              mimeType: z.string().optional().describe("MIME type override (defaults to a guess from the filename)."),
-            })
+              filename: z
+                .string()
+                .optional()
+                .describe(
+                  "Attachment filename shown to recipients (defaults to the basename of path).",
+                ),
+              mimeType: z
+                .string()
+                .optional()
+                .describe("MIME type override (defaults to a guess from the filename)."),
+            }),
           )
           .optional()
           .describe("Local files to attach to the draft."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-async ({ to, subject, body, cc, bcc, bodyType, attachments, account }) =>
-      withClient(account, (client) => createGmailDraft(client, { to, subject, body, cc, bcc, bodyType, attachments }))
+    async ({ to, subject, body, cc, bcc, bodyType, attachments, account }) =>
+      withClient(account, (client) =>
+        createGmailDraft(client, { to, subject, body, cc, bcc, bodyType, attachments }),
+      ),
   );
 
   server.registerTool(

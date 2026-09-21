@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockMessages = {
   send: vi.fn(),
@@ -656,7 +656,7 @@ describe("gmail attachments", () => {
         subject: "S",
         body: "B",
         attachments: [{ path: join(tmpDir, "nope.txt") }],
-      })
+      }),
     ).rejects.toThrow(/attachment/i);
   });
 
@@ -708,7 +708,9 @@ describe("gmail attachments", () => {
   });
 
   it("creates a draft with an attachment", async () => {
-    mockDrafts.create.mockResolvedValue({ data: { id: "d1", message: { id: "m1", threadId: "t1" } } });
+    mockDrafts.create.mockResolvedValue({
+      data: { id: "d1", message: { id: "m1", threadId: "t1" } },
+    });
     const filePath = join(tmpDir, "d.txt");
     writeFileSync(filePath, "draft att", "utf8");
 
@@ -735,7 +737,7 @@ describe("gmail attachments", () => {
       subject: "S",
       body: "B",
       attachments: [
-        { path: filePath, mimeType: 'text/plain\r\nBcc: evil@example.com\r\nX-Evil: 1' },
+        { path: filePath, mimeType: "text/plain\r\nBcc: evil@example.com\r\nX-Evil: 1" },
       ],
     });
 
@@ -807,7 +809,7 @@ describe("gmail attachments", () => {
         subject: "S",
         body: "B",
         attachments: [{ path: filePath }],
-      })
+      }),
     ).rejects.toThrow(/too large/i);
   });
 });
