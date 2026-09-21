@@ -269,7 +269,7 @@ git clone https://github.com/nabheet/google-services-mcp.git
 cd google-services-mcp
 npm install
 npm run build        # compile to dist/
-npm test             # vitest, TDD suites
+npm test             # vitest, TDD suites (incl. hermetic E2E in test/e2e/)
 npm run typecheck    # tsc --noEmit
 npm run dev          # run from source with tsx
 ```
