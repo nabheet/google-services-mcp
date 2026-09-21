@@ -134,7 +134,13 @@ function quotedPrintableEncode(input: string): string {
     } else if (code === 32) {
       enc = " "; // trailing spaces are trimmed by flush
     } else {
-      enc = `=${code.toString(16).toUpperCase().padStart(2, "0")}`;
+      // Encode UTF-8 bytes, not UTF-16 code units: RFC 2045 allows exactly
+      // 2 hex digits per =XX escape. U+2014 (—) is E2 80 94 in UTF-8.
+      enc = Buffer.from(input[i], "utf8")
+        .toString("hex")
+        .match(/../g)!
+        .map((b) => `=${b.toUpperCase()}`)
+        .join("");
     }
     if (line.length + enc.length > MAX_LINE - 1) {
       line += "="; // soft break
