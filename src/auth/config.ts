@@ -88,7 +88,10 @@ export function isValidName(name: string): boolean {
 }
 
 export async function ensureDirs(): Promise<void> {
-  await fs.mkdir(getAccountsDir(), { recursive: true });
+  await fs.mkdir(getAccountsDir(), { recursive: true, mode: 0o700 });
+  // mkdir's mode only applies to newly-created dirs; harden pre-existing ones.
+  await fs.chmod(getAccountsDir(), 0o700).catch(() => {});
+  await fs.chmod(getDataDir(), 0o700).catch(() => {});
 }
 
 export async function loadConfig(): Promise<Config> {
@@ -127,8 +130,9 @@ export async function saveConfig(config: Config): Promise<void> {
       null,
       2,
     ),
-    "utf8",
+    { encoding: "utf8", mode: 0o600 },
   );
+  await fs.chmod(getConfigPath(), 0o600).catch(() => {});
 }
 
 export async function saveClientCredentials(clientId: string, clientSecret: string): Promise<void> {
