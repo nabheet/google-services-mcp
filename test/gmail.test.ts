@@ -575,7 +575,7 @@ describe("gmail attachments", () => {
 
     const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
     expect(raw).toContain("Content-Type: multipart/mixed;");
-    const boundary = /boundary="([^"]+)"/.exec(raw)![1];
+    const boundary = /boundary="([^"]+)"/.exec(raw)?.[1] ?? "";
     expect(raw).toContain(`--${boundary}`);
     expect(raw).toContain(`--${boundary}--`);
     expect(raw).toContain("Content-Type: text/plain; charset=UTF-8");
