@@ -1,5 +1,18 @@
 import type { Auth } from "googleapis";
 import { google } from "googleapis";
+import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
+import { randomBytes } from "node:crypto";
+
+/** A local file to attach to an outgoing message. */
+export interface GmailAttachmentInput {
+  /** Local filesystem path of the file to attach. */
+  path: string;
+  /** Attachment filename shown to recipients (defaults to the basename of `path`). */
+  filename?: string;
+  /** MIME type override (defaults to a guess based on the filename). */
+  mimeType?: string;
+}
 
 export interface SendGmailOptions {
   to: string | string[];
@@ -8,6 +21,7 @@ export interface SendGmailOptions {
   subject: string;
   body: string;
   bodyType?: "text" | "html";
+  attachments?: GmailAttachmentInput[];
 }
 
 export interface ListGmailOptions {
@@ -31,6 +45,7 @@ export interface ReplyGmailOptions {
   messageId: string;
   body: string;
   bodyType?: "text" | "html";
+  attachments?: GmailAttachmentInput[];
 }
 
 export interface GmailMessageSummary {
@@ -84,6 +99,123 @@ export function buildRawMessage(opts: SendGmailOptions): string {
   return lines.join(CRLF);
 }
 
+function sanitizeFilename(name: string): string {
+  return name.replace(/["\r\n]/g, "").trim() || "attachment";
+}
+
+/** Best-effort MIME type guess by extension; binary fallback when unknown. */
+function guessMimeType(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  const table: Record<string, string> = {
+    txt: "text/plain",
+    md: "text/markdown",
+    csv: "text/csv",
+    html: "text/html",
+    htm: "text/html",
+    json: "application/json",
+    xml: "application/xml",
+    yaml: "application/yaml",
+    yml: "application/yaml",
+    pdf: "application/pdf",
+    zip: "application/zip",
+    gz: "application/gzip",
+    tar: "application/x-tar",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    svg: "image/svg+xml",
+    webp: "image/webp",
+    mp3: "audio/mpeg",
+    mp4: "video/mp4",
+    mov: "video/quicktime",
+  };
+  return table[ext] ?? "application/octet-stream";
+}
+
+function generateBoundary(): string {
+  return `----=_Part_${randomBytes(12).toString("hex")}`;
+}
+
+async function readAttachment(path: string): Promise<Buffer> {
+  try {
+    return await readFile(path);
+  } catch {
+    throw new Error(`Attachment not found or unreadable: ${path}`);
+  }
+}
+
+/**
+ * Build a raw RFC2822 message, emitting multipart/mixed when attachments are
+ * present and the exact same single-part layout as `buildRawMessage` when not.
+ * `extraHeaders` (raw header lines) are inserted between Subject and MIME-Version
+ * (used by replies for In-Reply-To/References). `skipValidation` lets the reply
+ * path reuse this without changing its previous behavior.
+ */
+async function buildRawEmail(
+  opts: SendGmailOptions,
+  extraHeaders?: string[],
+  skipValidation = false
+): Promise<string> {
+  const to = joinRecipients(opts.to);
+  if (!skipValidation) {
+    if (!to) throw new Error("A recipient is required (to).");
+    if (!opts.subject.trim() && !opts.body.trim()) {
+      throw new Error("A subject or a body is required.");
+    }
+  }
+  const lines: string[] = [];
+  lines.push(`To: ${to}`);
+  const cc = joinRecipients(opts.cc);
+  if (cc) lines.push(`Cc: ${cc}`);
+  const bcc = joinRecipients(opts.bcc);
+  if (bcc) lines.push(`Bcc: ${bcc}`);
+  lines.push(`Subject: ${opts.subject.replace(/[\r\n]+/g, " ")}`);
+  if (extraHeaders?.length) lines.push(...extraHeaders);
+
+  const attachments = opts.attachments ?? [];
+  const contentType = opts.bodyType === "html" ? "text/html" : "text/plain";
+
+  if (attachments.length === 0) {
+    lines.push("MIME-Version: 1.0");
+    lines.push(`Content-Type: ${contentType}; charset=UTF-8`);
+    lines.push("Content-Transfer-Encoding: quoted-printable");
+    lines.push("");
+    lines.push(opts.body.replace(/\r?\n/g, CRLF));
+    return lines.join(CRLF);
+  }
+
+  const boundary = generateBoundary();
+  lines.push("MIME-Version: 1.0");
+  lines.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+  lines.push("");
+  // Body part
+  lines.push(`--${boundary}`);
+  lines.push(`Content-Type: ${contentType}; charset=UTF-8`);
+  lines.push("Content-Transfer-Encoding: quoted-printable");
+  lines.push("");
+  lines.push(opts.body.replace(/\r?\n/g, CRLF));
+  // Attachment parts (base64 always — safe for text and binary)
+  for (const att of attachments) {
+    const buf = await readAttachment(att.path);
+    const filename = sanitizeFilename(att.filename ?? basename(att.path));
+    const mimeType = att.mimeType ?? guessMimeType(filename);
+    lines.push(`--${boundary}`);
+    lines.push(`Content-Type: ${mimeType}; name="${filename}"`);
+    lines.push(`Content-Disposition: attachment; filename="${filename}"`);
+    lines.push("Content-Transfer-Encoding: base64");
+    lines.push("");
+    lines.push(buf.toString("base64"));
+  }
+  lines.push(`--${boundary}--`);
+  return lines.join(CRLF);
+}
+
 function toBase64Url(raw: string): string {
   return Buffer.from(raw, "utf8").toString("base64url");
 }
@@ -115,7 +247,7 @@ function parseHeaders(headers: Array<{ name: string; value: string }> | undefine
 
 /** Send an email. Returns { id, threadId }. */
 export async function sendGmail(client: Auth.OAuth2Client, opts: SendGmailOptions) {
-  const raw = toBase64Url(buildRawMessage(opts));
+  const raw = toBase64Url(await buildRawEmail(opts));
   const gmail = google.gmail({ version: "v1", auth: client });
   const res = await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
   return res.data as { id: string; threadId?: string };
@@ -182,18 +314,25 @@ export async function replyGmail(client: Auth.OAuth2Client, opts: ReplyGmailOpti
   const headers = orig.payload?.headers ?? [];
   const parsed = parseHeaders(headers);
 
+  const subject = (parsed.subject.startsWith("Re:") ? parsed.subject : `Re: ${parsed.subject}`).replace(
+    /[\r\n]+/g,
+    " "
+  );
   const raw = toBase64Url(
-    [
-      `To: ${parsed.from}`,
-      `Subject: ${(parsed.subject.startsWith("Re:") ? parsed.subject : `Re: ${parsed.subject}`).replace(/[\r\n]+/g, " ")}`,
-      `In-Reply-To: ${parsed.messageId}`,
-      `References: ${[parsed.references, parsed.messageId].filter(Boolean).join(" ")}`,
-      "MIME-Version: 1.0",
-      `Content-Type: ${opts.bodyType === "html" ? "text/html" : "text/plain"}; charset=UTF-8`,
-      "Content-Transfer-Encoding: quoted-printable",
-      "",
-      opts.body.replace(/\r?\n/g, CRLF),
-    ].join(CRLF)
+    await buildRawEmail(
+      {
+        to: parsed.from,
+        subject,
+        body: opts.body,
+        bodyType: opts.bodyType,
+        attachments: opts.attachments,
+      },
+      [
+        `In-Reply-To: ${parsed.messageId}`,
+        `References: ${[parsed.references, parsed.messageId].filter(Boolean).join(" ")}`,
+      ],
+      true
+    )
   );
 
   const res = await gmail.users.messages.send({
@@ -313,7 +452,7 @@ export interface DraftDetail extends GmailMessageDetail {
 
 /** Create a draft (same options as send, but nothing is delivered). */
 export async function createGmailDraft(client: Auth.OAuth2Client, opts: SendGmailOptions): Promise<DraftSummary> {
-  const raw = toBase64Url(buildRawMessage(opts));
+  const raw = toBase64Url(await buildRawEmail(opts));
   const gmail = google.gmail({ version: "v1", auth: client });
   const res = await gmail.users.drafts.create({
     userId: "me",
