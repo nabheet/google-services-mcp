@@ -262,6 +262,9 @@ async function buildRawEmail(
   lines.push("Content-Transfer-Encoding: quoted-printable");
   lines.push("");
   lines.push(quotedPrintableEncode(opts.body));
+  // Blank line terminates the body part so clients render it as a block
+  // separate from the attachment parts (MIME requires the empty line).
+  lines.push("");
   // Attachment parts (base64 always — safe for text and binary)
   for (const att of attachments) {
     const buf = await readAttachment(att.path);
