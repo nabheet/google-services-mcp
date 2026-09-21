@@ -1,5 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { google } from "googleapis";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockDocs = {
   documents: {
@@ -18,12 +17,12 @@ vi.mock("googleapis", () => ({
 const client = {} as never;
 
 import {
+  batchUpdateDocument,
+  createDocument,
   getDocument,
   getDocumentText,
-  createDocument,
   insertText,
   replaceAllText,
-  batchUpdateDocument,
 } from "../src/services/docs.js";
 
 beforeEach(() => {
@@ -44,7 +43,11 @@ describe("docs service", () => {
         documentId: "d1",
         body: {
           content: [
-            { paragraph: { elements: [{ textRun: { content: "Hello " } }, { textRun: { content: "world" } }] } },
+            {
+              paragraph: {
+                elements: [{ textRun: { content: "Hello " } }, { textRun: { content: "world" } }],
+              },
+            },
             { paragraph: { elements: [{ textRun: { content: "Line two" } }] } },
             { table: { rows: [] } },
           ],
@@ -71,7 +74,9 @@ describe("docs service", () => {
   });
 
   it("insertText appends text at the document end", async () => {
-    mockDocs.documents.get.mockResolvedValue({ data: { documentId: "d1", body: { content: [{ endIndex: 5 }] } } });
+    mockDocs.documents.get.mockResolvedValue({
+      data: { documentId: "d1", body: { content: [{ endIndex: 5 }] } },
+    });
     mockDocs.documents.batchUpdate.mockResolvedValue({ data: { replies: [] } });
     const result = await insertText(client, { documentId: "d1", text: "More text" });
     expect(result).toEqual({ inserted: true });
@@ -90,7 +95,11 @@ describe("docs service", () => {
     mockDocs.documents.batchUpdate.mockResolvedValue({
       data: { replies: [{ replaceAllText: { occurrencesChanged: 2 } }] },
     });
-    const result = await replaceAllText(client, { documentId: "d1", find: "{{name}}", replace: "Nabheet" });
+    const result = await replaceAllText(client, {
+      documentId: "d1",
+      find: "{{name}}",
+      replace: "Nabheet",
+    });
     expect(result.occurrencesChanged).toBe(2);
     const body = mockDocs.documents.batchUpdate.mock.calls[0][0].requestBody;
     expect(body.requests[0].replaceAllText).toEqual({

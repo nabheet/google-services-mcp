@@ -15,9 +15,9 @@ export interface CliResult {
  */
 const VERSION = ((): string => {
   try {
-    const pkg = JSON.parse(
-      readFileSync(new URL("../package.json", import.meta.url), "utf8"),
-    ) as { version?: string };
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+      version?: string;
+    };
     return pkg.version ?? "0.0.0";
   } catch {
     return "0.0.0";
@@ -64,7 +64,10 @@ export async function dispatchCommand(args: string[]): Promise<CliResult> {
     case "add": {
       const name = rest[0];
       if (!name) {
-        return { exitCode: 1, output: "Usage: google-services-mcp add <name> [--timeout <seconds>]\n" };
+        return {
+          exitCode: 1,
+          output: "Usage: google-services-mcp add <name> [--timeout <seconds>]\n",
+        };
       }
       try {
         const timeoutMs = parseTimeout(rest);
@@ -74,7 +77,10 @@ export async function dispatchCommand(args: string[]): Promise<CliResult> {
           output: `Added account "${account.name}" for ${account.email}\n`,
         };
       } catch (error) {
-        return { exitCode: 1, output: `Error: ${error instanceof Error ? error.message : String(error)}\n` };
+        return {
+          exitCode: 1,
+          output: `Error: ${error instanceof Error ? error.message : String(error)}\n`,
+        };
       }
     }
     case "list": {
@@ -101,7 +107,10 @@ export async function dispatchCommand(args: string[]): Promise<CliResult> {
         await authManager.setDefaultAccount(name);
         return { exitCode: 0, output: `Default account set to "${name}".\n` };
       } catch (error) {
-        return { exitCode: 1, output: `Error: ${error instanceof Error ? error.message : String(error)}\n` };
+        return {
+          exitCode: 1,
+          output: `Error: ${error instanceof Error ? error.message : String(error)}\n`,
+        };
       }
     }
     case "status": {
@@ -122,7 +131,7 @@ export async function dispatchCommand(args: string[]): Promise<CliResult> {
           lines.push(`  ${a.name}${email} [token ${health}]`);
         }
       }
-      return { exitCode: 0, output: lines.join("\n") + "\n" };
+      return { exitCode: 0, output: `${lines.join("\n")}\n` };
     }
     default:
       return { exitCode: 1, output: `Unknown command: ${cmd}\n\n${HELP}` };
