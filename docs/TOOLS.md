@@ -111,7 +111,7 @@ are returned decoded as text; binary files as base64.
 | --- | --- | --- |
 | `id` | string | required. Message ID. |
 | `attachmentId` | string | required. From `list_attachments`. |
-| `partId` | string | optional. Stable part ID from `list_attachments`; preferred over `attachmentId` for lookup. |
+| `partId` | string | optional. Stable part ID from `list_attachments` (preferred). |
 
 ### `google_gmail_drafts_create`
 
