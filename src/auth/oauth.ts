@@ -1,8 +1,8 @@
-import { randomBytes } from "node:crypto";
-import { createServer, type Server } from "node:http";
 import { execFile } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
+import { createServer, type Server } from "node:http";
 import { promisify } from "node:util";
-import { DEFAULT_REDIRECT_PORT, DEFAULT_SCOPES, type Config } from "./config.js";
+import { type Config, DEFAULT_REDIRECT_PORT, DEFAULT_SCOPES } from "./config.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -51,7 +51,7 @@ function parseCallbackTarget(config: Config): CallbackTarget {
 }
 
 /** Build the Google consent-screen URL. */
-export function buildAuthUrl(config: Config, state: string): string {
+export function buildAuthUrl(config: Config, state: string, codeChallenge: string): string {
   const scopes = config.scopes?.length ? config.scopes : DEFAULT_SCOPES;
   const url = new URL(AUTH_ENDPOINT);
   url.searchParams.set("client_id", config.clientId);
@@ -61,6 +61,8 @@ export function buildAuthUrl(config: Config, state: string): string {
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", "consent");
   url.searchParams.set("state", state);
+  url.searchParams.set("code_challenge", codeChallenge);
+  url.searchParams.set("code_challenge_method", "S256");
   url.searchParams.set("include_granted_scopes", "true");
   return url.toString();
 }
@@ -94,7 +96,7 @@ export interface AuthCallback {
 export function waitForOAuthCallback(
   config: Config,
   expectedState: string,
-  options: { timeoutMs?: number } = {}
+  options: { timeoutMs?: number } = {},
 ): Promise<AuthCallback> {
   return new Promise((resolve, reject) => {
     const target = parseCallbackTarget(config);
@@ -164,8 +166,8 @@ export function waitForOAuthCallback(
           new Error(
             `Could not start the OAuth callback server: port ${target.port} (host ${target.host}) is already in use. ` +
               `Set GOOGLE_MCP_REDIRECT_URI (or redirectUri in config.json, GOOGLE_MCP_REDIRECT_PORT, ` +
-              `or redirectPort) to a free loopback endpoint and retry.`
-          )
+              `or redirectPort) to a free loopback endpoint and retry.`,
+          ),
         );
       } else {
         reject(new Error(`OAuth callback server failed: ${e.message}`));
@@ -177,8 +179,8 @@ export function waitForOAuthCallback(
       reject(
         new Error(
           `Timed out waiting for the OAuth callback after ${Math.round(timeoutMs / 1000)}s. ` +
-            `Open the authorization URL in a browser and approve the prompt.`
-        )
+            `Open the authorization URL in a browser and approve the prompt.`,
+        ),
       );
     }, timeoutMs);
     timer.unref?.();
@@ -217,9 +219,14 @@ async function postTokenRequest(config: Config, body: Record<string, string>): P
 }
 
 /** Exchange an authorization code for tokens. */
-export async function exchangeCode(config: Config, code: string): Promise<TokenSet> {
+export async function exchangeCode(
+  config: Config,
+  code: string,
+  codeVerifier: string,
+): Promise<TokenSet> {
   return postTokenRequest(config, {
     code,
+    code_verifier: codeVerifier,
     redirect_uri: resolveRedirectUri(config),
     grant_type: "authorization_code",
   });
@@ -234,7 +241,9 @@ export async function refreshAccessToken(config: Config, refreshToken: string): 
 }
 
 /** Best-effort fetch of the signed-in user's profile (email/name). Never throws. */
-export async function fetchUserInfo(accessToken: string): Promise<{ email?: string; name?: string }> {
+export async function fetchUserInfo(
+  accessToken: string,
+): Promise<{ email?: string; name?: string }> {
   try {
     const response = await fetch(USERINFO_ENDPOINT, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -252,4 +261,21 @@ export async function fetchUserInfo(accessToken: string): Promise<{ email?: stri
 /** Generate a random state value for CSRF protection. */
 export function generateState(): string {
   return randomBytes(16).toString("hex");
+}
+
+export interface PkcePair {
+  /** High-entropy secret kept client-side; sent at token exchange. */
+  codeVerifier: string;
+  /** S256 hash of the verifier; sent in the authorization URL. */
+  codeChallenge: string;
+}
+
+/** Generate a PKCE (RFC 7636) verifier/challenge pair with S256. */
+export function generatePkce(): PkcePair {
+  const codeVerifier = randomBytes(32)
+    .toString("base64url")
+    .replace(/[^A-Za-z0-9\-._~]/g, "")
+    .slice(0, 128);
+  const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
+  return { codeVerifier, codeChallenge };
 }

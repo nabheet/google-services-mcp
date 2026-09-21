@@ -1,14 +1,14 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import fs from "node:fs/promises";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  saveAccount,
+  deleteAccount,
   loadAccount,
   loadAllAccounts,
-  deleteAccount,
   type StoredAccount,
+  saveAccount,
 } from "../../src/auth/store.js";
 
 let tmp: string;
@@ -84,7 +84,26 @@ describe("store", () => {
       saveAccount(makeAccount("two")),
       saveAccount(makeAccount("three")),
     ]);
-    const names = (await loadAllAccounts()).map((a) => a.name).filter((n) => ["one", "two", "three"].includes(n));
+    const names = (await loadAllAccounts())
+      .map((a) => a.name)
+      .filter((n) => ["one", "two", "three"].includes(n));
     expect(names.sort()).toEqual(["one", "three", "two"]);
+  });
+
+  it("writes account files with owner-only permissions (0600)", async () => {
+    await saveAccount(makeAccount("private"));
+    const stat = await fs.stat(path.join(tmp, "accounts", "private.json"));
+    // Mask file-type bits; require no group/other access.
+    expect(stat.mode & 0o777).toBe(0o600);
+  });
+
+  it("hides account files from group/other even if previously loose", async () => {
+    // Simulate a file created with a permissive umask before the fix.
+    await fs.mkdir(path.join(tmp, "accounts"), { recursive: true });
+    const p = path.join(tmp, "accounts", "legacy.json");
+    await fs.writeFile(p, "{}", { encoding: "utf8", mode: 0o644 });
+    await saveAccount(makeAccount("legacy"));
+    const stat = await fs.stat(p);
+    expect(stat.mode & 0o777).toBe(0o600);
   });
 });

@@ -1,6 +1,6 @@
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -88,7 +88,10 @@ export function isValidName(name: string): boolean {
 }
 
 export async function ensureDirs(): Promise<void> {
-  await fs.mkdir(getAccountsDir(), { recursive: true });
+  await fs.mkdir(getAccountsDir(), { recursive: true, mode: 0o700 });
+  // mkdir's mode only applies to newly-created dirs; harden pre-existing ones.
+  await fs.chmod(getAccountsDir(), 0o700).catch(() => {});
+  await fs.chmod(getDataDir(), 0o700).catch(() => {});
 }
 
 export async function loadConfig(): Promise<Config> {
@@ -122,9 +125,14 @@ export async function saveConfig(config: Config): Promise<void> {
   const { clientId, clientSecret, redirectPort, redirectUri, defaultAccount, scopes } = config;
   await fs.writeFile(
     getConfigPath(),
-    JSON.stringify({ clientId, clientSecret, redirectPort, redirectUri, defaultAccount, scopes }, null, 2),
-    "utf8"
+    JSON.stringify(
+      { clientId, clientSecret, redirectPort, redirectUri, defaultAccount, scopes },
+      null,
+      2,
+    ),
+    { encoding: "utf8", mode: 0o600 },
   );
+  await fs.chmod(getConfigPath(), 0o600).catch(() => {});
 }
 
 export async function saveClientCredentials(clientId: string, clientSecret: string): Promise<void> {

@@ -12,7 +12,10 @@ export interface ReplaceAllTextArgs {
   matchCase?: boolean;
 }
 
-export async function getPresentation(client: Auth.OAuth2Client, { presentationId }: GetPresentationArgs): Promise<any> {
+export async function getPresentation(
+  client: Auth.OAuth2Client,
+  { presentationId }: GetPresentationArgs,
+): Promise<slides_v1.Schema$Presentation> {
   const slides = google.slides({ version: "v1", auth: client });
   const res = await slides.presentations.get({ presentationId });
   return res.data;
@@ -20,14 +23,17 @@ export async function getPresentation(client: Auth.OAuth2Client, { presentationI
 
 export async function getSlidePage(
   client: Auth.OAuth2Client,
-  { presentationId, pageObjectId }: GetPresentationArgs & { pageObjectId: string }
-): Promise<any> {
+  { presentationId, pageObjectId }: GetPresentationArgs & { pageObjectId: string },
+): Promise<slides_v1.Schema$Page> {
   const slides = google.slides({ version: "v1", auth: client });
   const res = await slides.presentations.pages.get({ presentationId, pageObjectId });
   return res.data;
 }
 
-export async function createPresentation(client: Auth.OAuth2Client, { title }: { title: string }): Promise<any> {
+export async function createPresentation(
+  client: Auth.OAuth2Client,
+  { title }: { title: string },
+): Promise<slides_v1.Schema$Presentation> {
   const slides = google.slides({ version: "v1", auth: client });
   const res = await slides.presentations.create({ requestBody: { title } });
   return res.data;
@@ -35,8 +41,8 @@ export async function createPresentation(client: Auth.OAuth2Client, { title }: {
 
 export async function replaceAllText(
   client: Auth.OAuth2Client,
-  { presentationId, find, replace, matchCase = true }: ReplaceAllTextArgs
-): Promise<any> {
+  { presentationId, find, replace, matchCase = true }: ReplaceAllTextArgs,
+): Promise<slides_v1.Schema$ReplaceAllTextResponse> {
   const slides = google.slides({ version: "v1", auth: client });
   const res = await slides.presentations.batchUpdate({
     presentationId,
@@ -51,15 +57,13 @@ export async function replaceAllText(
 
 export async function createSlide(
   client: Auth.OAuth2Client,
-  { presentationId }: GetPresentationArgs
-): Promise<any> {
+  { presentationId }: GetPresentationArgs,
+): Promise<slides_v1.Schema$CreateSlideResponse> {
   const slides = google.slides({ version: "v1", auth: client });
   const res = await slides.presentations.batchUpdate({
     presentationId,
     requestBody: {
-      requests: [
-        { createSlide: { slideLayoutReference: { predefinedLayout: "BLANK" as const } } },
-      ],
+      requests: [{ createSlide: { slideLayoutReference: { predefinedLayout: "BLANK" as const } } }],
     },
   });
   return res.data.replies?.[0]?.createSlide ?? { objectId: undefined };
@@ -67,8 +71,8 @@ export async function createSlide(
 
 export async function deleteSlide(
   client: Auth.OAuth2Client,
-  { presentationId, slideObjectId }: GetPresentationArgs & { slideObjectId: string }
-): Promise<any> {
+  { presentationId, slideObjectId }: GetPresentationArgs & { slideObjectId: string },
+): Promise<{ deleted: boolean }> {
   const slides = google.slides({ version: "v1", auth: client });
   await slides.presentations.batchUpdate({
     presentationId,
@@ -84,8 +88,8 @@ export type BatchUpdateArgs = {
 
 export async function batchUpdatePresentation(
   client: Auth.OAuth2Client,
-  { presentationId, requests }: BatchUpdateArgs
-): Promise<any> {
+  { presentationId, requests }: BatchUpdateArgs,
+): Promise<slides_v1.Schema$BatchUpdatePresentationResponse> {
   const slides = google.slides({ version: "v1", auth: client });
   const res = await slides.presentations.batchUpdate({ presentationId, requestBody: { requests } });
   return res.data;

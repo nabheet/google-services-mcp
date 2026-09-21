@@ -16,7 +16,10 @@ export interface AddQuestionArgs {
   required?: boolean;
 }
 
-export async function getForm(client: Auth.OAuth2Client, { formId }: GetFormArgs): Promise<any> {
+export async function getForm(
+  client: Auth.OAuth2Client,
+  { formId }: GetFormArgs,
+): Promise<forms_v1.Schema$Form> {
   const forms = google.forms({ version: "v1", auth: client });
   const res = await forms.forms.get({ formId });
   return res.data;
@@ -24,14 +27,17 @@ export async function getForm(client: Auth.OAuth2Client, { formId }: GetFormArgs
 
 export async function getFormResponses(
   client: Auth.OAuth2Client,
-  { formId, pageSize = 100 }: GetFormArgs & { pageSize?: number }
-): Promise<any[]> {
+  { formId, pageSize = 100 }: GetFormArgs & { pageSize?: number },
+): Promise<forms_v1.Schema$FormResponse[]> {
   const forms = google.forms({ version: "v1", auth: client });
-  const res = await (forms as any).forms_responses.list({ formId, pageSize });
+  const res = await forms.forms.responses.list({ formId, pageSize });
   return res.data.responses ?? [];
 }
 
-export async function createForm(client: Auth.OAuth2Client, { title }: { title: string }): Promise<any> {
+export async function createForm(
+  client: Auth.OAuth2Client,
+  { title }: { title: string },
+): Promise<forms_v1.Schema$Form> {
   const forms = google.forms({ version: "v1", auth: client });
   const res = await forms.forms.create({ requestBody: { info: { title } } });
   return res.data;
@@ -39,8 +45,15 @@ export async function createForm(client: Auth.OAuth2Client, { title }: { title: 
 
 export async function addQuestion(
   client: Auth.OAuth2Client,
-  { formId, title, description, type = "text" as const, options, required = false }: AddQuestionArgs
-): Promise<any> {
+  {
+    formId,
+    title,
+    description,
+    type = "text" as const,
+    options,
+    required = false,
+  }: AddQuestionArgs,
+): Promise<{ added: boolean }> {
   const forms = google.forms({ version: "v1", auth: client });
   let question: Record<string, unknown>;
   if (type === "multiple_choice") {
@@ -79,8 +92,8 @@ export type BatchUpdateArgs = {
 
 export async function batchUpdateForm(
   client: Auth.OAuth2Client,
-  { formId, requests }: BatchUpdateArgs
-): Promise<any> {
+  { formId, requests }: BatchUpdateArgs,
+): Promise<forms_v1.Schema$BatchUpdateFormResponse> {
   const forms = google.forms({ version: "v1", auth: client });
   const res = await forms.forms.batchUpdate({ formId, requestBody: { requests } });
   return res.data;

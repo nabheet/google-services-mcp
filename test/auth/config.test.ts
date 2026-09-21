@@ -1,21 +1,21 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import fs from "node:fs/promises";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   DEFAULT_SCOPES,
-  getDataDir,
-  getConfigPath,
-  getAccountsDir,
-  getAccountPath,
-  sanitizeName,
-  isValidName,
   ensureDirs,
-  loadConfig,
-  saveConfig,
-  saveClientCredentials,
+  getAccountPath,
+  getAccountsDir,
+  getConfigPath,
+  getDataDir,
   hasCredentials,
+  isValidName,
+  loadConfig,
+  sanitizeName,
+  saveClientCredentials,
+  saveConfig,
 } from "../../src/auth/config.js";
 
 let tmp: string;
@@ -136,7 +136,12 @@ describe("loadConfig / saveConfig", () => {
   });
 
   it("saveClientCredentials merges without clobbering other fields", async () => {
-    await saveConfig({ clientId: "", clientSecret: "", redirectPort: 7777, defaultAccount: "work" });
+    await saveConfig({
+      clientId: "",
+      clientSecret: "",
+      redirectPort: 7777,
+      defaultAccount: "work",
+    });
     await saveClientCredentials("merged-id", "merged-secret");
     const config = await loadConfig();
     expect(config.clientId).toBe("merged-id");
@@ -156,5 +161,19 @@ describe("ensureDirs", () => {
     await ensureDirs();
     const stat = await fs.stat(path.join(tmp, "accounts"));
     expect(stat.isDirectory()).toBe(true);
+  });
+
+  it("restricts the data dir and accounts dir to the owner (0700)", async () => {
+    await ensureDirs();
+    const dataStat = await fs.stat(tmp);
+    const accountsStat = await fs.stat(path.join(tmp, "accounts"));
+    expect(dataStat.mode & 0o777).toBe(0o700);
+    expect(accountsStat.mode & 0o777).toBe(0o700);
+  });
+
+  it("writes config.json with owner-only permissions (0600)", async () => {
+    await saveConfig({ clientId: "id", clientSecret: "", redirectPort: 8787 });
+    const stat = await fs.stat(path.join(tmp, "config.json"));
+    expect(stat.mode & 0o777).toBe(0o600);
   });
 });

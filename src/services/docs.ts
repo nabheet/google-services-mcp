@@ -24,30 +24,37 @@ export interface BatchUpdateArgs {
   requests: docs_v1.Schema$Request[];
 }
 
-export async function getDocument(client: Auth.OAuth2Client, { documentId }: GetDocumentArgs): Promise<any> {
+export async function getDocument(
+  client: Auth.OAuth2Client,
+  { documentId }: GetDocumentArgs,
+): Promise<docs_v1.Schema$Document> {
   const docs = google.docs({ version: "v1", auth: client });
   const res = await docs.documents.get({ documentId });
   return res.data;
 }
 
 /** Extract plain text from the body's paragraph elements (text runs only). */
-export async function getDocumentText(client: Auth.OAuth2Client, { documentId }: GetDocumentArgs): Promise<string> {
+export async function getDocumentText(
+  client: Auth.OAuth2Client,
+  { documentId }: GetDocumentArgs,
+): Promise<string> {
   const docs = google.docs({ version: "v1", auth: client });
   const doc = await docs.documents.get({ documentId });
   const content = doc.data.body?.content ?? [];
   const parts: string[] = [];
   for (const element of content) {
     if (element.paragraph) {
-      const line = (element.paragraph.elements ?? [])
-        .map((e) => e.textRun?.content ?? "")
-        .join("");
+      const line = (element.paragraph.elements ?? []).map((e) => e.textRun?.content ?? "").join("");
       parts.push(line);
     }
   }
   return parts.join("\n") + (parts.length ? "\n" : "");
 }
 
-export async function createDocument(client: Auth.OAuth2Client, { title }: { title: string }): Promise<any> {
+export async function createDocument(
+  client: Auth.OAuth2Client,
+  { title }: { title: string },
+): Promise<docs_v1.Schema$Document> {
   const docs = google.docs({ version: "v1", auth: client });
   const res = await docs.documents.create({ requestBody: { title } });
   return res.data;
@@ -55,8 +62,8 @@ export async function createDocument(client: Auth.OAuth2Client, { title }: { tit
 
 export async function insertText(
   client: Auth.OAuth2Client,
-  { documentId, text, index }: InsertTextArgs
-): Promise<any> {
+  { documentId, text, index }: InsertTextArgs,
+): Promise<{ inserted: boolean }> {
   const docs = google.docs({ version: "v1", auth: client });
   let location: Record<string, unknown>;
   if (index !== undefined) {
@@ -73,8 +80,8 @@ export async function insertText(
 
 export async function replaceAllText(
   client: Auth.OAuth2Client,
-  { documentId, find, replace, matchCase = true }: ReplaceAllTextArgs
-): Promise<any> {
+  { documentId, find, replace, matchCase = true }: ReplaceAllTextArgs,
+): Promise<docs_v1.Schema$ReplaceAllTextResponse> {
   const docs = google.docs({ version: "v1", auth: client });
   const res = await docs.documents.batchUpdate({
     documentId,
@@ -89,8 +96,8 @@ export async function replaceAllText(
 
 export async function batchUpdateDocument(
   client: Auth.OAuth2Client,
-  { documentId, requests }: BatchUpdateArgs
-): Promise<any> {
+  { documentId, requests }: BatchUpdateArgs,
+): Promise<docs_v1.Schema$BatchUpdateDocumentResponse> {
   const docs = google.docs({ version: "v1", auth: client });
   const res = await docs.documents.batchUpdate({ documentId, requestBody: { requests } });
   return res.data;
