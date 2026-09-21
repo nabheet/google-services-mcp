@@ -28,6 +28,10 @@ vi.mock("../../src/auth/oauth.js", () => ({
   fetchUserInfo: vi.fn(async () => ({ email: "alice@example.com", name: "Alice Example" })),
   openBrowser: vi.fn(async () => {}),
   generateState: vi.fn(() => "state-x"),
+  generatePkce: vi.fn(() => ({
+    codeVerifier: "verifier-x",
+    codeChallenge: "challenge-x",
+  })),
 }));
 
 vi.mock("googleapis", () => ({

@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { promisify } from "node:util";
 import { type Config, DEFAULT_REDIRECT_PORT, DEFAULT_SCOPES } from "./config.js";
@@ -51,7 +51,7 @@ function parseCallbackTarget(config: Config): CallbackTarget {
 }
 
 /** Build the Google consent-screen URL. */
-export function buildAuthUrl(config: Config, state: string): string {
+export function buildAuthUrl(config: Config, state: string, codeChallenge: string): string {
   const scopes = config.scopes?.length ? config.scopes : DEFAULT_SCOPES;
   const url = new URL(AUTH_ENDPOINT);
   url.searchParams.set("client_id", config.clientId);
@@ -61,6 +61,8 @@ export function buildAuthUrl(config: Config, state: string): string {
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", "consent");
   url.searchParams.set("state", state);
+  url.searchParams.set("code_challenge", codeChallenge);
+  url.searchParams.set("code_challenge_method", "S256");
   url.searchParams.set("include_granted_scopes", "true");
   return url.toString();
 }
@@ -217,9 +219,10 @@ async function postTokenRequest(config: Config, body: Record<string, string>): P
 }
 
 /** Exchange an authorization code for tokens. */
-export async function exchangeCode(config: Config, code: string): Promise<TokenSet> {
+export async function exchangeCode(config: Config, code: string, codeVerifier: string): Promise<TokenSet> {
   return postTokenRequest(config, {
     code,
+    code_verifier: codeVerifier,
     redirect_uri: resolveRedirectUri(config),
     grant_type: "authorization_code",
   });
@@ -254,4 +257,21 @@ export async function fetchUserInfo(
 /** Generate a random state value for CSRF protection. */
 export function generateState(): string {
   return randomBytes(16).toString("hex");
+}
+
+export interface PkcePair {
+  /** High-entropy secret kept client-side; sent at token exchange. */
+  codeVerifier: string;
+  /** S256 hash of the verifier; sent in the authorization URL. */
+  codeChallenge: string;
+}
+
+/** Generate a PKCE (RFC 7636) verifier/challenge pair with S256. */
+export function generatePkce(): PkcePair {
+  const codeVerifier = randomBytes(32)
+    .toString("base64url")
+    .replace(/[^A-Za-z0-9\-._~]/g, "")
+    .slice(0, 128);
+  const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
+  return { codeVerifier, codeChallenge };
 }
