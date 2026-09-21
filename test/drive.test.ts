@@ -147,6 +147,20 @@ describe("downloadDriveFile", () => {
     expect(result.binary).toBe(true);
     expect(Buffer.from(result.data, "base64")).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   });
+
+  it("converts foreign Blob (not instanceof global Blob) like googleapis' bundled fetch", async () => {
+    // googleapis' gaxios returns a Blob from its own bundled fetch impl, which
+    // is NOT an instanceof the global Blob class. Duck-type it via arrayBuffer().
+    const foreignBlob = {
+      size: 4,
+      type: "application/octet-stream",
+      arrayBuffer: async () => new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer,
+    };
+    mockFiles.get.mockResolvedValue({ data: foreignBlob });
+    const result = await downloadDriveFile(client, { fileId: "f1" });
+    expect(result.binary).toBe(true);
+    expect(Buffer.from(result.data, "base64")).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  });
 });
 
 describe("exportDriveFile", () => {
