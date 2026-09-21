@@ -257,9 +257,9 @@ npx -y google-services-mcp --help              # show help
 | Symptom | Cause / fix |
 | --- | --- |
 | `access blocked` on consent | Account not in **Test users** (setup step 2.3) — add it and retry |
-| `redirect_uri_mismatch` | URI must exactly match `http://localhost:8787` (no trailing slash) |
+| `redirect_uri_mismatch` | Exactly `http://localhost:8787` (no trailing slash), per OAuth client |
 | Tokens stop after ~7 days | App in **Testing** mode — re-run `add` or **Publish app** |
-| `npx` not found | GUI clients may lack your PATH — use absolute `npx` or install globally |
+| `npx` not found | GUI clients may lack PATH — use `/usr/local/bin/npx` or global install |
 | `Google hasn't verified this app` | Normal — click **Advanced → Continue** for personal use |
 
 ## Local development

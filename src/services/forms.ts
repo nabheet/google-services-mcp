@@ -30,16 +30,7 @@ export async function getFormResponses(
   { formId, pageSize = 100 }: GetFormArgs & { pageSize?: number },
 ): Promise<forms_v1.Schema$FormResponse[]> {
   const forms = google.forms({ version: "v1", auth: client });
-  const listResponses = (
-    forms as unknown as {
-      forms_responses: {
-        list: (args: { formId: string; pageSize: number }) => Promise<{
-          data: { responses?: forms_v1.Schema$FormResponse[] };
-        }>;
-      };
-    }
-  ).forms_responses.list;
-  const res = await listResponses({ formId, pageSize });
+  const res = await forms.forms.responses.list({ formId, pageSize });
   return res.data.responses ?? [];
 }
 

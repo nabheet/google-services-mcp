@@ -5,9 +5,9 @@ const mockForms = {
     get: vi.fn(),
     create: vi.fn(),
     batchUpdate: vi.fn(),
-  },
-  forms_responses: {
-    list: vi.fn(),
+    responses: {
+      list: vi.fn(),
+    },
   },
 };
 
@@ -34,7 +34,7 @@ describe("forms service", () => {
   });
 
   it("getFormResponses lists responses with flatten", async () => {
-    mockForms.forms_responses.list.mockResolvedValue({
+    mockForms.forms.responses.list.mockResolvedValue({
       data: {
         responses: [
           { responseId: "r1", answers: { q1: { textAnswers: { answers: [{ value: "yes" }] } } } },
@@ -45,11 +45,11 @@ describe("forms service", () => {
     expect(result).toEqual([
       { responseId: "r1", answers: { q1: { textAnswers: { answers: [{ value: "yes" }] } } } },
     ]);
-    expect(mockForms.forms_responses.list).toHaveBeenCalledWith({ formId: "f1", pageSize: 100 });
+    expect(mockForms.forms.responses.list).toHaveBeenCalledWith({ formId: "f1", pageSize: 100 });
   });
 
   it("getFormResponses returns empty array when none", async () => {
-    mockForms.forms_responses.list.mockResolvedValue({ data: {} });
+    mockForms.forms.responses.list.mockResolvedValue({ data: {} });
     const result = await getFormResponses(client, { formId: "f1" });
     expect(result).toEqual([]);
   });

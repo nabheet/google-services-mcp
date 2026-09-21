@@ -47,8 +47,12 @@ vi.mock("googleapis", () => ({
       subscriptions: { list: vi.fn() },
     })),
     forms: vi.fn(() => ({
-      forms: { get: mockFormsGet, create: vi.fn(), batchUpdate: vi.fn() },
-      forms_responses: mockFormsResponses,
+      forms: {
+        get: mockFormsGet,
+        create: vi.fn(),
+        batchUpdate: vi.fn(),
+        responses: mockFormsResponses,
+      },
     })),
   },
 }));
