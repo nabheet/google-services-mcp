@@ -10,7 +10,7 @@ create documents and spreadsheets, and more — using your real Google data.
 
 ## Features
 
-- **Gmail** — send, list, read, modify, and reply to messages
+- **Gmail** — send, draft, reply, list, read, search, label, and manage attachments
 - **Calendar** — list calendars, create/read/update/delete events, create Google Meet links
 - **Drive** — list, read, upload, update, delete, and share files
 - **Contacts** — list, search, and create contacts
@@ -24,7 +24,7 @@ create documents and spreadsheets, and more — using your real Google data.
   an `account` argument to any tool
 - **OAuth 2.0** — one-time browser authorization; tokens are stored locally and refreshed automatically
 
-> **60 tools** across 11 services, all prefixed `google_`. Full reference:
+> **79 tools** across 11 services, all prefixed `google_`. Full reference:
 > [docs/TOOLS.md](docs/TOOLS.md).
 
 ## Requirements

@@ -5,9 +5,10 @@ Guide for AI agents working in this repository.
 ## Project
 
 TypeScript MCP server connecting to Google consumer services (Gmail, Calendar,
-Meet, Drive, Contacts, Tasks) with multi-account OAuth. Package name
-`google-services-mcp`, executable `google-services-mcp`. ESM (`"type": "module"`),
-Node16 module resolution, target ES2022.
+Meet, Drive, Contacts, Tasks, Sheets, Docs, Slides, YouTube, Forms) with
+multi-account OAuth. Package name `google-services-mcp`, executable
+`google-services-mcp`. ESM (`"type": "module"`), Node16 module resolution,
+target ES2022.
 
 ## Architecture
 
@@ -22,7 +23,7 @@ src/
     oauth.ts              # OAuth loopback flow, browser launch, CSRF state
     manager.ts            # AuthManager facade: accounts, clients, status
   services/
-    gmail.ts              # send/list/get/modify/reply
+    gmail.ts              # send/draft/reply/labels/attachments/trash
     calendar.ts           # events CRUD + Meet links
     drive.ts              # files list/get/upload/update/delete/share
     contacts-tasks.ts     # contacts + tasks
@@ -32,7 +33,7 @@ src/
     youtube.ts            # search/videos/playlists/playlistItems/subscriptions
     forms.ts              # forms: get/responses/create/add-question/batch
   tools/
-    index.ts              # registerTools(server): 60 tools, google_ prefix
+    index.ts              # registerTools(server): 79 tools, google_ prefix
   util/
     result.ts             # ok/text/err/noAccountsHint
 test/                     # vitest suites, mirrored layout
