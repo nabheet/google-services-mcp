@@ -100,7 +100,7 @@ export function buildRawMessage(opts: SendGmailOptions): string {
   if (cc) lines.push(`Cc: ${cc}`);
   const bcc = joinRecipients(opts.bcc);
   if (bcc) lines.push(`Bcc: ${bcc}`);
-  lines.push(`Subject: ${opts.subject.replace(/[\r\n]+/g, " ")}`);
+  lines.push(`Subject: ${encodeSubject(opts.subject)}`);
   lines.push("MIME-Version: 1.0");
   const contentType = opts.bodyType === "html" ? "text/html" : "text/plain";
   lines.push(`Content-Type: ${contentType}; charset=UTF-8`);
@@ -153,6 +153,15 @@ function quotedPrintableEncode(input: string): string {
   flush();
   // Trailing space would be stripped by receivers; encode it.
   return out.map((l) => (l.endsWith(" ") ? `${l.slice(0, -1)}=20` : l)).join(CRLF);
+}
+
+/** RFC 2047 encoded-word for non-ASCII subjects; ASCII passes through. */
+function encodeSubject(subject: string): string {
+  const cleaned = subject.replace(/[\r\n]+/g, " ");
+  // Byte length equals char length iff the string is pure ASCII.
+  return cleaned.length === Buffer.byteLength(cleaned, "utf8")
+    ? cleaned
+    : `=?UTF-8?B?${Buffer.from(cleaned, "utf8").toString("base64")}?=`;
 }
 
 function sanitizeFilename(name: string): string {
@@ -245,7 +254,7 @@ async function buildRawEmail(
   if (cc) lines.push(`Cc: ${cc}`);
   const bcc = joinRecipients(opts.bcc);
   if (bcc) lines.push(`Bcc: ${bcc}`);
-  lines.push(`Subject: ${opts.subject.replace(/[\r\n]+/g, " ")}`);
+  lines.push(`Subject: ${encodeSubject(opts.subject)}`);
   if (extraHeaders?.length) lines.push(...extraHeaders);
 
   const attachments = opts.attachments ?? [];
