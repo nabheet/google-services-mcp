@@ -120,6 +120,69 @@ describe("sendGmail", () => {
       sendGmail(client, { to: "bob@example.com", subject: "", body: "" }),
     ).rejects.toThrow(/subject.*body/i);
   });
+
+  it("encodes a non-ASCII subject as an RFC 2047 encoded-word", async () => {
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+    const subject = "Assessment — follow-up";
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject,
+      body: "B",
+    });
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    const expected = `=?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`;
+    expect(raw).toContain(`Subject: ${expected}`);
+    // No raw UTF-8 bytes leak into the header.
+    expect(raw).not.toMatch(/Subject: [^\r\n]*—/);
+  });
+
+  it("leaves an ASCII subject unchanged", async () => {
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "Follow-up",
+      body: "B",
+    });
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain("Subject: Follow-up");
+    expect(raw).not.toContain("=?UTF-8?B?");
+  });
+
+  it("encodes a non-ASCII subject in a draft and in a reply", async () => {
+    mockDrafts.create.mockResolvedValue({ data: { id: "d1" } });
+    const subject = "Réunion — demain";
+    await createGmailDraft(client, {
+      to: "bob@example.com",
+      subject,
+      body: "B",
+    });
+    const draftRaw = decodeRaw(mockDrafts.create.mock.calls[0][0].requestBody.message.raw);
+    const expected = `=?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`;
+    expect(draftRaw).toContain(`Subject: ${expected}`);
+
+    mockMessages.get.mockResolvedValue({
+      data: {
+        id: "orig-1",
+        payload: {
+          headers: [
+            { name: "From", value: "Bob <bob@example.com>" },
+            { name: "Subject", value: subject },
+            { name: "Message-ID", value: "<abc@mail.gmail.com>" },
+          ],
+        },
+      },
+    });
+    mockMessages.send.mockResolvedValue({ data: { id: "r1", threadId: "thr-1" } });
+    await replyGmail(client, {
+      threadId: "thr-1",
+      messageId: "orig-1",
+      body: "OK",
+    });
+    const replyRaw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(replyRaw).toContain(
+      `Subject: =?UTF-8?B?${Buffer.from(`Re: ${subject}`, "utf8").toString("base64")}?=`,
+    );
+  });
 });
 
 describe("listGmailMessages", () => {
