@@ -675,6 +675,25 @@ describe("gmail attachments", () => {
     expect(raw).toContain("Content-Transfer-Encoding: quoted-printable");
   });
 
+  it("ends the body part with an empty line before each attachment boundary", async () => {
+    const filePath = join(tmpDir, "a.txt");
+    writeFileSync(filePath, "att", "utf8");
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "S",
+      body: "Thanks,\nNabheet",
+      attachments: [{ path: filePath }],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    // Body part must be terminated by an empty line: \r\n\r\n before the boundary.
+    expect(raw).toMatch(/Nabheet\r\n\r\n--/);
+    // And the boundary must not sit flush against the body with a single CRLF.
+    expect(raw).not.toMatch(/Nabheet\r\n--/);
+  });
+
   it("reply keeps threading headers and attaches files", async () => {
     mockMessages.get.mockResolvedValue({
       data: {
@@ -774,6 +793,36 @@ describe("gmail attachments", () => {
     const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
     expect(raw).toContain("token=3D41&next=3Dx");
     expect(raw).not.toContain("token=41&next=x");
+  });
+
+  it("encodes non-ASCII body chars as UTF-8 quoted-printable bytes", async () => {
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+    const body = "A — B é € 日本語 😀";
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "QP",
+      body,
+    });
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    // Em-dash U+2014 is E2 80 94 in UTF-8 → valid =XX pairs, never =2014.
+    expect(raw).toContain("=E2=80=94");
+    expect(raw).not.toContain("=2014");
+    // é = C3 A9, € = E2 82 AC, 日 = E6 97 A5, 本 = E6 9C AC
+    expect(raw).toContain("=C3=A9");
+    expect(raw).toContain("=E2=82=AC");
+    expect(raw).toContain("=E6=97=A5");
+    expect(raw).toContain("=E6=9C=AC");
+    // 😀 (U+1F600) is a surrogate pair → F0 9F 98 80 as one code point,
+    // never the replacement char =EF=BF=BD from a lone surrogate.
+    expect(raw).toContain("=F0=9F=98=80");
+    expect(raw).not.toContain("=EF=BF=BD");
+    // Round-trips through a QP decoder back to the original text.
+    const bodyPart = raw.split(/\r?\n\r?\n/)[1] ?? "";
+    const qpDecoded = bodyPart
+      .replace(/=\r?\n/g, "") // soft line breaks
+      .replace(/=([0-9A-F]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+    const decoded = Buffer.from(qpDecoded, "latin1").toString("utf8");
+    expect(decoded).toBe(body);
   });
 
   it("folds base64 attachment bodies at 76 columns", async () => {
