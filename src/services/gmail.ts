@@ -100,7 +100,7 @@ export function buildRawMessage(opts: SendGmailOptions): string {
   if (cc) lines.push(`Cc: ${cc}`);
   const bcc = joinRecipients(opts.bcc);
   if (bcc) lines.push(`Bcc: ${bcc}`);
-  lines.push(`Subject: ${opts.subject.replace(/[\r\n]+/g, " ")}`);
+  lines.push(`Subject: ${encodeSubject(opts.subject)}`);
   lines.push("MIME-Version: 1.0");
   const contentType = opts.bodyType === "html" ? "text/html" : "text/plain";
   lines.push(`Content-Type: ${contentType}; charset=UTF-8`);
@@ -119,8 +119,10 @@ function quotedPrintableEncode(input: string): string {
     out.push(line);
     line = "";
   };
-  for (let i = 0; i < input.length; i++) {
-    const code = input.charCodeAt(i);
+  // Iterate code points, not UTF-16 code units: surrogate pairs (emoji, rare
+  // CJK) must encode as one codepoint, never as two lone surrogates.
+  for (const ch of input) {
+    const code = ch.codePointAt(0)!;
     if (code === 0x0d) continue; // normalize CRLF to LF below
     if (code === 0x0a) {
       flush();
@@ -130,11 +132,17 @@ function quotedPrintableEncode(input: string): string {
     if (code === 0x3d) {
       enc = "=3D";
     } else if (code >= 33 && code <= 126) {
-      enc = input[i];
+      enc = ch;
     } else if (code === 32) {
       enc = " "; // trailing spaces are trimmed by flush
     } else {
-      enc = `=${code.toString(16).toUpperCase().padStart(2, "0")}`;
+      // Encode UTF-8 bytes, not UTF-16 code units: RFC 2045 allows exactly
+      // 2 hex digits per =XX escape. U+2014 (—) is E2 80 94 in UTF-8.
+      enc = Buffer.from(ch, "utf8")
+        .toString("hex")
+        .match(/../g)!
+        .map((b) => `=${b.toUpperCase()}`)
+        .join("");
     }
     if (line.length + enc.length > MAX_LINE - 1) {
       line += "="; // soft break
@@ -145,6 +153,15 @@ function quotedPrintableEncode(input: string): string {
   flush();
   // Trailing space would be stripped by receivers; encode it.
   return out.map((l) => (l.endsWith(" ") ? `${l.slice(0, -1)}=20` : l)).join(CRLF);
+}
+
+/** RFC 2047 encoded-word for non-ASCII subjects; ASCII passes through. */
+function encodeSubject(subject: string): string {
+  const cleaned = subject.replace(/[\r\n]+/g, " ");
+  // Byte length equals char length iff the string is pure ASCII.
+  return cleaned.length === Buffer.byteLength(cleaned, "utf8")
+    ? cleaned
+    : `=?UTF-8?B?${Buffer.from(cleaned, "utf8").toString("base64")}?=`;
 }
 
 function sanitizeFilename(name: string): string {
@@ -237,7 +254,7 @@ async function buildRawEmail(
   if (cc) lines.push(`Cc: ${cc}`);
   const bcc = joinRecipients(opts.bcc);
   if (bcc) lines.push(`Bcc: ${bcc}`);
-  lines.push(`Subject: ${opts.subject.replace(/[\r\n]+/g, " ")}`);
+  lines.push(`Subject: ${encodeSubject(opts.subject)}`);
   if (extraHeaders?.length) lines.push(...extraHeaders);
 
   const attachments = opts.attachments ?? [];
@@ -262,6 +279,9 @@ async function buildRawEmail(
   lines.push("Content-Transfer-Encoding: quoted-printable");
   lines.push("");
   lines.push(quotedPrintableEncode(opts.body));
+  // Blank line terminates the body part so clients render it as a block
+  // separate from the attachment parts (MIME requires the empty line).
+  lines.push("");
   // Attachment parts (base64 always — safe for text and binary)
   for (const att of attachments) {
     const buf = await readAttachment(att.path);
