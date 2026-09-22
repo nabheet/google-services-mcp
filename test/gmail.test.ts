@@ -675,6 +675,25 @@ describe("gmail attachments", () => {
     expect(raw).toContain("Content-Transfer-Encoding: quoted-printable");
   });
 
+  it("ends the body part with an empty line before each attachment boundary", async () => {
+    const filePath = join(tmpDir, "a.txt");
+    writeFileSync(filePath, "att", "utf8");
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "S",
+      body: "Thanks,\nNabheet",
+      attachments: [{ path: filePath }],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    // Body part must be terminated by an empty line: \r\n\r\n before the boundary.
+    expect(raw).toMatch(/Nabheet\r\n\r\n--/);
+    // And the boundary must not sit flush against the body with a single CRLF.
+    expect(raw).not.toMatch(/Nabheet\r\n--/);
+  });
+
   it("reply keeps threading headers and attaches files", async () => {
     mockMessages.get.mockResolvedValue({
       data: {
