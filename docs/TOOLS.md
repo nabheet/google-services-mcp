@@ -53,6 +53,7 @@ Send an email from the connected account.
 | `cc` | string \| string[] | optional. |
 | `bcc` | string \| string[] | optional. |
 | `bodyType` | `text` \| `html` | optional, default `text`. |
+| `attachments` | object[] | optional. Local files to attach: `{ path, filename?, mimeType? }`. |
 
 ### `google_gmail_list`
 
@@ -91,6 +92,118 @@ Reply to an existing message inside its thread, preserving threading headers.
 | `messageId` | string | required. Message being replied to. |
 | `body` | string | required. |
 | `bodyType` | `text` \| `html` | optional, default `text`. |
+| `attachments` | object[] | optional. Local files to attach: `{ path, filename?, mimeType? }`. |
+
+### `google_gmail_list_attachments`
+
+List attachments on a message (metadata only, no bytes).
+
+| arg | type | notes |
+| --- | --- | --- |
+| `id` | string | required. Message ID. |
+
+### `google_gmail_get_attachment`
+
+Download a single attachment by message ID and attachment ID. Text-like files
+are returned decoded as text; binary files as base64.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `id` | string | required. Message ID. |
+| `attachmentId` | string | required. From `list_attachments`. |
+| `partId` | string | optional. Stable part ID from `list_attachments` (preferred). |
+
+### `google_gmail_drafts_create`
+
+Create a draft email (not sent).
+
+| arg | type | notes |
+| --- | --- | --- |
+| `to` | string \| string[] | required. Recipient(s). |
+| `subject` | string | required. |
+| `body` | string | required. |
+| `cc` | string \| string[] | optional. |
+| `bcc` | string \| string[] | optional. |
+| `bodyType` | `text` \| `html` | optional, default `text`. |
+| `attachments` | object[] | optional. Local files to attach: `{ path, filename?, mimeType? }`. |
+
+### `google_gmail_drafts_list`
+
+List draft emails.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `maxResults` | number (1–100) | optional, default 25. |
+
+### `google_gmail_drafts_get`
+
+Fetch a single draft with parsed headers and body.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `id` | string | required. Draft ID. |
+
+### `google_gmail_drafts_send`
+
+Send an existing draft email.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `id` | string | required. Draft ID. |
+
+### `google_gmail_drafts_delete`
+
+Delete a draft email.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `id` | string | required. Draft ID. |
+
+### `google_gmail_labels_list`
+
+List all Gmail labels. No args beyond `account`.
+
+### `google_gmail_labels_create`
+
+Create a custom Gmail label.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `name` | string | required. Label name. |
+| `messageListVisibility` | string | optional. e.g. `show` or `hide`. |
+| `labelListVisibility` | string | optional. e.g. `labelShow` or `labelHide`. |
+
+### `google_gmail_labels_delete`
+
+Delete a Gmail label.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `id` | string | required. Label ID. |
+
+### `google_gmail_trash`
+
+Move a message to trash.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `id` | string | required. Message ID. |
+
+### `google_gmail_untrash`
+
+Restore a message from trash.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `id` | string | required. Message ID. |
+
+### `google_gmail_delete`
+
+Permanently delete a message (irreversible).
+
+| arg | type | notes |
+| --- | --- | --- |
+| `id` | string | required. Message ID. |
 
 ## Calendar
 
@@ -195,6 +308,42 @@ Share a file with a user by email and role.
 | `email` | string (email) | required. |
 | `role` | `reader` \| `writer` \| `commenter` | required. |
 | `sendNotificationEmail` | boolean | optional, default true. |
+
+### `google_drive_download`
+
+Download a file's raw bytes (non-Google-native files). Text content returns
+decoded text; binary returns base64.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `fileId` | string | required. Drive file ID. |
+
+### `google_drive_export`
+
+Export a Google-native file (Docs/Sheets/Slides/Drawings) to another format.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `fileId` | string | required. Drive file ID. |
+| `mimeType` | string | required. Target MIME type, e.g. `application/pdf`. |
+
+### `google_drive_create_folder`
+
+Create a folder in Drive.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `name` | string | required. Folder name. |
+| `parentFolderId` | string | optional. Parent folder ID (root if omitted). |
+
+### `google_drive_copy`
+
+Copy a file, optionally with a new name.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `fileId` | string | required. Drive file ID. |
+| `name` | string | optional. New name. |
 
 ## Contacts
 
@@ -325,6 +474,11 @@ Add a blank slide. Arg: `presentationId` (required). Returns the new slide `obje
 
 Delete a slide. Args: `presentationId` (required), `slideObjectId` (required).
 
+### `google_slides_get_page`
+
+Get the contents of a single slide page by object ID. Args:
+`presentationId` (required), `pageObjectId` (required).
+
 ### `google_slides_batch_update`
 
 Send raw Slides batchUpdate requests. Args: `presentationId` (required), `requests` (required array).
@@ -385,7 +539,3 @@ Create a new form. Arg: `title` (required). Returns the form ID and responder UR
 Add a question to a form. Args: `formId` (required), `title` (required),
 `description` (optional), `type` (`text`|`multiple_choice`, default `text`),
 `options` (array, required for multiple_choice), `required` (default `false`).
-
-### `google_forms_batch_update`
-
-Send raw Forms batchUpdate requests. Args: `formId` (required), `requests` (required array).
