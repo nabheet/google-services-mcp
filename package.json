@@ -58,7 +58,7 @@
     "@types/node": "^26.6.1",
     "markdownlint-cli2": "^0.23.3",
     "nock": "^14.0.17",
-    "tsx": "^4.23.13",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"
   }
