@@ -91,6 +91,7 @@ import {
   getVideo,
   listPlaylists,
   listSubscriptions,
+  removeVideoFromPlaylist,
   searchVideos,
 } from "../services/youtube.js";
 import { err, ok } from "../util/result.js";
@@ -1543,6 +1544,20 @@ export function registerTools(server: McpServer): void {
     },
     async ({ playlistId, videoId, account }) =>
       withClient(account, (client) => addVideoToPlaylist(client, { playlistId, videoId })),
+  );
+
+  server.registerTool(
+    "google_youtube_remove_from_playlist",
+    {
+      title: "Remove video from playlist",
+      description: "Remove a video from a playlist by playlist item ID.",
+      inputSchema: {
+        playlistItemId: z.string().describe("Playlist item ID to remove."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ playlistItemId, account }) =>
+      withClient(account, (client) => removeVideoFromPlaylist(client, { playlistItemId })),
   );
 
   server.registerTool(
