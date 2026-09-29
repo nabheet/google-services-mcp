@@ -64,11 +64,14 @@ import {
   untrashGmailMessage,
 } from "../services/gmail.js";
 import {
+  addSheet,
   appendSheetRange,
   batchUpdateSheet,
   createSpreadsheet,
+  deleteSheet,
   getSpreadsheet,
   readSheetRange,
+  renameSheet,
   writeSheetRange,
 } from "../services/sheets.js";
 import {
@@ -1166,6 +1169,65 @@ export function registerTools(server: McpServer): void {
     },
     async ({ spreadsheetId, requests, account }) =>
       withClient(account, (client) => batchUpdateSheet(client, { spreadsheetId, requests })),
+  );
+
+  server.registerTool(
+    "google_sheets_add_sheet",
+    {
+      title: "Add spreadsheet tab",
+      description: "Add a new tab (sheet) to a spreadsheet.",
+      inputSchema: {
+        spreadsheetId: z.string().describe("Spreadsheet ID."),
+        title: z.string().describe("Title of the new tab."),
+        index: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe("0-based position to insert at (appended at end if omitted)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ spreadsheetId, title, index, account }) =>
+      withClient(account, (client) => addSheet(client, { spreadsheetId, title, index })),
+  );
+
+  server.registerTool(
+    "google_sheets_delete_sheet",
+    {
+      title: "Delete spreadsheet tab",
+      description: "Permanently delete a tab (sheet) from a spreadsheet.",
+      inputSchema: {
+        spreadsheetId: z.string().describe("Spreadsheet ID."),
+        sheetId: z.number().int().describe("Numeric sheet ID (from google_sheets_get metadata)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ spreadsheetId, sheetId, account }) => {
+      try {
+        const client = await authManager.getClient(account);
+        const result = await deleteSheet(client, { spreadsheetId, sheetId });
+        return ok({ status: "deleted", sheetId, ...result });
+      } catch (error) {
+        return err(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "google_sheets_rename_sheet",
+    {
+      title: "Rename spreadsheet tab",
+      description: "Rename a tab (sheet) in a spreadsheet.",
+      inputSchema: {
+        spreadsheetId: z.string().describe("Spreadsheet ID."),
+        sheetId: z.number().int().describe("Numeric sheet ID (from google_sheets_get metadata)."),
+        title: z.string().describe("New tab title."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ spreadsheetId, sheetId, title, account }) =>
+      withClient(account, (client) => renameSheet(client, { spreadsheetId, sheetId, title })),
   );
 
   // ---- Docs ---------------------------------------------------------------
