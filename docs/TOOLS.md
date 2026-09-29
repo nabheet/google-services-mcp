@@ -323,18 +323,20 @@ Get metadata for a single file. Args: `fileId` (required).
 
 ### `google_drive_upload`
 
-Create a file, optionally with text content.
+Create a file, optionally with text content or from a local file path.
 
 | arg | type | notes |
 | --- | --- | --- |
 | `name` | string | required. |
-| `mimeType` | string | required. e.g. `text/plain`, `application/vnd.google-apps.document`. |
-| `content` | string | optional. Blank Google-native file if omitted. |
+| `mimeType` | string | required. e.g. `text/plain`, `image/png`, Google-native. |
+| `content` | string | optional. Text content. Blank Google-native file if omitted. |
+| `path` | string | optional. Local path, reads raw bytes (binary-safe). Use instead of `content`. |
 | `parentFolderId` | string | optional. |
 
 ### `google_drive_update`
 
-Rename a file and/or replace its content. `fileId` required; `name`, `mimeType`, `content` optional.
+Rename a file and/or replace its content (text or local file path). `fileId`
+required; `name`, `mimeType`, `content`, `path` optional.
 
 ### `google_drive_delete`
 
@@ -367,11 +369,13 @@ Revoke a permission from a file by permission ID. Args: `fileId` (required),
 ### `google_drive_download`
 
 Download a file's raw bytes (non-Google-native files). Text content returns
-decoded text; binary returns base64.
+decoded text; binary returns base64. Pass `saveToPath` to write bytes to a
+local file instead (returns `{ savedTo }`).
 
 | arg | type | notes |
 | --- | --- | --- |
 | `fileId` | string | required. Drive file ID. |
+| `saveToPath` | string | optional. Local path to write the raw bytes to. |
 
 ### `google_drive_export`
 
