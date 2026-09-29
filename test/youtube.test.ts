@@ -1,8 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockYouTube = {
   search: { list: vi.fn() },
-  videos: { list: vi.fn(), rate: vi.fn(), update: vi.fn() },
+  videos: { list: vi.fn(), rate: vi.fn(), update: vi.fn(), insert: vi.fn() },
   playlists: { list: vi.fn(), insert: vi.fn(), delete: vi.fn() },
   playlistItems: { list: vi.fn(), insert: vi.fn(), delete: vi.fn() },
   subscriptions: { list: vi.fn() },
@@ -33,6 +36,7 @@ import {
   searchVideos,
   setCommentModeration,
   updateVideo,
+  uploadVideo,
 } from "../src/services/youtube.js";
 
 beforeEach(() => {
@@ -365,5 +369,84 @@ describe("youtube service", () => {
     const result = await markCommentAsSpam(client, { commentId: "c1" });
     expect(result).toEqual({ commentId: "c1", markedAsSpam: true });
     expect(mockYouTube.comments.markAsSpam).toHaveBeenCalledWith({ id: ["c1"] });
+  });
+
+  describe("uploadVideo", () => {
+    let tmpFile: string;
+
+    beforeEach(() => {
+      tmpFile = path.join(os.tmpdir(), `yt-upload-${Date.now()}.mp4`);
+      fs.writeFileSync(tmpFile, Buffer.from("fake-mp4-bytes"));
+    });
+
+    afterEach(() => {
+      try {
+        fs.unlinkSync(tmpFile);
+      } catch {
+        // already gone
+      }
+    });
+
+    it("uploads from a file path with a read stream and private default", async () => {
+      mockYouTube.videos.insert.mockResolvedValue({
+        data: { id: "vid1", status: { privacyStatus: "private" } },
+      });
+      const result = await uploadVideo(client, {
+        path: tmpFile,
+        title: "My Video",
+        description: "Desc",
+        tags: ["a", "b"],
+      });
+      expect(result).toMatchObject({ id: "vid1", status: { privacyStatus: "private" } });
+      expect(mockYouTube.videos.insert).toHaveBeenCalledTimes(1);
+      const call = mockYouTube.videos.insert.mock.calls[0][0];
+      expect(call.part).toEqual(["snippet", "status"]);
+      expect(call.requestBody.snippet).toMatchObject({
+        title: "My Video",
+        description: "Desc",
+        tags: ["a", "b"],
+      });
+      expect(call.requestBody.status).toEqual({
+        privacyStatus: "private",
+      });
+      expect(call.notifySubscribers).toBe(false);
+      expect(call.media.mimeType).toBe("video/mp4");
+      expect(call.media.body).toBeInstanceOf(fs.ReadStream);
+    });
+
+    it("uploads from base64 content as a Buffer", async () => {
+      mockYouTube.videos.insert.mockResolvedValue({ data: { id: "vid2" } });
+      await uploadVideo(client, {
+        content: Buffer.from("hello").toString("base64"),
+        title: "B64",
+        privacyStatus: "unlisted",
+      });
+      const call = mockYouTube.videos.insert.mock.calls[0][0];
+      expect(call.media.body).toBeInstanceOf(Buffer);
+      expect(call.media.body.toString()).toBe("hello");
+      expect(call.requestBody.status.privacyStatus).toBe("unlisted");
+    });
+
+    it("throws when both path and content are provided", async () => {
+      await expect(
+        uploadVideo(client, {
+          path: tmpFile,
+          content: Buffer.from("x").toString("base64"),
+          title: "Both",
+        }),
+      ).rejects.toThrow(/either.*path.*content|path.*content.*not both/i);
+    });
+
+    it("throws when neither path nor content is provided", async () => {
+      await expect(uploadVideo(client, { title: "None" })).rejects.toThrow(
+        /either.*path.*content|provide.*path.*content/i,
+      );
+    });
+
+    it("throws when the file does not exist", async () => {
+      await expect(
+        uploadVideo(client, { path: "/tmp/definitely-missing-file.mp4", title: "Missing" }),
+      ).rejects.toThrow(/no such file|not found|ENOENT/i);
+    });
   });
 });
