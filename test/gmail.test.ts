@@ -23,36 +23,56 @@ const mockDrafts = {
 const mockLabels = {
   list: vi.fn(),
   create: vi.fn(),
+  update: vi.fn(),
   delete: vi.fn(),
+};
+const mockSettings = {
+  getVacation: vi.fn(),
+  updateVacation: vi.fn(),
+  sendAs: { list: vi.fn(), create: vi.fn() },
+  filters: { list: vi.fn(), create: vi.fn(), delete: vi.fn() },
 };
 
 vi.mock("googleapis", () => ({
   google: {
     gmail: vi.fn(() => ({
-      users: { messages: mockMessages, drafts: mockDrafts, labels: mockLabels },
+      users: {
+        messages: mockMessages,
+        drafts: mockDrafts,
+        labels: mockLabels,
+        settings: mockSettings,
+      },
     })),
   },
 }));
 
 import {
   createGmailDraft,
+  createGmailFilter,
   createGmailLabel,
+  createSendAs,
   deleteGmailDraft,
+  deleteGmailFilter,
   deleteGmailLabel,
   deleteGmailMessage,
   getGmailAttachment,
   getGmailDraft,
   getGmailMessage,
+  getVacationSettings,
   listGmailAttachments,
   listGmailDrafts,
+  listGmailFilters,
   listGmailLabels,
   listGmailMessages,
+  listSendAs,
   modifyGmailMessage,
   replyGmail,
   sendGmail,
   sendGmailDraft,
   trashGmailMessage,
   untrashGmailMessage,
+  updateGmailLabel,
+  updateVacationSettings,
 } from "../src/services/gmail.js";
 
 const client = {} as never;
@@ -923,5 +943,153 @@ describe("gmail attachments", () => {
         attachments: [{ path: filePath }],
       }),
     ).rejects.toThrow(/too large/i);
+  });
+});
+
+describe("updateGmailLabel", () => {
+  it("updates label name and visibility", async () => {
+    mockLabels.update.mockResolvedValue({
+      data: {
+        id: "Label_1",
+        name: "Renamed",
+        type: "user",
+        messageListVisibility: "show",
+        labelListVisibility: "labelShow",
+      },
+    });
+    const result = await updateGmailLabel(client, {
+      id: "Label_1",
+      name: "Renamed",
+      messageListVisibility: "show",
+      labelListVisibility: "labelShow",
+    });
+    expect(mockLabels.update).toHaveBeenCalledWith({
+      userId: "me",
+      id: "Label_1",
+      requestBody: {
+        name: "Renamed",
+        messageListVisibility: "show",
+        labelListVisibility: "labelShow",
+      },
+    });
+    expect(result.name).toBe("Renamed");
+  });
+
+  it("throws when nothing to update", async () => {
+    await expect(updateGmailLabel(client, { id: "Label_1" })).rejects.toThrow("Nothing to update");
+    expect(mockLabels.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("vacation settings", () => {
+  it("gets the vacation responder", async () => {
+    mockSettings.getVacation.mockResolvedValue({
+      data: {
+        enableAutoReply: true,
+        responseSubject: "OOF",
+        responseBodyPlainText: "Away",
+        startTime: "1700000000000",
+        endTime: "1700600000000",
+      },
+    });
+    const result = await getVacationSettings(client);
+    expect(mockSettings.getVacation).toHaveBeenCalledWith({ userId: "me" });
+    expect(result.enableAutoReply).toBe(true);
+  });
+
+  it("updates the vacation responder", async () => {
+    mockSettings.updateVacation.mockResolvedValue({ data: { enableAutoReply: true } });
+    const result = await updateVacationSettings(client, {
+      enableAutoReply: true,
+      responseSubject: "OOF",
+      responseBodyPlainText: "Away until Monday",
+      startTime: "1700000000000",
+      endTime: "1700600000000",
+    });
+    expect(mockSettings.updateVacation).toHaveBeenCalledWith({
+      userId: "me",
+      requestBody: {
+        enableAutoReply: true,
+        responseSubject: "OOF",
+        responseBodyPlainText: "Away until Monday",
+        startTime: "1700000000000",
+        endTime: "1700600000000",
+      },
+    });
+    expect(result.enableAutoReply).toBe(true);
+  });
+});
+
+describe("sendAs", () => {
+  it("lists send-as aliases", async () => {
+    mockSettings.sendAs.list.mockResolvedValue({
+      data: {
+        sendAs: [{ sendAsEmail: "bob@example.com", displayName: "Me", isDefault: true }],
+      },
+    });
+    const result = await listSendAs(client);
+    expect(mockSettings.sendAs.list).toHaveBeenCalledWith({ userId: "me" });
+    expect(result[0].sendAsEmail).toBe("bob@example.com");
+  });
+
+  it("creates a send-as alias", async () => {
+    mockSettings.sendAs.create.mockResolvedValue({
+      data: { sendAsEmail: "a@example.com", displayName: "Work" },
+    });
+    const result = await createSendAs(client, {
+      sendAsEmail: "a@example.com",
+      displayName: "Work",
+      isDefault: true,
+    });
+    expect(mockSettings.sendAs.create).toHaveBeenCalledWith({
+      userId: "me",
+      requestBody: {
+        sendAsEmail: "a@example.com",
+        displayName: "Work",
+        isDefault: true,
+      },
+    });
+    expect(result.displayName).toBe("Work");
+  });
+});
+
+describe("filters", () => {
+  it("lists filters", async () => {
+    mockSettings.filters.list.mockResolvedValue({
+      data: {
+        filter: [
+          {
+            id: "f1",
+            criteria: { from: "boss@example.com" },
+            action: { addLabelIds: ["Label_1"], removeLabelIds: [] },
+          },
+        ],
+      },
+    });
+    const result = await listGmailFilters(client);
+    expect(mockSettings.filters.list).toHaveBeenCalledWith({ userId: "me" });
+    expect(result[0].id).toBe("f1");
+  });
+
+  it("creates a filter with criteria and action", async () => {
+    mockSettings.filters.create.mockResolvedValue({
+      data: { id: "f2", criteria: { query: "from:newsletter" }, action: { markAsRead: true } },
+    });
+    const result = await createGmailFilter(client, {
+      criteria: { query: "from:newsletter" },
+      action: { markAsRead: true },
+    });
+    expect(mockSettings.filters.create).toHaveBeenCalledWith({
+      userId: "me",
+      requestBody: { criteria: { query: "from:newsletter" }, action: { markAsRead: true } },
+    });
+    expect(result.id).toBe("f2");
+  });
+
+  it("deletes a filter", async () => {
+    mockSettings.filters.delete.mockResolvedValue({ data: {} });
+    const result = await deleteGmailFilter(client, { id: "f1" });
+    expect(mockSettings.filters.delete).toHaveBeenCalledWith({ userId: "me", id: "f1" });
+    expect(result).toEqual({ deleted: true, id: "f1" });
   });
 });

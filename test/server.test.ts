@@ -116,6 +116,14 @@ describe("server tool registration", () => {
     expect(names).toContain("google_gmail_labels_list");
     expect(names).toContain("google_gmail_labels_create");
     expect(names).toContain("google_gmail_labels_delete");
+    expect(names).toContain("google_gmail_labels_update");
+    expect(names).toContain("google_gmail_vacation_get");
+    expect(names).toContain("google_gmail_vacation_update");
+    expect(names).toContain("google_gmail_sendas_list");
+    expect(names).toContain("google_gmail_sendas_create");
+    expect(names).toContain("google_gmail_filters_list");
+    expect(names).toContain("google_gmail_filters_create");
+    expect(names).toContain("google_gmail_filters_delete");
     expect(names).toContain("google_gmail_trash");
     expect(names).toContain("google_gmail_untrash");
     expect(names).toContain("google_gmail_delete");
@@ -184,7 +192,7 @@ describe("server tool registration", () => {
     expect(names).toContain("google_forms_responses");
     expect(names).toContain("google_forms_create");
     expect(names).toContain("google_forms_add_question");
-    expect(names.length).toBe(101);
+    expect(names.length).toBe(109);
   });
 });
 
