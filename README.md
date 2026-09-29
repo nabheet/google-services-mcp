@@ -24,7 +24,7 @@ create documents and spreadsheets, and more — using your real Google data.
   an `account` argument to any tool
 - **OAuth 2.0** — one-time browser authorization; tokens are stored locally and refreshed automatically
 
-> **109 tools** across 11 services, all prefixed `google_`. Full reference:
+> **111 tools** across 11 services, all prefixed `google_`. Full reference:
 > [docs/TOOLS.md](docs/TOOLS.md).
 
 ## Requirements
