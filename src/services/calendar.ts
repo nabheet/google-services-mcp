@@ -46,6 +46,24 @@ export interface CalendarSummary {
   accessRole?: string;
 }
 
+export interface CreateCalendarOptions {
+  summary: string;
+  timeZone?: string;
+  description?: string;
+}
+
+export interface UpdateCalendarOptions {
+  calendarId: string;
+  summary?: string;
+  colorId?: string;
+  timeZone?: string;
+  description?: string;
+}
+
+export interface DeleteCalendarOptions {
+  calendarId: string;
+}
+
 export interface EventSummary {
   id: string;
   summary?: string;
@@ -79,6 +97,68 @@ export async function listCalendars(client: Auth.OAuth2Client): Promise<Calendar
     isPrimary: !!c.primary,
     accessRole: c.accessRole as string | undefined,
   }));
+}
+
+/** Create a secondary calendar. Returns the created calendar metadata. */
+export async function createCalendar(
+  client: Auth.OAuth2Client,
+  opts: CreateCalendarOptions,
+): Promise<CalendarSummary> {
+  const calendar = google.calendar({ version: "v3", auth: client });
+  const requestBody: calendar_v3.Schema$Calendar = {
+    summary: opts.summary,
+  };
+  if (opts.timeZone !== undefined) requestBody.timeZone = opts.timeZone;
+  if (opts.description !== undefined) requestBody.description = opts.description;
+  const res = await calendar.calendars.insert({ requestBody });
+  return {
+    id: res.data.id as string,
+    summary: res.data.summary as string | undefined,
+  };
+}
+
+/** Update a calendar's metadata (partial: summary, colorId, timeZone, description).
+ *  summary/timeZone/description go through calendars.patch (calendar-level);
+ *  colorId goes through calendarList.patch (per-user view). */
+export async function updateCalendar(
+  client: Auth.OAuth2Client,
+  opts: UpdateCalendarOptions,
+): Promise<CalendarSummary> {
+  const calendar = google.calendar({ version: "v3", auth: client });
+  let result: calendar_v3.Schema$Calendar | undefined;
+
+  const metaBody: calendar_v3.Schema$Calendar = {};
+  if (opts.summary !== undefined) metaBody.summary = opts.summary;
+  if (opts.timeZone !== undefined) metaBody.timeZone = opts.timeZone;
+  if (opts.description !== undefined) metaBody.description = opts.description;
+  if (Object.keys(metaBody).length > 0) {
+    const res = await calendar.calendars.patch({
+      calendarId: opts.calendarId,
+      requestBody: metaBody,
+    });
+    result = res.data;
+  }
+
+  if (opts.colorId !== undefined) {
+    await calendar.calendarList.patch({
+      calendarId: opts.calendarId,
+      requestBody: { colorId: opts.colorId },
+    });
+  }
+
+  return {
+    id: (result?.id ?? opts.calendarId) as string,
+    summary: result?.summary as string | undefined,
+  };
+}
+
+/** Delete a calendar permanently (destructive). */
+export async function deleteCalendar(
+  client: Auth.OAuth2Client,
+  opts: DeleteCalendarOptions,
+): Promise<void> {
+  const calendar = google.calendar({ version: "v3", auth: client });
+  await calendar.calendars.delete({ calendarId: opts.calendarId });
 }
 
 /** List events in a calendar, optionally filtered by time range / free-text query. */

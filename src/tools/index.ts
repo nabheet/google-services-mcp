@@ -3,12 +3,15 @@ import type { Auth } from "googleapis";
 import { z } from "zod";
 import { authManager } from "../auth/manager.js";
 import {
+  createCalendar,
   createEvent,
   createMeetLink,
+  deleteCalendar,
   deleteEvent,
   getEvent,
   listCalendars,
   listEvents,
+  updateCalendar,
   updateEvent,
 } from "../services/calendar.js";
 import {
@@ -734,6 +737,63 @@ export function registerTools(server: McpServer): void {
         const client = await authManager.getClient(account);
         await deleteEvent(client, { eventId, calendarId });
         return ok({ status: "deleted", eventId });
+      } catch (error) {
+        return err(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "google_calendar_create",
+    {
+      title: "Create calendar",
+      description: "Create a secondary calendar with a name, timezone, and description.",
+      inputSchema: {
+        summary: z.string().describe("Calendar name."),
+        timeZone: z.string().optional().describe("IANA timezone (e.g. America/Los_Angeles)."),
+        description: z.string().optional(),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ summary, timeZone, description, account }) =>
+      withClient(account, (client) => createCalendar(client, { summary, timeZone, description })),
+  );
+
+  server.registerTool(
+    "google_calendar_update",
+    {
+      title: "Update calendar",
+      description: "Update a calendar's name, color, timezone, or description (partial).",
+      inputSchema: {
+        calendarId: z.string().describe("Calendar ID."),
+        summary: z.string().optional().describe("New calendar name."),
+        colorId: z.string().optional().describe("Color ID (1-24)."),
+        timeZone: z.string().optional().describe("IANA timezone (e.g. America/Los_Angeles)."),
+        description: z.string().optional(),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ calendarId, summary, colorId, timeZone, description, account }) =>
+      withClient(account, (client) =>
+        updateCalendar(client, { calendarId, summary, colorId, timeZone, description }),
+      ),
+  );
+
+  server.registerTool(
+    "google_calendar_delete",
+    {
+      title: "Delete calendar",
+      description: "Delete a secondary calendar permanently (destructive).",
+      inputSchema: {
+        calendarId: z.string().describe("Calendar ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ calendarId, account }) => {
+      try {
+        const client = await authManager.getClient(account);
+        await deleteCalendar(client, { calendarId });
+        return ok({ status: "deleted", calendarId });
       } catch (error) {
         return err(error);
       }

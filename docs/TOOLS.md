@@ -211,6 +211,35 @@ Permanently delete a message (irreversible).
 
 List calendars the account can access. No args beyond `account`.
 
+### `google_calendar_create`
+
+Create a secondary calendar.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `summary` | string | required. Calendar name. |
+| `timeZone` | string | optional. IANA timezone (e.g. `America/Los_Angeles`). |
+| `description` | string | optional. |
+
+### `google_calendar_update`
+
+Partially update a calendar's metadata. `calendarId` required; all other
+fields optional. `summary`, `timeZone`, `description` update the calendar
+itself; `colorId` (1–24) updates the calendar's color in your view.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `calendarId` | string | required. Calendar ID. |
+| `summary` | string | optional. New calendar name. |
+| `colorId` | string | optional. Color ID (1–24). |
+| `timeZone` | string | optional. IANA timezone. |
+| `description` | string | optional. |
+
+### `google_calendar_delete`
+
+Delete a secondary calendar permanently (destructive). Args: `calendarId`
+(required).
+
 ### `google_calendar_list_events`
 
 List upcoming events, optionally filtered by time range or query.
@@ -345,6 +374,18 @@ Copy a file, optionally with a new name.
 | `fileId` | string | required. Drive file ID. |
 | `name` | string | optional. New name. |
 
+### `google_drive_move`
+
+Move a file into a folder. Provide `removeParentFolderId` (the file's current
+folder) to remove it from there — a true move; omit it to add the file to an
+additional folder.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `fileId` | string | required. Drive file ID. |
+| `parentFolderId` | string | required. Destination folder ID. |
+| `removeParentFolderId` | string | optional. Current folder ID to remove the file from. |
+
 ## Contacts
 
 ### `google_contacts_list`
@@ -416,6 +457,27 @@ Append rows below existing data. Args: `spreadsheetId` (required), `range`
 ### `google_sheets_create`
 
 Create a new spreadsheet. Args: `title` (required), `sheets` (optional array of tab titles to pre-create).
+
+### `google_sheets_add_sheet`
+
+Add a new tab (sheet) to a spreadsheet.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `spreadsheetId` | string | required. |
+| `title` | string | required. Title of the new tab. |
+| `index` | number (int ≥ 0) | optional. 0-based insert position; appended at end if omitted. |
+
+### `google_sheets_delete_sheet`
+
+Permanently delete a tab (sheet) from a spreadsheet. Args: `spreadsheetId`
+(required), `sheetId` (required numeric sheet ID, from `google_sheets_get`
+metadata).
+
+### `google_sheets_rename_sheet`
+
+Rename a tab (sheet) in a spreadsheet. Args: `spreadsheetId` (required),
+`sheetId` (required numeric sheet ID), `title` (required new tab title).
 
 ### `google_sheets_batch_update`
 
@@ -494,6 +556,22 @@ Returns `{ id, type, title, channelTitle }` per item.
 
 Get video details (snippet, contentDetails, statistics). Arg: `videoId` (required).
 
+### `google_youtube_update_video`
+
+Update a video's title, description, tags, or privacy status. All fields
+optional except `videoId`.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `videoId` | string | required. |
+| `title` | string | optional. New title. |
+| `description` | string | optional. New description. |
+| `tags` | string[] | optional. New tags. |
+| `privacyStatus` | enum | optional. `public`, `private`, or `unlisted`. |
+
+Note: private videos are not usable with the comment APIs — they report
+`commentsDisabled`. Use unlisted/public for comment workflows.
+
 ### `google_youtube_my_videos`
 
 List the signed-in channel's uploads. Arg: `maxResults` (default 25).
@@ -514,6 +592,32 @@ Delete a playlist. Arg: `playlistId` (required).
 ### `google_youtube_add_to_playlist`
 
 Add a video to a playlist. Args: `playlistId` (required), `videoId` (required).
+
+### `google_youtube_remove_from_playlist`
+
+Remove a video from a playlist. Arg: `playlistItemId` (required). To find the
+playlist item ID for a video, list the playlist and match the item by video ID.
+
+### `google_youtube_list_comments`
+
+List comment threads for a video, most recent first. Args: `videoId`
+(required), `maxResults` (1–100, optional, default 20). Returns
+`{ id, authorDisplayName, textDisplay, likeCount, publishedAt }` per thread.
+
+### `google_youtube_insert_comment`
+
+Post a top-level comment on a video. Args: `videoId` (required), `text`
+(required). Note: comment threads may take a few seconds to appear in
+`google_youtube_list_comments` (API eventual consistency).
+
+### `google_youtube_set_comment_moderation`
+
+Set a comment's moderation status. Args: `commentId` (required),
+`moderationStatus` (required: `heldForReview`, `published`, or `rejected`).
+
+### `google_youtube_mark_comment_spam`
+
+Mark a comment as spam. Arg: `commentId` (required).
 
 ### `google_youtube_subscriptions`
 
