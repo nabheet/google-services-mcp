@@ -462,17 +462,37 @@ List the account's Google Tasks lists. No args beyond `account`.
 
 ### `google_tasks_list`
 
-List tasks in a task list. Arg: `tasklistId` (optional, default `@default`).
+List tasks in a task list.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `tasklistId` | string | optional, default `@default`. |
+| `dueBefore` | string (RFC3339) | optional. Only tasks due at or before this time. |
+| `dueAfter` | string (RFC3339) | optional. Only tasks due at or after this time. |
 
 ### `google_tasks_create`
 
-Create a task.
+Create a task, optionally as a subtask.
 
 | arg | type | notes |
 | --- | --- | --- |
 | `title` | string | required. |
 | `notes` | string | optional. |
 | `due` | string (RFC3339) | optional. |
+| `parentTaskId` | string | optional. Parent task ID to create a subtask. |
+| `tasklistId` | string | optional, default `@default`. |
+
+### `google_tasks_update`
+
+Update a task (partial).
+
+| arg | type | notes |
+| --- | --- | --- |
+| `taskId` | string | required. |
+| `title` | string | optional. |
+| `notes` | string | optional. |
+| `due` | string (RFC3339) | optional. |
+| `status` | `needsAction` / `completed` | optional. |
 | `tasklistId` | string | optional, default `@default`. |
 
 ### `google_tasks_complete`
@@ -482,6 +502,18 @@ Mark a task completed. Args: `taskId` (required), `tasklistId` (optional).
 ### `google_tasks_delete`
 
 Delete a task. Args: `taskId` (required), `tasklistId` (optional).
+
+### `google_tasks_create_list`
+
+Create a new task list. Arg: `title` (required).
+
+### `google_tasks_update_list`
+
+Rename a task list. Args: `tasklistId` (required), `title` (required).
+
+### `google_tasks_delete_list`
+
+Delete a task list (removes its tasks). Arg: `tasklistId` (required).
 
 ## Sheets
 

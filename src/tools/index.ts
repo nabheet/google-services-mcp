@@ -20,12 +20,16 @@ import {
   completeTask,
   createContact,
   createTask,
+  createTaskList,
   deleteTask,
+  deleteTaskList,
   listContacts,
   listTaskLists,
   listTasks,
   searchContacts,
   updateContact,
+  updateTask,
+  updateTaskList,
 } from "../services/contacts-tasks.js";
 import {
   batchUpdateDocument,
@@ -1231,28 +1235,116 @@ export function registerTools(server: McpServer): void {
       description: "List tasks in a task list (default list if not specified).",
       inputSchema: {
         tasklistId: z.string().optional().describe("Task list ID (default @default)."),
+        dueBefore: z
+          .string()
+          .optional()
+          .describe("Only tasks due at or before this RFC3339 datetime."),
+        dueAfter: z
+          .string()
+          .optional()
+          .describe("Only tasks due at or after this RFC3339 datetime."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ tasklistId, account }) =>
-      withClient(account, (client) => listTasks(client, { tasklistId })),
+    async ({ tasklistId, dueBefore, dueAfter, account }) =>
+      withClient(account, (client) =>
+        listTasks(client, {
+          tasklistId,
+          dueMax: dueBefore,
+          dueMin: dueAfter,
+        }),
+      ),
   );
 
   server.registerTool(
     "google_tasks_create",
     {
       title: "Create task",
-      description: "Create a task, optionally with notes and due date.",
+      description: "Create a task, optionally with notes, due date, or as a subtask.",
       inputSchema: {
         title: z.string().describe("Task title."),
         notes: z.string().optional(),
         due: z.string().optional().describe("Due date (RFC3339, e.g. 2026-08-15T17:00:00Z)."),
+        parentTaskId: z.string().optional().describe("Parent task ID to create a subtask."),
         tasklistId: z.string().optional().describe("Task list ID (default @default)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ title, notes, due, tasklistId, account }) =>
-      withClient(account, (client) => createTask(client, { title, notes, due, tasklistId })),
+    async ({ title, notes, due, parentTaskId, tasklistId, account }) =>
+      withClient(account, (client) =>
+        createTask(client, { title, notes, due, parentTaskId, tasklistId }),
+      ),
+  );
+
+  server.registerTool(
+    "google_tasks_update",
+    {
+      title: "Update task",
+      description: "Update a task's title, notes, due date, or status (partial).",
+      inputSchema: {
+        taskId: z.string().describe("Task ID."),
+        title: z.string().optional().describe("New task title."),
+        notes: z.string().optional().describe("New task notes."),
+        due: z.string().optional().describe("Due date (RFC3339, e.g. 2026-08-15T17:00:00Z)."),
+        status: z.enum(["needsAction", "completed"]).optional().describe("Task status."),
+        tasklistId: z.string().optional().describe("Task list ID (default @default)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ taskId, title, notes, due, status, tasklistId, account }) =>
+      withClient(account, (client) =>
+        updateTask(client, { taskId, title, notes, due, status, tasklistId }),
+      ),
+  );
+
+  server.registerTool(
+    "google_tasks_create_list",
+    {
+      title: "Create task list",
+      description: "Create a new Google Tasks list.",
+      inputSchema: {
+        title: z.string().describe("Task list title."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ title, account }) =>
+      withClient(account, (client) => createTaskList(client, { title })),
+  );
+
+  server.registerTool(
+    "google_tasks_update_list",
+    {
+      title: "Rename task list",
+      description: "Rename a Google Tasks list.",
+      inputSchema: {
+        tasklistId: z.string().describe("Task list ID."),
+        title: z.string().describe("New task list title."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ tasklistId, title, account }) =>
+      withClient(account, (client) => updateTaskList(client, { tasklistId, title })),
+  );
+
+  server.registerTool(
+    "google_tasks_delete_list",
+    {
+      title: "Delete task list",
+      description: "Delete a Google Tasks list (removes its tasks).",
+      inputSchema: {
+        tasklistId: z.string().describe("Task list ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ tasklistId, account }) => {
+      try {
+        const client = await authManager.getClient(account);
+        await deleteTaskList(client, { tasklistId });
+        return ok({ status: "deleted", tasklistId });
+      } catch (error) {
+        return err(error);
+      }
+    },
   );
 
   server.registerTool(
