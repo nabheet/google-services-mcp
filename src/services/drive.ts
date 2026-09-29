@@ -32,6 +32,14 @@ export interface ShareDriveOptions {
   sendNotificationEmail?: boolean;
 }
 
+export interface MoveDriveOptions {
+  fileId: string;
+  /** Destination folder id. */
+  parentFolderId: string;
+  /** Current folder id to remove the file from. Omit to keep existing parents (add-only). */
+  removeParentFolderId?: string;
+}
+
 export interface DriveFile {
   id: string;
   name?: string;
@@ -136,6 +144,22 @@ export async function deleteDriveFile(
 ): Promise<void> {
   const drive = google.drive({ version: "v3", auth: client });
   await drive.files.delete({ fileId: opts.fileId });
+}
+
+/** Move a file into a folder (and optionally out of its current folder). */
+export async function moveDriveFile(
+  client: Auth.OAuth2Client,
+  opts: MoveDriveOptions,
+): Promise<DriveFile> {
+  const drive = google.drive({ version: "v3", auth: client });
+  const params: drive_v3.Params$Resource$Files$Update = {
+    fileId: opts.fileId,
+    addParents: opts.parentFolderId,
+    fields: "id,name,mimeType,size,createdTime,modifiedTime,webViewLink,parents",
+  };
+  if (opts.removeParentFolderId) params.removeParents = opts.removeParentFolderId;
+  const res = await drive.files.update(params);
+  return mapFile(res.data);
 }
 
 /** Share a file with a user by email. */

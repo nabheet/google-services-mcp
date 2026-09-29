@@ -25,6 +25,7 @@ import {
   exportDriveFile,
   getDriveFile,
   listDriveFiles,
+  moveDriveFile,
   shareDriveFile,
   updateDriveFile,
   uploadDriveFile,
@@ -146,6 +147,60 @@ describe("shareDriveFile", () => {
       role: "writer",
     });
     expect(mockPermissions.create.mock.calls[0][0].sendNotificationEmail).toBe(true);
+  });
+});
+
+describe("moveDriveFile", () => {
+  it("moves a file into a new parent folder", async () => {
+    mockFiles.update.mockResolvedValue({
+      data: { id: "f1", name: "notes.md", parents: ["fld2"] },
+    });
+    const result = await moveDriveFile(client, {
+      fileId: "f1",
+      parentFolderId: "fld2",
+      removeParentFolderId: "fld1",
+    });
+    expect(mockFiles.update).toHaveBeenCalledWith({
+      fileId: "f1",
+      addParents: "fld2",
+      removeParents: "fld1",
+      fields: expect.stringContaining("parents"),
+    });
+    expect(result).toMatchObject({ id: "f1", name: "notes.md" });
+  });
+
+  it("adds to a folder without removing existing parents when no removeParentFolderId given", async () => {
+    mockFiles.update.mockResolvedValue({
+      data: { id: "f1", name: "notes.md", parents: ["fld1", "fld2"] },
+    });
+    const result = await moveDriveFile(client, { fileId: "f1", parentFolderId: "fld2" });
+    expect(mockFiles.update).toHaveBeenCalledWith({
+      fileId: "f1",
+      addParents: "fld2",
+      fields: expect.stringContaining("parents"),
+    });
+    expect(result).toMatchObject({ id: "f1" });
+  });
+
+  it("maps the resulting file with parents", async () => {
+    mockFiles.update.mockResolvedValue({
+      data: {
+        id: "f1",
+        name: "notes.md",
+        parents: ["fld2"],
+        webViewLink: "https://drive.google.com/f1",
+      },
+    });
+    const result = await moveDriveFile(client, {
+      fileId: "f1",
+      parentFolderId: "fld2",
+      removeParentFolderId: "fld1",
+    });
+    expect(result).toMatchObject({
+      id: "f1",
+      name: "notes.md",
+      webViewLink: "https://drive.google.com/f1",
+    });
   });
 });
 
