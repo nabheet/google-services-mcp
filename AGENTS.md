@@ -93,6 +93,18 @@ disk. Never print or log real credentials.
 
 ## Commands
 
+**DO NOT run `rtk lint`** — `rtk`'s `lint` subcommand wraps ESLint, and this
+repo has no ESLint config; it lints with Biome. Use the npm scripts instead:
+
+```bash
+npm run lint         # biome check . && markdownlint-cli2 (CI enforces this)
+npm run lint:fix     # biome check --write . && markdownlint-cli2 --fix
+npx biome check .    # quick single-tool check
+npx biome check --write <file>   # apply fixes to one file
+```
+
+Compact-output alternative (works — verified): `rtk npm run lint` / `rtk npx biome check .`
+
 ```bash
 npm test             # full suite (vitest run)
 npm run test:watch
