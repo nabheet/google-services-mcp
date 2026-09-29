@@ -9,6 +9,10 @@ export interface ListEventsOptions {
   q?: string;
 }
 
+export type SendUpdates = "all" | "externalOnly" | "none";
+export type EventTransparency = "opaque" | "transparent";
+export type ReminderMethod = "email" | "popup";
+
 export interface CreateEventOptions {
   calendarId?: string;
   summary: string;
@@ -18,7 +22,18 @@ export interface CreateEventOptions {
   start: string;
   /** RFC3339 datetime, or a plain date (YYYY-MM-DD, exclusive) for all-day events. */
   end: string;
+  /** IANA time zone, e.g. "America/Denver". Required for recurring timed events. */
+  timeZone?: string;
   attendees?: string[];
+  /** RRULE strings, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=TH"]. */
+  recurrence?: string[];
+  reminderMethod?: ReminderMethod;
+  reminderMinutes?: number;
+  remindersUseDefault?: boolean;
+  /** Control whether attendee emails are sent. */
+  sendUpdates?: SendUpdates;
+  transparency?: EventTransparency;
+  colorId?: string;
 }
 
 export interface UpdateEventOptions {
@@ -29,7 +44,16 @@ export interface UpdateEventOptions {
   location?: string;
   start?: string;
   end?: string;
+  /** IANA time zone, e.g. "America/Denver". Required when updating to recurring timed events. */
+  timeZone?: string;
   attendees?: string[];
+  recurrence?: string[];
+  reminderMethod?: ReminderMethod;
+  reminderMinutes?: number;
+  remindersUseDefault?: boolean;
+  sendUpdates?: SendUpdates;
+  transparency?: EventTransparency;
+  colorId?: string;
 }
 
 export interface GetEventOptions {
@@ -101,22 +125,75 @@ export interface EventSummary {
   summary?: string;
   description?: string;
   location?: string;
-  start?: { dateTime?: string; date?: string };
-  end?: { dateTime?: string; date?: string };
+  start?: { dateTime?: string; date?: string; timeZone?: string };
+  end?: { dateTime?: string; date?: string; timeZone?: string };
   hangoutLink?: string;
   htmlLink?: string;
   attendees?: Array<{ email: string; displayName?: string; responseStatus?: string }>;
+  recurrence?: string[];
+  reminders?: {
+    useDefault?: boolean;
+    overrides?: Array<{ method?: string; minutes?: number }>;
+  };
+  transparency?: string;
+  colorId?: string;
 }
 
 function isAllDay(dt: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(dt);
 }
 
-function buildStartEnd(start: string, end: string) {
+function buildStartEnd(start: string, end: string, timeZone?: string) {
   if (isAllDay(start) || isAllDay(end)) {
     return { start: { date: start }, end: { date: end } };
   }
-  return { start: { dateTime: start }, end: { dateTime: end } };
+  return {
+    start: { dateTime: start, ...(timeZone !== undefined ? { timeZone } : {}) },
+    end: { dateTime: end, ...(timeZone !== undefined ? { timeZone } : {}) },
+  };
+}
+
+/** Recurring timed events require an explicit time zone (Google API error otherwise). */
+function assertRecurringTimeZone(
+  recurrence: string[] | undefined,
+  start: string | undefined,
+  end: string | undefined,
+  timeZone: string | undefined,
+) {
+  if (
+    recurrence !== undefined &&
+    recurrence.length > 0 &&
+    start !== undefined &&
+    end !== undefined &&
+    !isAllDay(start) &&
+    !isAllDay(end) &&
+    timeZone === undefined
+  ) {
+    throw new Error('Recurring timed events require a timeZone (e.g. "America/Denver").');
+  }
+}
+
+/** Build the reminders sub-object from reminder option fields, or undefined. */
+function buildReminders(opts: {
+  reminderMethod?: ReminderMethod;
+  reminderMinutes?: number;
+  remindersUseDefault?: boolean;
+}): calendar_v3.Schema$Event["reminders"] | undefined {
+  if (opts.remindersUseDefault === true) {
+    return { useDefault: true };
+  }
+  if (opts.reminderMethod !== undefined || opts.reminderMinutes !== undefined) {
+    return {
+      useDefault: false,
+      overrides: [
+        {
+          method: opts.reminderMethod ?? "popup",
+          minutes: opts.reminderMinutes ?? 10,
+        },
+      ],
+    };
+  }
+  return undefined;
 }
 
 /** List the user's calendars. */
@@ -230,16 +307,22 @@ export async function createEvent(
   if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs <= startMs) {
     throw new Error("Event end must not be before start.");
   }
+  assertRecurringTimeZone(opts.recurrence, opts.start, opts.end, opts.timeZone);
   const calendar = google.calendar({ version: "v3", auth: client });
   const requestBody: calendar_v3.Schema$Event = {
     summary: opts.summary,
     description: opts.description,
     location: opts.location,
-    ...buildStartEnd(opts.start, opts.end),
+    ...buildStartEnd(opts.start, opts.end, opts.timeZone),
     attendees: opts.attendees?.map((email) => ({ email })),
+    ...(opts.recurrence !== undefined ? { recurrence: opts.recurrence } : {}),
+    ...(buildReminders(opts) !== undefined ? { reminders: buildReminders(opts) } : {}),
+    ...(opts.transparency !== undefined ? { transparency: opts.transparency } : {}),
+    ...(opts.colorId !== undefined ? { colorId: opts.colorId } : {}),
   };
   const res = await calendar.events.insert({
     calendarId: opts.calendarId ?? "primary",
+    ...(opts.sendUpdates !== undefined ? { sendUpdates: opts.sendUpdates } : {}),
     requestBody,
   });
   return mapEvent(res.data);
@@ -298,11 +381,18 @@ export async function updateEvent(
   if (opts.attendees !== undefined)
     requestBody.attendees = opts.attendees.map((email) => ({ email }));
   if (opts.start !== undefined && opts.end !== undefined) {
-    Object.assign(requestBody, buildStartEnd(opts.start, opts.end));
+    assertRecurringTimeZone(opts.recurrence, opts.start, opts.end, opts.timeZone);
+    Object.assign(requestBody, buildStartEnd(opts.start, opts.end, opts.timeZone));
   }
-  const res = await calendar.events.update({
+  if (opts.recurrence !== undefined) requestBody.recurrence = opts.recurrence;
+  const reminders = buildReminders(opts);
+  if (reminders !== undefined) requestBody.reminders = reminders;
+  if (opts.transparency !== undefined) requestBody.transparency = opts.transparency;
+  if (opts.colorId !== undefined) requestBody.colorId = opts.colorId;
+  const res = await calendar.events.patch({
     calendarId: opts.calendarId ?? "primary",
     eventId: opts.eventId,
+    ...(opts.sendUpdates !== undefined ? { sendUpdates: opts.sendUpdates } : {}),
     requestBody,
   });
   return mapEvent(res.data);
@@ -385,5 +475,9 @@ function mapEvent(data: calendar_v3.Schema$Event): EventSummary {
     hangoutLink: data.hangoutLink as string | undefined,
     htmlLink: data.htmlLink as string | undefined,
     attendees: data.attendees as EventSummary["attendees"],
+    recurrence: data.recurrence as string[] | undefined,
+    reminders: data.reminders as EventSummary["reminders"],
+    transparency: data.transparency as string | undefined,
+    colorId: data.colorId as string | undefined,
   };
 }

@@ -245,6 +245,68 @@ describe("createEvent", () => {
       }),
     ).rejects.toThrow(/end.*before start|start.*after end/i);
   });
+
+  it("supports recurrence, reminders, transparency, colorId and sendUpdates", async () => {
+    mockEvents.insert.mockResolvedValue({ data: { id: "e3" } });
+    await createEvent(client, {
+      calendarId: "primary",
+      summary: "Standup",
+      start: "2026-08-13T09:00:00-07:00",
+      end: "2026-08-13T09:30:00-07:00",
+      timeZone: "America/Denver",
+      recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=TH"],
+      reminderMethod: "popup",
+      reminderMinutes: 10,
+      transparency: "transparent",
+      colorId: "3",
+      sendUpdates: "none",
+    });
+    expect(mockEvents.insert).toHaveBeenCalledWith({
+      calendarId: "primary",
+      sendUpdates: "none",
+      requestBody: {
+        summary: "Standup",
+        start: { dateTime: "2026-08-13T09:00:00-07:00", timeZone: "America/Denver" },
+        end: { dateTime: "2026-08-13T09:30:00-07:00", timeZone: "America/Denver" },
+        recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=TH"],
+        reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 10 }] },
+        transparency: "transparent",
+        colorId: "3",
+      },
+    });
+  });
+
+  it("honors remindersUseDefault instead of overrides", async () => {
+    mockEvents.insert.mockResolvedValue({ data: { id: "e4" } });
+    await createEvent(client, {
+      calendarId: "primary",
+      summary: "Deep work",
+      start: "2026-08-13T10:00:00-07:00",
+      end: "2026-08-13T11:00:00-07:00",
+      remindersUseDefault: true,
+    });
+    expect(mockEvents.insert).toHaveBeenCalledWith({
+      calendarId: "primary",
+      requestBody: {
+        summary: "Deep work",
+        start: { dateTime: "2026-08-13T10:00:00-07:00" },
+        end: { dateTime: "2026-08-13T11:00:00-07:00" },
+        reminders: { useDefault: true },
+      },
+    });
+  });
+
+  it("throws a helpful error for recurring timed events without timeZone", async () => {
+    await expect(
+      createEvent(client, {
+        calendarId: "primary",
+        summary: "Bad recurring",
+        start: "2026-08-13T09:00:00-07:00",
+        end: "2026-08-13T09:30:00-07:00",
+        recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=TH"],
+      }),
+    ).rejects.toThrow(/recurring timed events require a timeZone/i);
+  });
 });
 
 describe("getEvent", () => {
@@ -258,18 +320,46 @@ describe("getEvent", () => {
 
 describe("updateEvent", () => {
   it("updates summary and returns the updated event", async () => {
-    mockEvents.update.mockResolvedValue({ data: { id: "e1", summary: "Updated" } });
+    mockEvents.patch.mockResolvedValue({ data: { id: "e1", summary: "Updated" } });
     const result = await updateEvent(client, {
       calendarId: "primary",
       eventId: "e1",
       summary: "Updated",
     });
-    expect(mockEvents.update).toHaveBeenCalledWith({
+    expect(mockEvents.patch).toHaveBeenCalledWith({
       calendarId: "primary",
       eventId: "e1",
       requestBody: { summary: "Updated" },
     });
     expect(result.summary).toBe("Updated");
+  });
+
+  it("updates recurrence, reminders, colorId and passes sendUpdates", async () => {
+    mockEvents.patch.mockResolvedValue({ data: { id: "e1", colorId: "5" } });
+    await updateEvent(client, {
+      calendarId: "primary",
+      eventId: "e1",
+      start: "2026-08-17T09:00:00-07:00",
+      end: "2026-08-17T09:30:00-07:00",
+      timeZone: "America/Denver",
+      recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=MO"],
+      reminderMethod: "email",
+      reminderMinutes: 30,
+      colorId: "5",
+      sendUpdates: "externalOnly",
+    });
+    expect(mockEvents.patch).toHaveBeenCalledWith({
+      calendarId: "primary",
+      eventId: "e1",
+      sendUpdates: "externalOnly",
+      requestBody: {
+        start: { dateTime: "2026-08-17T09:00:00-07:00", timeZone: "America/Denver" },
+        end: { dateTime: "2026-08-17T09:30:00-07:00", timeZone: "America/Denver" },
+        recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=MO"],
+        reminders: { useDefault: false, overrides: [{ method: "email", minutes: 30 }] },
+        colorId: "5",
+      },
+    });
   });
 });
 
