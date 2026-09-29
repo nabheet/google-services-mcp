@@ -60,22 +60,28 @@ export async function updateVideo(
   { videoId, title, description, tags, privacyStatus }: UpdateVideoArgs,
 ): Promise<youtube_v3.Schema$Video> {
   const yt = google.youtube({ version: "v3", auth: client });
-  const part: string[] = [];
-  const snippet: Record<string, unknown> = {};
-  if (title !== undefined) snippet.title = title;
-  if (description !== undefined) snippet.description = description;
-  if (tags !== undefined) snippet.tags = tags;
-  if (Object.keys(snippet).length > 0) part.push("snippet");
-  const status: Record<string, unknown> = {};
-  if (privacyStatus !== undefined) status.privacyStatus = privacyStatus;
-  if (Object.keys(status).length > 0) part.push("status");
+  // videos.update replaces each requested part wholesale, so fetch the
+  // existing snippet/status and merge — otherwise fields like categoryId
+  // are dropped and the API rejects the request.
+  const existing = await yt.videos.list({
+    part: ["snippet", "status"],
+    id: [videoId],
+  });
+  const current = existing.data.items?.[0];
+  if (!current) throw new Error(`video not found: ${videoId}`);
+  const snippet = {
+    ...(current.snippet ?? {}),
+    ...(title !== undefined ? { title } : {}),
+    ...(description !== undefined ? { description } : {}),
+    ...(tags !== undefined ? { tags } : {}),
+  };
+  const status = {
+    ...(current.status ?? {}),
+    ...(privacyStatus !== undefined ? { privacyStatus } : {}),
+  };
   const res = await yt.videos.update({
-    part,
-    requestBody: {
-      id: videoId,
-      ...(Object.keys(snippet).length > 0 ? { snippet } : {}),
-      ...(Object.keys(status).length > 0 ? { status } : {}),
-    },
+    part: ["snippet", "status"],
+    requestBody: { id: videoId, snippet, status },
   });
   return res.data;
 }
