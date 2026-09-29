@@ -323,6 +323,14 @@ Create a timed or all-day event.
 | `description` | string | optional. |
 | `location` | string | optional. |
 | `attendees` | string[] (emails) | optional. |
+| `timeZone` | string | optional. IANA zone; required for recurring timed events. |
+| `recurrence` | string[] | optional. RRULE strings, e.g. `["RRULE:FREQ=WEEKLY;BYDAY=TH"]`. |
+| `reminderMethod` | enum | optional. `email` or `popup`. |
+| `reminderMinutes` | number | optional. Minutes before event. |
+| `remindersUseDefault` | boolean | optional. Use calendar default reminders instead of overrides. |
+| `sendUpdates` | enum | optional. `all`, `externalOnly`, or `none`. |
+| `transparency` | enum | optional. `opaque` (busy) or `transparent` (free). |
+| `colorId` | string | optional. Event color ID (1-11). |
 | `calendarId` | string | optional, default primary. |
 
 ### `google_calendar_create_meet`
@@ -346,7 +354,8 @@ Fetch a single event by ID. Args: `eventId` (required), `calendarId` (optional).
 
 Partially update an existing event. `eventId` required; all other fields
 optional (`summary`, `description`, `location`, `start`, `end`, `attendees`,
-`calendarId`).
+`timeZone`, `recurrence`, `reminderMethod`, `reminderMinutes`,
+`remindersUseDefault`, `sendUpdates`, `transparency`, `colorId`, `calendarId`).
 
 ### `google_calendar_delete_event`
 
