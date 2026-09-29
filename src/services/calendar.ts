@@ -37,6 +37,16 @@ export interface GetEventOptions {
   eventId: string;
 }
 
+export type ResponseStatus = "accepted" | "declined" | "tentative";
+
+export interface RespondEventOptions extends GetEventOptions {
+  /** Attendee email whose responseStatus should be set (the signed-in user). */
+  email: string;
+  responseStatus: ResponseStatus;
+  /** Notify the organizer: "all", "externalOnly", or "none". */
+  sendUpdates?: "all" | "externalOnly" | "none";
+}
+
 export interface DeleteEventOptions extends GetEventOptions {}
 
 export interface CalendarSummary {
@@ -259,6 +269,33 @@ export async function deleteEvent(
     calendarId: opts.calendarId ?? "primary",
     eventId: opts.eventId,
   });
+}
+
+/**
+ * Respond to an event invite by setting the attendee's responseStatus.
+ * Fetches the event first so only the matching attendee is patched; the rest
+ * of the attendee list is preserved.
+ */
+export async function respondToEvent(
+  client: Auth.OAuth2Client,
+  opts: RespondEventOptions,
+): Promise<EventSummary> {
+  const calendar = google.calendar({ version: "v3", auth: client });
+  const calendarId = opts.calendarId ?? "primary";
+  const current = await calendar.events.get({ calendarId, eventId: opts.eventId });
+  const attendees: calendar_v3.Schema$EventAttendee[] = (current.data.attendees ?? []).map((a) =>
+    a.email === opts.email ? { ...a, responseStatus: opts.responseStatus } : a,
+  );
+  if (!attendees.some((a) => a.email === opts.email)) {
+    attendees.push({ email: opts.email, responseStatus: opts.responseStatus });
+  }
+  const res = await calendar.events.patch({
+    calendarId,
+    eventId: opts.eventId,
+    requestBody: { attendees },
+    ...(opts.sendUpdates ? { sendUpdates: opts.sendUpdates } : {}),
+  });
+  return mapEvent(res.data);
 }
 
 /** Create an event with an attached Google Meet conference. Returns the hangout link. */
