@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockYouTube = {
   search: { list: vi.fn() },
-  videos: { list: vi.fn(), rate: vi.fn() },
+  videos: { list: vi.fn(), rate: vi.fn(), update: vi.fn() },
   playlists: { list: vi.fn(), insert: vi.fn(), delete: vi.fn() },
   playlistItems: { list: vi.fn(), insert: vi.fn(), delete: vi.fn() },
   subscriptions: { list: vi.fn() },
@@ -26,6 +26,7 @@ import {
   listSubscriptions,
   removeVideoFromPlaylist,
   searchVideos,
+  updateVideo,
 } from "../src/services/youtube.js";
 
 beforeEach(() => {
@@ -164,6 +165,112 @@ describe("youtube service", () => {
     await expect(removeVideoFromPlaylist(client, { playlistItemId: "pi-missing" })).rejects.toThrow(
       "not found",
     );
+  });
+
+  it("updateVideo updates title and description, preserving categoryId", async () => {
+    mockYouTube.videos.list.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "v1",
+            snippet: { categoryId: "22", title: "Old", description: "Old desc" },
+            status: { privacyStatus: "private" },
+          },
+        ],
+      },
+    });
+    mockYouTube.videos.update.mockResolvedValue({
+      data: { id: "v1", snippet: { title: "New title" } },
+    });
+    const result = await updateVideo(client, {
+      videoId: "v1",
+      title: "New title",
+      description: "New desc",
+    });
+    expect(result.id).toBe("v1");
+    // fetches existing first
+    expect(mockYouTube.videos.list).toHaveBeenCalledWith({
+      part: ["snippet", "status"],
+      id: ["v1"],
+    });
+    expect(mockYouTube.videos.update).toHaveBeenCalledWith({
+      part: ["snippet", "status"],
+      requestBody: {
+        id: "v1",
+        snippet: { categoryId: "22", title: "New title", description: "New desc" },
+        status: { privacyStatus: "private" },
+      },
+    });
+  });
+
+  it("updateVideo updates privacy status only", async () => {
+    mockYouTube.videos.list.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "v1",
+            snippet: { categoryId: "22", title: "T", description: "D" },
+            status: { privacyStatus: "private" },
+          },
+        ],
+      },
+    });
+    mockYouTube.videos.update.mockResolvedValue({ data: {} });
+    await updateVideo(client, { videoId: "v1", privacyStatus: "unlisted" });
+    expect(mockYouTube.videos.update).toHaveBeenCalledWith({
+      part: ["snippet", "status"],
+      requestBody: {
+        id: "v1",
+        snippet: { categoryId: "22", title: "T", description: "D" },
+        status: { privacyStatus: "unlisted" },
+      },
+    });
+  });
+
+  it("updateVideo updates snippet and status together", async () => {
+    mockYouTube.videos.list.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "v1",
+            snippet: { categoryId: "22", title: "T", tags: ["old"] },
+            status: { privacyStatus: "public" },
+          },
+        ],
+      },
+    });
+    mockYouTube.videos.update.mockResolvedValue({ data: {} });
+    await updateVideo(client, {
+      videoId: "v1",
+      tags: ["a", "b"],
+      privacyStatus: "private",
+    });
+    expect(mockYouTube.videos.update).toHaveBeenCalledWith({
+      part: ["snippet", "status"],
+      requestBody: {
+        id: "v1",
+        snippet: { categoryId: "22", title: "T", tags: ["a", "b"] },
+        status: { privacyStatus: "private" },
+      },
+    });
+  });
+
+  it("updateVideo throws when video not found", async () => {
+    mockYouTube.videos.list.mockResolvedValue({ data: { items: [] } });
+    await expect(updateVideo(client, { videoId: "missing", title: "x" })).rejects.toThrow(
+      "video not found: missing",
+    );
+    expect(mockYouTube.videos.update).not.toHaveBeenCalled();
+  });
+
+  it("updateVideo propagates API errors", async () => {
+    mockYouTube.videos.list.mockResolvedValue({
+      data: {
+        items: [{ id: "v1", snippet: { categoryId: "22" }, status: { privacyStatus: "private" } }],
+      },
+    });
+    mockYouTube.videos.update.mockRejectedValue(new Error("forbidden"));
+    await expect(updateVideo(client, { videoId: "v1", title: "x" })).rejects.toThrow("forbidden");
   });
 
   it("propagates API errors", async () => {
