@@ -5,6 +5,7 @@ import {
   createMeetLink,
   listCalendars,
   listEvents,
+  queryFreeBusy,
 } from "../../src/services/calendar.js";
 import { cleanup, lockNetwork, makeClient } from "./helpers.js";
 
@@ -121,6 +122,47 @@ describe("calendar E2E (nock)", () => {
     });
 
     expect(res.hangoutLink).toBe("https://meet.google.com/xyz-abcd-efg");
+    expect(nock.isDone()).toBe(true);
+  });
+
+  it("queryFreeBusy POSTs calendar ids and parses busy intervals", async () => {
+    lockNetwork();
+    const client = makeClient();
+    nock("https://www.googleapis.com")
+      .post("/calendar/v3/freeBusy", (body) => {
+        const b = body as {
+          timeMin: string;
+          timeMax: string;
+          items?: Array<{ id: string }>;
+          timeZone?: string;
+        };
+        return (
+          b.timeMin === "2026-10-01T00:00:00Z" &&
+          b.timeMax === "2026-10-01T23:59:59Z" &&
+          b.items?.length === 1 &&
+          b.items[0].id === "primary" &&
+          b.timeZone === "UTC"
+        );
+      })
+      .reply(200, {
+        timeMin: "2026-10-01T00:00:00Z",
+        timeMax: "2026-10-01T23:59:59Z",
+        calendars: {
+          primary: {
+            busy: [{ start: "2026-10-01T09:00:00Z", end: "2026-10-01T09:30:00Z" }],
+          },
+        },
+      });
+
+    const res = await queryFreeBusy(client, {
+      timeMin: "2026-10-01T00:00:00Z",
+      timeMax: "2026-10-01T23:59:59Z",
+      timeZone: "UTC",
+    });
+
+    expect(res.calendars.primary.busy).toEqual([
+      { start: "2026-10-01T09:00:00Z", end: "2026-10-01T09:30:00Z" },
+    ]);
     expect(nock.isDone()).toBe(true);
   });
 });

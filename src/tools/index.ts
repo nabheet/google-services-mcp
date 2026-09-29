@@ -11,6 +11,7 @@ import {
   getEvent,
   listCalendars,
   listEvents,
+  queryFreeBusy,
   respondToEvent,
   updateCalendar,
   updateEvent,
@@ -851,6 +852,23 @@ export function registerTools(server: McpServer): void {
         return err(error);
       }
     },
+  );
+
+  server.registerTool(
+    "google_calendar_free_busy",
+    {
+      title: "Query calendar free/busy",
+      description: "Query busy intervals across calendars to find free meeting windows.",
+      inputSchema: {
+        timeMin: z.string().describe("Start of range (RFC3339 datetime)."),
+        timeMax: z.string().describe("End of range (RFC3339 datetime)."),
+        items: z.array(z.string()).optional().describe("Calendar IDs to query (default primary)."),
+        timeZone: z.string().optional().describe("IANA timezone (e.g. America/Los_Angeles)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ timeMin, timeMax, items, timeZone, account }) =>
+      withClient(account, (client) => queryFreeBusy(client, { timeMin, timeMax, items, timeZone })),
   );
 
   // ---- Drive --------------------------------------------------------------

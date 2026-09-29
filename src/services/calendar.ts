@@ -37,6 +37,28 @@ export interface GetEventOptions {
   eventId: string;
 }
 
+export interface FreeBusyOptions {
+  /** Start of range (RFC3339). */
+  timeMin: string;
+  /** End of range (RFC3339). */
+  timeMax: string;
+  /** Calendar IDs to query (default primary). */
+  items?: string[];
+  /** IANA time zone, e.g. America/Los_Angeles. */
+  timeZone?: string;
+}
+
+export interface FreeBusyInterval {
+  start: string;
+  end: string;
+}
+
+export interface FreeBusyResult {
+  timeMin?: string;
+  timeMax?: string;
+  calendars: Record<string, { busy: FreeBusyInterval[] }>;
+}
+
 export type ResponseStatus = "accepted" | "declined" | "tentative";
 
 export interface RespondEventOptions extends GetEventOptions {
@@ -221,6 +243,33 @@ export async function createEvent(
     requestBody,
   });
   return mapEvent(res.data);
+}
+
+/** Query busy intervals across calendars (free/busy). */
+export async function queryFreeBusy(
+  client: Auth.OAuth2Client,
+  opts: FreeBusyOptions,
+): Promise<FreeBusyResult> {
+  const calendar = google.calendar({ version: "v3", auth: client });
+  const res = await calendar.freebusy.query({
+    requestBody: {
+      timeMin: opts.timeMin,
+      timeMax: opts.timeMax,
+      items: (opts.items ?? ["primary"]).map((id) => ({ id })),
+      ...(opts.timeZone !== undefined ? { timeZone: opts.timeZone } : {}),
+    },
+  });
+  const calendars: FreeBusyResult["calendars"] = {};
+  for (const [id, info] of Object.entries(res.data.calendars ?? {})) {
+    calendars[id] = {
+      busy: (info.busy ?? []).map((b) => ({ start: b.start ?? "", end: b.end ?? "" })),
+    };
+  }
+  return {
+    timeMin: res.data.timeMin as string | undefined,
+    timeMax: res.data.timeMax as string | undefined,
+    calendars,
+  };
 }
 
 /** Get a single event. */
