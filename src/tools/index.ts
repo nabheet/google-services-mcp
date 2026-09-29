@@ -93,6 +93,7 @@ import {
   listSubscriptions,
   removeVideoFromPlaylist,
   searchVideos,
+  updateVideo,
 } from "../services/youtube.js";
 import { err, ok } from "../util/result.js";
 
@@ -1466,6 +1467,29 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ videoId, account }) => withClient(account, (client) => getVideo(client, { videoId })),
+  );
+
+  server.registerTool(
+    "google_youtube_update_video",
+    {
+      title: "Update YouTube video metadata",
+      description: "Update a video's title, description, tags or privacy status.",
+      inputSchema: {
+        videoId: z.string().describe("YouTube video ID."),
+        title: z.string().optional().describe("New video title."),
+        description: z.string().optional().describe("New video description."),
+        tags: z.array(z.string()).optional().describe("New video tags."),
+        privacyStatus: z
+          .enum(["public", "private", "unlisted"])
+          .optional()
+          .describe("New privacy status."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ videoId, title, description, tags, privacyStatus, account }) =>
+      withClient(account, (client) =>
+        updateVideo(client, { videoId, title, description, tags, privacyStatus }),
+      ),
   );
 
   server.registerTool(
