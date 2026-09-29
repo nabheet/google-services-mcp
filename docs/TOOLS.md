@@ -427,6 +427,17 @@ Search contacts (including non-connected) by name, email or phone. Arg: `query` 
 
 Create a contact. `name` required; `email`, `phone` optional.
 
+### `google_contacts_update`
+
+Update an existing contact (name, email, or phone) by resourceName.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `resourceName` | string | required. e.g. `people/123` (from list/search). |
+| `name` | string | optional. New full name. |
+| `email` | string (email) | optional. New email. |
+| `phone` | string | optional. New phone number. |
+
 ## Tasks
 
 ### `google_tasks_list_lists`

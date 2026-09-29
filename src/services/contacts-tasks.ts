@@ -16,6 +16,15 @@ export interface CreateContactOptions {
   phone?: string;
 }
 
+export interface UpdateContactOptions {
+  resourceName: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  /** Contact etag for optimistic concurrency. Fetched automatically if omitted. */
+  etag?: string;
+}
+
 export interface ListTasksOptions {
   tasklistId?: string;
 }
@@ -102,6 +111,47 @@ export async function createContact(
   const res = await people.people.createContact({
     requestBody,
     personFields: "names,emailAddresses,phoneNumbers",
+  });
+  return { resourceName: res.data.resourceName ?? "" };
+}
+
+/** Update an existing contact (name, email, phone). */
+export async function updateContact(
+  client: Auth.OAuth2Client,
+  opts: UpdateContactOptions,
+): Promise<{ resourceName: string }> {
+  const people = google.people({ version: "v1", auth: client });
+  const requestBody: people_v1.Schema$Person = {};
+  const updatePersonFields: string[] = [];
+  if (opts.name !== undefined) {
+    requestBody.names = [{ displayName: opts.name, givenName: opts.name }];
+    updatePersonFields.push("names");
+  }
+  if (opts.email !== undefined) {
+    requestBody.emailAddresses = [{ value: opts.email }];
+    updatePersonFields.push("emailAddresses");
+  }
+  if (opts.phone !== undefined) {
+    requestBody.phoneNumbers = [{ value: opts.phone }];
+    updatePersonFields.push("phoneNumbers");
+  }
+  if (updatePersonFields.length === 0) {
+    throw new Error("Nothing to update: provide at least one of name, email, or phone.");
+  }
+  // The People API requires the person etag on update (optimistic concurrency).
+  if (!opts.etag) {
+    const current = await people.people.get({
+      resourceName: opts.resourceName,
+      personFields: "names",
+    });
+    requestBody.etag = current.data.etag ?? undefined;
+  } else {
+    requestBody.etag = opts.etag;
+  }
+  const res = await people.people.updateContact({
+    resourceName: opts.resourceName,
+    updatePersonFields: updatePersonFields.join(","),
+    requestBody,
   });
   return { resourceName: res.data.resourceName ?? "" };
 }
