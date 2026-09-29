@@ -1,7 +1,12 @@
 // Live smoke: create -> update -> delete a secondary calendar (issue #71).
 // Run: node --experimental-strip-types dist/main.js ... (or via tsx)
 import { authManager } from "../src/auth/manager.js";
-import { createCalendar, updateCalendar, deleteCalendar, listCalendars } from "../src/services/calendar.js";
+import {
+  createCalendar,
+  deleteCalendar,
+  listCalendars,
+  updateCalendar,
+} from "../src/services/calendar.js";
 
 const client = await authManager.getClient("personal");
 
