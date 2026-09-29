@@ -21,6 +21,8 @@ export interface UpdateContactOptions {
   name?: string;
   email?: string;
   phone?: string;
+  /** Contact etag for optimistic concurrency. Fetched automatically if omitted. */
+  etag?: string;
 }
 
 export interface ListTasksOptions {
@@ -135,6 +137,16 @@ export async function updateContact(
   }
   if (updatePersonFields.length === 0) {
     throw new Error("Nothing to update: provide at least one of name, email, or phone.");
+  }
+  // The People API requires the person etag on update (optimistic concurrency).
+  if (!opts.etag) {
+    const current = await people.people.get({
+      resourceName: opts.resourceName,
+      personFields: "names",
+    });
+    requestBody.etag = current.data.etag ?? undefined;
+  } else {
+    requestBody.etag = opts.etag;
   }
   const res = await people.people.updateContact({
     resourceName: opts.resourceName,

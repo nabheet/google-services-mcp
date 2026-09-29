@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockConnections = { list: vi.fn(), create: vi.fn(), update: vi.fn() };
+const mockConnections = { list: vi.fn(), create: vi.fn(), update: vi.fn(), get: vi.fn() };
 const mockPeople = { searchContacts: vi.fn() };
 const mockTasksLists = { list: vi.fn() };
 const mockTaskItems = { list: vi.fn(), insert: vi.fn(), patch: vi.fn(), delete: vi.fn() };
@@ -12,6 +12,7 @@ vi.mock("googleapis", () => ({
         connections: mockConnections,
         createContact: mockConnections.create,
         updateContact: mockConnections.update,
+        get: mockConnections.get,
       },
       otherContacts: { search: mockPeople.searchContacts },
     })),
@@ -101,33 +102,41 @@ describe("createContact", () => {
 });
 
 describe("updateContact", () => {
-  it("updates name and email, setting updatePersonFields", async () => {
+  it("fetches etag then updates name and email, setting updatePersonFields", async () => {
+    mockConnections.get?.mockResolvedValue({ data: { resourceName: "people/3", etag: "abc" } });
     mockConnections.update.mockResolvedValue({ data: { resourceName: "people/3" } });
     await updateContact(client, {
       resourceName: "people/3",
       name: "Carol Renamed",
       email: "__VG_EMAIL_2a3a9bd93ab9__",
     });
+    expect(mockConnections.get).toHaveBeenCalledWith({
+      resourceName: "people/3",
+      personFields: "names",
+    });
     expect(mockConnections.update).toHaveBeenCalledWith({
       resourceName: "people/3",
       updatePersonFields: "names,emailAddresses",
       requestBody: {
+        etag: "abc",
         names: [{ displayName: "Carol Renamed", givenName: "Carol Renamed" }],
         emailAddresses: [{ value: "__VG_EMAIL_2a3a9bd93ab9__" }],
       },
     });
   });
 
-  it("updates phone only", async () => {
+  it("uses a provided etag without fetching", async () => {
     mockConnections.update.mockResolvedValue({ data: { resourceName: "people/3" } });
     await updateContact(client, {
       resourceName: "people/3",
       phone: "+1-555-0100",
+      etag: "etag-1",
     });
+    expect(mockConnections.get).not.toHaveBeenCalled();
     expect(mockConnections.update).toHaveBeenCalledWith({
       resourceName: "people/3",
       updatePersonFields: "phoneNumbers",
-      requestBody: { phoneNumbers: [{ value: "+1-555-0100" }] },
+      requestBody: { etag: "etag-1", phoneNumbers: [{ value: "+1-555-0100" }] },
     });
   });
 });
