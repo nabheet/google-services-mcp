@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockConnections = { list: vi.fn(), create: vi.fn() };
+const mockConnections = { list: vi.fn(), create: vi.fn(), update: vi.fn() };
 const mockPeople = { searchContacts: vi.fn() };
 const mockTasksLists = { list: vi.fn() };
 const mockTaskItems = { list: vi.fn(), insert: vi.fn(), patch: vi.fn(), delete: vi.fn() };
@@ -8,7 +8,11 @@ const mockTaskItems = { list: vi.fn(), insert: vi.fn(), patch: vi.fn(), delete: 
 vi.mock("googleapis", () => ({
   google: {
     people: vi.fn(() => ({
-      people: { connections: mockConnections, createContact: mockConnections.create },
+      people: {
+        connections: mockConnections,
+        createContact: mockConnections.create,
+        updateContact: mockConnections.update,
+      },
       otherContacts: { search: mockPeople.searchContacts },
     })),
     tasks: vi.fn(() => ({
@@ -27,6 +31,7 @@ import {
   listTaskLists,
   listTasks,
   searchContacts,
+  updateContact,
 } from "../src/services/contacts-tasks.js";
 
 const client = {} as never;
@@ -92,6 +97,38 @@ describe("createContact", () => {
     expect(call.requestBody.names[0].givenName).toBe("Carol Example");
     expect(call.requestBody.names[0].displayName).toBe("Carol Example");
     expect(call.requestBody.emailAddresses[0].value).toBe("__VG_EMAIL_2a3a9bd93ab9__");
+  });
+});
+
+describe("updateContact", () => {
+  it("updates name and email, setting updatePersonFields", async () => {
+    mockConnections.update.mockResolvedValue({ data: { resourceName: "people/3" } });
+    await updateContact(client, {
+      resourceName: "people/3",
+      name: "Carol Renamed",
+      email: "__VG_EMAIL_2a3a9bd93ab9__",
+    });
+    expect(mockConnections.update).toHaveBeenCalledWith({
+      resourceName: "people/3",
+      updatePersonFields: "names,emailAddresses",
+      requestBody: {
+        names: [{ displayName: "Carol Renamed", givenName: "Carol Renamed" }],
+        emailAddresses: [{ value: "__VG_EMAIL_2a3a9bd93ab9__" }],
+      },
+    });
+  });
+
+  it("updates phone only", async () => {
+    mockConnections.update.mockResolvedValue({ data: { resourceName: "people/3" } });
+    await updateContact(client, {
+      resourceName: "people/3",
+      phone: "+1-555-0100",
+    });
+    expect(mockConnections.update).toHaveBeenCalledWith({
+      resourceName: "people/3",
+      updatePersonFields: "phoneNumbers",
+      requestBody: { phoneNumbers: [{ value: "+1-555-0100" }] },
+    });
   });
 });
 
