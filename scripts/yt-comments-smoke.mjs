@@ -2,8 +2,10 @@
 import { google } from "googleapis";
 // Live smoke test for google_youtube_list_comments / insert_comment /
 // set_comment_moderation / mark_comment_spam (PR for issue #77).
-// Uploads a tiny private test video, posts a comment on it, lists threads,
+// Uploads a tiny unlisted test video, posts a comment on it, lists threads,
 // moderates the comment, marks it spam, then deletes comment + video.
+// NOTE: privacyStatus must be "unlisted" — YouTube reports private videos
+// as commentsDisabled in the comment APIs (verified live).
 import { authManager } from "../dist/auth/manager.js";
 import {
   insertComment,
@@ -58,7 +60,7 @@ async function uploadTestVideo() {
     part: ["snippet", "status"],
     requestBody: {
       snippet: { title: `mcp-yt-comments-test-${ts}` },
-      status: { privacyStatus: "private" },
+      status: { privacyStatus: "unlisted", selfDeclaredMadeForKids: false },
     },
     media: { body: fs.createReadStream(path) },
   });
@@ -66,10 +68,10 @@ async function uploadTestVideo() {
 }
 
 try {
-  // 1. Upload a private test video
+  // 1. Upload an unlisted test video
   videoId = await uploadTestVideo();
   if (!videoId) throw new Error("upload returned no id");
-  step(`uploaded private test video: ${videoId}`);
+  step(`uploaded unlisted test video: ${videoId}`);
 
   // Wait for processing so comment endpoints accept the video.
   await new Promise((r) => setTimeout(r, 5000));
@@ -119,7 +121,7 @@ try {
   try {
     const yt = google.youtube({ version: "v3", auth: client });
     if (commentId) {
-      await yt.comments.delete({ id: [commentId] });
+      await yt.comments.delete({ id: commentId });
       console.log("🧹 deleted test comment");
     }
     if (videoId) {
