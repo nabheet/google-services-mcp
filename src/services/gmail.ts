@@ -644,6 +644,13 @@ export interface CreateGmailLabelOptions {
   labelListVisibility?: string;
 }
 
+export interface UpdateGmailLabelOptions {
+  id: string;
+  name?: string;
+  messageListVisibility?: string;
+  labelListVisibility?: string;
+}
+
 /** List all labels. */
 export async function listGmailLabels(client: Auth.OAuth2Client): Promise<GmailLabel[]> {
   const gmail = google.gmail({ version: "v1", auth: client });
@@ -678,6 +685,170 @@ export async function createGmailLabel(
 export async function deleteGmailLabel(client: Auth.OAuth2Client, opts: GetGmailOptions) {
   const gmail = google.gmail({ version: "v1", auth: client });
   await gmail.users.labels.delete({ userId: "me", id: opts.id });
+  return { deleted: true, id: opts.id };
+}
+
+/** Update a custom label (name, message/label list visibility). */
+export async function updateGmailLabel(
+  client: Auth.OAuth2Client,
+  opts: UpdateGmailLabelOptions,
+): Promise<GmailLabel> {
+  const requestBody: gmail_v1.Schema$Label = {};
+  if (opts.name !== undefined) requestBody.name = opts.name;
+  if (opts.messageListVisibility !== undefined) {
+    requestBody.messageListVisibility = opts.messageListVisibility;
+  }
+  if (opts.labelListVisibility !== undefined) {
+    requestBody.labelListVisibility = opts.labelListVisibility;
+  }
+  if (Object.keys(requestBody).length === 0) {
+    throw new Error(
+      "Nothing to update: provide at least one of name, messageListVisibility, or labelListVisibility.",
+    );
+  }
+  const gmail = google.gmail({ version: "v1", auth: client });
+  const res = await gmail.users.labels.update({
+    userId: "me",
+    id: opts.id,
+    requestBody,
+  });
+  return res.data as GmailLabel;
+}
+
+// ---- Settings -------------------------------------------------------------
+
+export interface VacationSettings {
+  enableAutoReply?: boolean;
+  responseSubject?: string;
+  responseBodyPlainText?: string;
+  responseBodyHtml?: string;
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface UpdateVacationSettingsOptions {
+  enableAutoReply?: boolean;
+  responseSubject?: string;
+  responseBodyPlainText?: string;
+  responseBodyHtml?: string;
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface SendAsInfo {
+  sendAsEmail: string;
+  displayName?: string;
+  isDefault?: boolean;
+  isPrimary?: boolean;
+}
+
+export interface CreateSendAsOptions {
+  sendAsEmail: string;
+  displayName?: string;
+  isDefault?: boolean;
+}
+
+export interface GmailFilterInfo {
+  id?: string;
+  criteria?: Record<string, unknown>;
+  action?: Record<string, unknown>;
+}
+
+export interface CreateFilterOptions {
+  criteria?: Record<string, unknown>;
+  action?: Record<string, unknown>;
+}
+
+/** Get the vacation (out-of-office) responder settings. */
+export async function getVacationSettings(client: Auth.OAuth2Client): Promise<VacationSettings> {
+  const gmail = google.gmail({ version: "v1", auth: client });
+  const res = await gmail.users.settings.getVacation({ userId: "me" });
+  return res.data as VacationSettings;
+}
+
+/** Update the vacation (out-of-office) responder settings. */
+export async function updateVacationSettings(
+  client: Auth.OAuth2Client,
+  opts: UpdateVacationSettingsOptions,
+): Promise<VacationSettings> {
+  const gmail = google.gmail({ version: "v1", auth: client });
+  const res = await gmail.users.settings.updateVacation({
+    userId: "me",
+    requestBody: {
+      enableAutoReply: opts.enableAutoReply,
+      responseSubject: opts.responseSubject,
+      responseBodyPlainText: opts.responseBodyPlainText,
+      responseBodyHtml: opts.responseBodyHtml,
+      startTime: opts.startTime,
+      endTime: opts.endTime,
+    },
+  });
+  return res.data as VacationSettings;
+}
+
+/** List send-as aliases. */
+export async function listSendAs(client: Auth.OAuth2Client): Promise<SendAsInfo[]> {
+  const gmail = google.gmail({ version: "v1", auth: client });
+  const res = await gmail.users.settings.sendAs.list({ userId: "me" });
+  return (res.data.sendAs ?? []).map((s: gmail_v1.Schema$SendAs) => ({
+    sendAsEmail: s.sendAsEmail as string,
+    displayName: s.displayName as string | undefined,
+    isDefault: s.isDefault as boolean | undefined,
+    isPrimary: s.isPrimary as boolean | undefined,
+  }));
+}
+
+/** Create a send-as alias. */
+export async function createSendAs(
+  client: Auth.OAuth2Client,
+  opts: CreateSendAsOptions,
+): Promise<SendAsInfo> {
+  const gmail = google.gmail({ version: "v1", auth: client });
+  const res = await gmail.users.settings.sendAs.create({
+    userId: "me",
+    requestBody: {
+      sendAsEmail: opts.sendAsEmail,
+      displayName: opts.displayName,
+      isDefault: opts.isDefault,
+    },
+  });
+  return res.data as SendAsInfo;
+}
+
+/** List Gmail filters. */
+export async function listGmailFilters(client: Auth.OAuth2Client): Promise<GmailFilterInfo[]> {
+  const gmail = google.gmail({ version: "v1", auth: client });
+  const res = await gmail.users.settings.filters.list({ userId: "me" });
+  return (res.data.filter ?? []).map((f: gmail_v1.Schema$Filter) => ({
+    id: f.id as string | undefined,
+    criteria: f.criteria as Record<string, unknown> | undefined,
+    action: f.action as Record<string, unknown> | undefined,
+  }));
+}
+
+/** Create a Gmail filter (auto-archive/apply rules). */
+export async function createGmailFilter(
+  client: Auth.OAuth2Client,
+  opts: CreateFilterOptions,
+): Promise<GmailFilterInfo> {
+  const gmail = google.gmail({ version: "v1", auth: client });
+  const res = await gmail.users.settings.filters.create({
+    userId: "me",
+    requestBody: {
+      criteria: opts.criteria,
+      action: opts.action,
+    },
+  });
+  return res.data as GmailFilterInfo;
+}
+
+/** Delete a Gmail filter. */
+export async function deleteGmailFilter(
+  client: Auth.OAuth2Client,
+  opts: GetGmailOptions,
+): Promise<{ deleted: true; id: string }> {
+  const gmail = google.gmail({ version: "v1", auth: client });
+  await gmail.users.settings.filters.delete({ userId: "me", id: opts.id });
   return { deleted: true, id: opts.id };
 }
 
