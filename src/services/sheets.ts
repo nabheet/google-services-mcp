@@ -43,6 +43,24 @@ export interface BatchUpdateArgs {
   requests: sheets_v4.Schema$Request[];
 }
 
+export interface AddSheetArgs {
+  spreadsheetId: string;
+  /** Title of the new tab. */
+  title: string;
+  /** 0-based position to insert at (appended at end if omitted). */
+  index?: number;
+}
+
+export interface SheetRefArgs {
+  spreadsheetId: string;
+  /** Numeric sheet ID (from google_sheets_get / getSpreadsheet metadata). */
+  sheetId: number;
+}
+
+export interface RenameSheetArgs extends SheetRefArgs {
+  title: string;
+}
+
 export async function getSpreadsheet(
   client: Auth.OAuth2Client,
   { spreadsheetId, range }: GetSpreadsheetArgs,
@@ -116,4 +134,46 @@ export async function batchUpdateSheet(
   const sheets = google.sheets({ version: "v4", auth: client });
   const res = await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } });
   return res.data;
+}
+
+/** Add a new tab to a spreadsheet. */
+export async function addSheet(
+  client: Auth.OAuth2Client,
+  { spreadsheetId, title, index }: AddSheetArgs,
+): Promise<sheets_v4.Schema$BatchUpdateSpreadsheetResponse> {
+  const properties: sheets_v4.Schema$SheetProperties = { title };
+  if (index !== undefined) properties.index = index;
+  return batchUpdateSheet(client, {
+    spreadsheetId,
+    requests: [{ addSheet: { properties } }],
+  });
+}
+
+/** Permanently delete a tab from a spreadsheet. */
+export async function deleteSheet(
+  client: Auth.OAuth2Client,
+  { spreadsheetId, sheetId }: SheetRefArgs,
+): Promise<sheets_v4.Schema$BatchUpdateSpreadsheetResponse> {
+  return batchUpdateSheet(client, {
+    spreadsheetId,
+    requests: [{ deleteSheet: { sheetId } }],
+  });
+}
+
+/** Rename a tab. */
+export async function renameSheet(
+  client: Auth.OAuth2Client,
+  { spreadsheetId, sheetId, title }: RenameSheetArgs,
+): Promise<sheets_v4.Schema$BatchUpdateSpreadsheetResponse> {
+  return batchUpdateSheet(client, {
+    spreadsheetId,
+    requests: [
+      {
+        updateSheetProperties: {
+          properties: { sheetId, title },
+          fields: "title",
+        },
+      },
+    ],
+  });
 }
