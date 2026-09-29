@@ -1176,10 +1176,7 @@ export function registerTools(server: McpServer): void {
       description: "Permanently delete a tab (sheet) from a spreadsheet.",
       inputSchema: {
         spreadsheetId: z.string().describe("Spreadsheet ID."),
-        sheetId: z
-          .number()
-          .int()
-          .describe("Numeric sheet ID (from google_sheets_get metadata)."),
+        sheetId: z.number().int().describe("Numeric sheet ID (from google_sheets_get metadata)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
@@ -1201,10 +1198,7 @@ export function registerTools(server: McpServer): void {
       description: "Rename a tab (sheet) in a spreadsheet.",
       inputSchema: {
         spreadsheetId: z.string().describe("Spreadsheet ID."),
-        sheetId: z
-          .number()
-          .int()
-          .describe("Numeric sheet ID (from google_sheets_get metadata)."),
+        sheetId: z.number().int().describe("Numeric sheet ID (from google_sheets_get metadata)."),
         title: z.string().describe("New tab title."),
         account: z.string().optional().describe("Account nickname to use."),
       },
