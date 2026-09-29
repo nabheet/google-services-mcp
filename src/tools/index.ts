@@ -37,6 +37,7 @@ import {
   exportDriveFile,
   getDriveFile,
   listDriveFiles,
+  moveDriveFile,
   shareDriveFile,
   updateDriveFile,
   uploadDriveFile,
@@ -904,6 +905,28 @@ export function registerTools(server: McpServer): void {
     },
     async ({ fileId, name, account }) =>
       withClient(account, (client) => copyDriveFile(client, { fileId, name })),
+  );
+
+  server.registerTool(
+    "google_drive_move",
+    {
+      title: "Move Drive file to folder",
+      description:
+        "Move a file into a folder. Provide removeParentFolderId to also remove it from its current folder (true move); omit to add it to an additional folder.",
+      inputSchema: {
+        fileId: z.string().describe("Drive file ID."),
+        parentFolderId: z.string().describe("Destination folder ID."),
+        removeParentFolderId: z
+          .string()
+          .optional()
+          .describe("Current folder ID to remove the file from (optional)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ fileId, parentFolderId, removeParentFolderId, account }) =>
+      withClient(account, (client) =>
+        moveDriveFile(client, { fileId, parentFolderId, removeParentFolderId }),
+      ),
   );
 
   // ---- Contacts -----------------------------------------------------------
