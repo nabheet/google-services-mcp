@@ -178,7 +178,7 @@ describe("server tool registration", () => {
     expect(names).toContain("google_forms_responses");
     expect(names).toContain("google_forms_create");
     expect(names).toContain("google_forms_add_question");
-    expect(names.length).toBe(83);
+    expect(names.length).toBe(84);
   });
 });
 

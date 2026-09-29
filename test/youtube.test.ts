@@ -4,7 +4,7 @@ const mockYouTube = {
   search: { list: vi.fn() },
   videos: { list: vi.fn(), rate: vi.fn() },
   playlists: { list: vi.fn(), insert: vi.fn(), delete: vi.fn() },
-  playlistItems: { list: vi.fn(), insert: vi.fn() },
+  playlistItems: { list: vi.fn(), insert: vi.fn(), delete: vi.fn() },
   subscriptions: { list: vi.fn() },
 };
 
@@ -24,6 +24,7 @@ import {
   getVideo,
   listPlaylists,
   listSubscriptions,
+  removeVideoFromPlaylist,
   searchVideos,
 } from "../src/services/youtube.js";
 
@@ -149,6 +150,20 @@ describe("youtube service", () => {
       mine: true,
       maxResults: 50,
     });
+  });
+
+  it("removeVideoFromPlaylist removes a playlist item", async () => {
+    mockYouTube.playlistItems.delete.mockResolvedValue({ data: {} });
+    const result = await removeVideoFromPlaylist(client, { playlistItemId: "pi1" });
+    expect(result).toEqual({ deleted: true });
+    expect(mockYouTube.playlistItems.delete).toHaveBeenCalledWith({ id: "pi1" });
+  });
+
+  it("removeVideoFromPlaylist propagates API errors", async () => {
+    mockYouTube.playlistItems.delete.mockRejectedValue(new Error("not found"));
+    await expect(removeVideoFromPlaylist(client, { playlistItemId: "pi-missing" })).rejects.toThrow(
+      "not found",
+    );
   });
 
   it("propagates API errors", async () => {
