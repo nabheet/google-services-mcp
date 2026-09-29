@@ -342,14 +342,27 @@ Permanently delete a file. Args: `fileId` (required).
 
 ### `google_drive_share`
 
-Share a file with a user by email and role.
+Share a file with a user/group by email, anyone with the link, or a domain;
+optionally transfer ownership.
 
 | arg | type | notes |
 | --- | --- | --- |
 | `fileId` | string | required. |
-| `email` | string (email) | required. |
-| `role` | `reader` \| `writer` \| `commenter` | required. |
+| `email` | string (email) | optional. Required for type `user`/`group`. |
+| `role` | `reader` \| `writer` \| `commenter` \| `owner` | required. |
+| `type` | `user` \| `group` \| `anyone` \| `domain` | optional, default `user`. |
+| `domain` | string | optional. For type `domain`, e.g. `example.com`. |
+| `transferOwnership` | boolean | optional. Transfer ownership (requires role `owner`). |
 | `sendNotificationEmail` | boolean | optional, default true. |
+
+### `google_drive_list_permissions`
+
+List who can access a file and with what role. Args: `fileId` (required).
+
+### `google_drive_delete_permission`
+
+Revoke a permission from a file by permission ID. Args: `fileId` (required),
+`permissionId` (required, from `google_drive_list_permissions`).
 
 ### `google_drive_download`
 
