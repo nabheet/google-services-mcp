@@ -20,11 +20,14 @@ vi.mock("googleapis", () => ({
 const client = {} as never;
 
 import {
+  addSheet,
   appendSheetRange,
   batchUpdateSheet,
   createSpreadsheet,
+  deleteSheet,
   getSpreadsheet,
   readSheetRange,
+  renameSheet,
   writeSheetRange,
 } from "../src/services/sheets.js";
 
@@ -149,5 +152,67 @@ describe("sheets service", () => {
     await expect(readSheetRange(client, { spreadsheetId: "s1", range: "Z99" })).rejects.toThrow(
       "bad range",
     );
+  });
+
+  it("addSheet sends addSheet request with title and index", async () => {
+    mockSpreadsheets.batchUpdate.mockResolvedValue({
+      data: { replies: [{ addSheet: { properties: { sheetId: 123, title: "Extra" } } }] },
+    });
+    const result = await addSheet(client, {
+      spreadsheetId: "s1",
+      title: "Extra",
+      index: 1,
+    });
+    expect(result.replies).toEqual([
+      { addSheet: { properties: { sheetId: 123, title: "Extra" } } },
+    ]);
+    expect(mockSpreadsheets.batchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: "s1",
+      requestBody: {
+        requests: [{ addSheet: { properties: { title: "Extra", index: 1 } } }],
+      },
+    });
+  });
+
+  it("addSheet without index omits index property", async () => {
+    mockSpreadsheets.batchUpdate.mockResolvedValue({ data: { replies: [] } });
+    await addSheet(client, { spreadsheetId: "s1", title: "Extra" });
+    expect(mockSpreadsheets.batchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: "s1",
+      requestBody: { requests: [{ addSheet: { properties: { title: "Extra" } } }] },
+    });
+  });
+
+  it("deleteSheet sends deleteSheet request", async () => {
+    mockSpreadsheets.batchUpdate.mockResolvedValue({ data: { replies: [{}] } });
+    const result = await deleteSheet(client, { spreadsheetId: "s1", sheetId: 123 });
+    expect(result.replies).toEqual([{}]);
+    expect(mockSpreadsheets.batchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: "s1",
+      requestBody: { requests: [{ deleteSheet: { sheetId: 123 } }] },
+    });
+  });
+
+  it("renameSheet sends updateSheetProperties request", async () => {
+    mockSpreadsheets.batchUpdate.mockResolvedValue({ data: { replies: [{}] } });
+    const result = await renameSheet(client, {
+      spreadsheetId: "s1",
+      sheetId: 123,
+      title: "Renamed",
+    });
+    expect(result.replies).toEqual([{}]);
+    expect(mockSpreadsheets.batchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: "s1",
+      requestBody: {
+        requests: [
+          {
+            updateSheetProperties: {
+              properties: { sheetId: 123, title: "Renamed" },
+              fields: "title",
+            },
+          },
+        ],
+      },
+    });
   });
 });
