@@ -37,10 +37,12 @@ import {
   copyDriveFile,
   createDriveFolder,
   deleteDriveFile,
+  deleteDrivePermission,
   downloadDriveFile,
   exportDriveFile,
   getDriveFile,
   listDriveFiles,
+  listDrivePermissions,
   moveDriveFile,
   shareDriveFile,
   updateDriveFile,
@@ -944,11 +946,25 @@ export function registerTools(server: McpServer): void {
     "google_drive_share",
     {
       title: "Share Drive file",
-      description: "Share a file with a user by email and role.",
+      description:
+        "Share a file with a user/group by email, anyone with the link, or a domain; optionally transfer ownership.",
       inputSchema: {
         fileId: z.string().describe("Drive file ID."),
-        email: z.string().email().describe("Recipient email."),
-        role: z.enum(["reader", "writer", "commenter"]).describe("Access role."),
+        email: z
+          .string()
+          .email()
+          .optional()
+          .describe("Recipient email (required for type user/group)."),
+        role: z.enum(["reader", "writer", "commenter", "owner"]).describe("Access role."),
+        type: z
+          .enum(["user", "group", "anyone", "domain"])
+          .optional()
+          .describe("Permission type (default user)."),
+        domain: z.string().optional().describe("Domain for type=domain, e.g. example.com."),
+        transferOwnership: z
+          .boolean()
+          .optional()
+          .describe("Transfer ownership to the recipient (requires role=owner)."),
         sendNotificationEmail: z
           .boolean()
           .optional()
@@ -956,10 +972,56 @@ export function registerTools(server: McpServer): void {
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ fileId, email, role, sendNotificationEmail, account }) =>
+    async ({
+      fileId,
+      email,
+      role,
+      type,
+      domain,
+      transferOwnership,
+      sendNotificationEmail,
+      account,
+    }) =>
       withClient(account, (client) =>
-        shareDriveFile(client, { fileId, email, role, sendNotificationEmail }),
+        shareDriveFile(client, {
+          fileId,
+          email,
+          role,
+          type,
+          domain,
+          transferOwnership,
+          sendNotificationEmail,
+        }),
       ),
+  );
+
+  server.registerTool(
+    "google_drive_list_permissions",
+    {
+      title: "List Drive file permissions",
+      description: "List who can access a file and with what role.",
+      inputSchema: {
+        fileId: z.string().describe("Drive file ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ fileId, account }) =>
+      withClient(account, (client) => listDrivePermissions(client, { fileId })),
+  );
+
+  server.registerTool(
+    "google_drive_delete_permission",
+    {
+      title: "Delete Drive file permission",
+      description: "Revoke a permission from a file by permission ID.",
+      inputSchema: {
+        fileId: z.string().describe("Drive file ID."),
+        permissionId: z.string().describe("Permission ID (from google_drive_list_permissions)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ fileId, permissionId, account }) =>
+      withClient(account, (client) => deleteDrivePermission(client, { fileId, permissionId })),
   );
 
   server.registerTool(

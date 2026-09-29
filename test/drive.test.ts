@@ -9,7 +9,7 @@ const mockFiles = {
   copy: vi.fn(),
   export: vi.fn(),
 };
-const mockPermissions = { create: vi.fn(), delete: vi.fn() };
+const mockPermissions = { create: vi.fn(), list: vi.fn(), delete: vi.fn() };
 
 vi.mock("googleapis", () => ({
   google: {
@@ -21,10 +21,12 @@ import {
   copyDriveFile,
   createDriveFolder,
   deleteDriveFile,
+  deleteDrivePermission,
   downloadDriveFile,
   exportDriveFile,
   getDriveFile,
   listDriveFiles,
+  listDrivePermissions,
   moveDriveFile,
   shareDriveFile,
   updateDriveFile,
@@ -291,5 +293,80 @@ describe("copyDriveFile", () => {
     mockFiles.copy.mockResolvedValue({ data: { id: "f-copy2" } });
     await copyDriveFile(client, { fileId: "f1" });
     expect(mockFiles.copy).toHaveBeenCalledWith({ fileId: "f1", requestBody: {} });
+  });
+});
+
+describe("listDrivePermissions", () => {
+  it("lists permissions for a file", async () => {
+    mockPermissions.list.mockResolvedValue({
+      data: {
+        permissions: [
+          { id: "p1", type: "user", role: "writer", emailAddress: "__VG_EMAIL_b3e8b64ce83f__" },
+          { id: "p2", type: "anyone", role: "reader" },
+        ],
+      },
+    });
+    const result = await listDrivePermissions(client, { fileId: "f1" });
+    expect(mockPermissions.list).toHaveBeenCalledWith({ fileId: "f1" });
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ id: "p1", type: "user", role: "writer" });
+    expect(result[1]).toMatchObject({ id: "p2", type: "anyone", role: "reader" });
+  });
+});
+
+describe("deleteDrivePermission", () => {
+  it("deletes a permission by id", async () => {
+    mockPermissions.delete.mockResolvedValue({ data: {} });
+    await deleteDrivePermission(client, { fileId: "f1", permissionId: "p1" });
+    expect(mockPermissions.delete).toHaveBeenCalledWith({ fileId: "f1", permissionId: "p1" });
+  });
+});
+
+describe("shareDriveFile extended", () => {
+  it("shares with anyone via link (type=anyone)", async () => {
+    mockPermissions.create.mockResolvedValue({ data: { id: "perm-link" } });
+    const result = await shareDriveFile(client, {
+      fileId: "f1",
+      type: "anyone",
+      role: "reader",
+      sendNotificationEmail: false,
+    });
+    expect(mockPermissions.create).toHaveBeenCalledWith({
+      fileId: "f1",
+      requestBody: { type: "anyone", role: "reader" },
+      sendNotificationEmail: false,
+    });
+    expect(result.id).toBe("perm-link");
+  });
+
+  it("shares with a domain (type=domain with domain field)", async () => {
+    mockPermissions.create.mockResolvedValue({ data: { id: "perm-dom" } });
+    await shareDriveFile(client, {
+      fileId: "f1",
+      type: "domain",
+      domain: "example.com",
+      role: "writer",
+    });
+    expect(mockPermissions.create).toHaveBeenCalledWith({
+      fileId: "f1",
+      requestBody: { type: "domain", role: "writer", domain: "example.com" },
+      sendNotificationEmail: true,
+    });
+  });
+
+  it("transfers ownership when transferOwnership is set", async () => {
+    mockPermissions.create.mockResolvedValue({ data: { id: "perm-owner" } });
+    await shareDriveFile(client, {
+      fileId: "f1",
+      email: "__VG_EMAIL_b3e8b64ce83f__",
+      role: "owner",
+      transferOwnership: true,
+    });
+    expect(mockPermissions.create).toHaveBeenCalledWith({
+      fileId: "f1",
+      requestBody: { type: "user", role: "owner", emailAddress: "__VG_EMAIL_b3e8b64ce83f__" },
+      sendNotificationEmail: true,
+      transferOwnership: true,
+    });
   });
 });
