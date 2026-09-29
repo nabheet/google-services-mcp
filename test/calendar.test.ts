@@ -8,6 +8,9 @@ const mockEvents = {
   patch: vi.fn(),
   delete: vi.fn(),
 };
+const mockFreeBusy = {
+  query: vi.fn(),
+};
 const mockCalendarList = {
   list: vi.fn(),
   patch: vi.fn(),
@@ -22,6 +25,7 @@ vi.mock("googleapis", () => ({
   google: {
     calendar: vi.fn(() => ({
       events: mockEvents,
+      freebusy: mockFreeBusy,
       calendarList: mockCalendarList,
       calendars: mockCalendars,
     })),
@@ -37,6 +41,7 @@ import {
   getEvent,
   listCalendars,
   listEvents,
+  queryFreeBusy,
   respondToEvent,
   updateCalendar,
   updateEvent,
@@ -365,6 +370,56 @@ describe("respondToEvent", () => {
       calendarId: "primary",
       eventId: "e1",
       requestBody: { attendees: [{ email: "me@example.com", responseStatus: "declined" }] },
+    });
+  });
+});
+
+describe("queryFreeBusy", () => {
+  it("queries free/busy for the given calendars and maps busy intervals", async () => {
+    mockFreeBusy.query.mockResolvedValue({
+      data: {
+        timeMin: "2026-10-01T00:00:00Z",
+        timeMax: "2026-10-01T23:59:59Z",
+        calendars: {
+          primary: {
+            busy: [
+              { start: "2026-10-01T09:00:00Z", end: "2026-10-01T09:30:00Z" },
+              { start: "2026-10-01T14:00:00Z", end: "2026-10-01T15:00:00Z" },
+            ],
+          },
+          "work@example.com": { busy: [] },
+        },
+      },
+    });
+    const result = await queryFreeBusy(client, {
+      timeMin: "2026-10-01T00:00:00Z",
+      timeMax: "2026-10-01T23:59:59Z",
+      items: ["primary", "work@example.com"],
+      timeZone: "America/Los_Angeles",
+    });
+    expect(mockFreeBusy.query).toHaveBeenCalledWith({
+      requestBody: {
+        timeMin: "2026-10-01T00:00:00Z",
+        timeMax: "2026-10-01T23:59:59Z",
+        items: [{ id: "primary" }, { id: "work@example.com" }],
+        timeZone: "America/Los_Angeles",
+      },
+    });
+    expect(result.timeMin).toBe("2026-10-01T00:00:00Z");
+    expect(result.calendars.primary.busy).toHaveLength(2);
+    expect(result.calendars.primary.busy[1]).toEqual({
+      start: "2026-10-01T14:00:00Z",
+      end: "2026-10-01T15:00:00Z",
+    });
+  });
+
+  it("defaults to the primary calendar when items is omitted", async () => {
+    mockFreeBusy.query.mockResolvedValue({
+      data: { timeMin: "t0", timeMax: "t1", calendars: { primary: { busy: [] } } },
+    });
+    await queryFreeBusy(client, { timeMin: "t0", timeMax: "t1" });
+    expect(mockFreeBusy.query).toHaveBeenCalledWith({
+      requestBody: { timeMin: "t0", timeMax: "t1", items: [{ id: "primary" }] },
     });
   });
 });

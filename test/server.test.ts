@@ -126,6 +126,8 @@ describe("server tool registration", () => {
     expect(names).toContain("google_calendar_get_event");
     expect(names).toContain("google_calendar_update_event");
     expect(names).toContain("google_calendar_delete_event");
+    expect(names).toContain("google_calendar_respond");
+    expect(names).toContain("google_calendar_free_busy");
     expect(names).toContain("google_drive_list");
     expect(names).toContain("google_drive_get");
     expect(names).toContain("google_drive_upload");
@@ -178,7 +180,7 @@ describe("server tool registration", () => {
     expect(names).toContain("google_forms_responses");
     expect(names).toContain("google_forms_create");
     expect(names).toContain("google_forms_add_question");
-    expect(names.length).toBe(96);
+    expect(names.length).toBe(97);
   });
 });
 
