@@ -127,6 +127,15 @@ export async function addVideoToPlaylist(
   return res.data;
 }
 
+export async function removeVideoFromPlaylist(
+  client: Auth.OAuth2Client,
+  { playlistItemId }: { playlistItemId: string },
+): Promise<{ deleted: boolean }> {
+  const yt = google.youtube({ version: "v3", auth: client });
+  await yt.playlistItems.delete({ id: playlistItemId });
+  return { deleted: true };
+}
+
 export async function listSubscriptions(
   client: Auth.OAuth2Client,
   { maxResults = 50 }: { maxResults?: number },
