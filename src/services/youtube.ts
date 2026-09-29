@@ -47,6 +47,45 @@ export async function getVideo(
   return res.data.items?.[0] ?? null;
 }
 
+export interface UpdateVideoArgs {
+  videoId: string;
+  title?: string;
+  description?: string;
+  tags?: string[];
+  privacyStatus?: "public" | "private" | "unlisted";
+}
+
+export async function updateVideo(
+  client: Auth.OAuth2Client,
+  { videoId, title, description, tags, privacyStatus }: UpdateVideoArgs,
+): Promise<youtube_v3.Schema$Video> {
+  const yt = google.youtube({ version: "v3", auth: client });
+  // videos.update replaces each requested part wholesale, so fetch the
+  // existing snippet/status and merge — otherwise fields like categoryId
+  // are dropped and the API rejects the request.
+  const existing = await yt.videos.list({
+    part: ["snippet", "status"],
+    id: [videoId],
+  });
+  const current = existing.data.items?.[0];
+  if (!current) throw new Error(`video not found: ${videoId}`);
+  const snippet = {
+    ...(current.snippet ?? {}),
+    ...(title !== undefined ? { title } : {}),
+    ...(description !== undefined ? { description } : {}),
+    ...(tags !== undefined ? { tags } : {}),
+  };
+  const status = {
+    ...(current.status ?? {}),
+    ...(privacyStatus !== undefined ? { privacyStatus } : {}),
+  };
+  const res = await yt.videos.update({
+    part: ["snippet", "status"],
+    requestBody: { id: videoId, snippet, status },
+  });
+  return res.data;
+}
+
 export async function getMyVideos(
   client: Auth.OAuth2Client,
   { maxResults = 25 }: { maxResults?: number },
