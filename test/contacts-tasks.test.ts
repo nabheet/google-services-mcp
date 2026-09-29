@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockConnections = { list: vi.fn(), create: vi.fn(), update: vi.fn(), get: vi.fn() };
 const mockPeople = { searchContacts: vi.fn() };
-const mockTasksLists = { list: vi.fn() };
+const mockTasksLists = { list: vi.fn(), insert: vi.fn(), patch: vi.fn(), delete: vi.fn() };
 const mockTaskItems = { list: vi.fn(), insert: vi.fn(), patch: vi.fn(), delete: vi.fn() };
 
 vi.mock("googleapis", () => ({
@@ -27,12 +27,16 @@ import {
   completeTask,
   createContact,
   createTask,
+  createTaskList,
   deleteTask,
+  deleteTaskList,
   listContacts,
   listTaskLists,
   listTasks,
   searchContacts,
   updateContact,
+  updateTask,
+  updateTaskList,
 } from "../src/services/contacts-tasks.js";
 
 const client = {} as never;
@@ -162,6 +166,20 @@ describe("listTasks", () => {
     expect(mockTaskItems.list).toHaveBeenCalledWith({ tasklist: "tl1" });
     expect(result[0]).toMatchObject({ id: "t1", title: "Buy milk" });
   });
+
+  it("passes due window filters to the API", async () => {
+    mockTaskItems.list.mockResolvedValue({ data: { items: [] } });
+    await listTasks(client, {
+      tasklistId: "tl1",
+      dueMin: "2026-08-01T00:00:00.000Z",
+      dueMax: "2026-08-31T23:59:59.000Z",
+    });
+    expect(mockTaskItems.list).toHaveBeenCalledWith({
+      tasklist: "tl1",
+      dueMin: "2026-08-01T00:00:00.000Z",
+      dueMax: "2026-08-31T23:59:59.000Z",
+    });
+  });
 });
 
 describe("createTask", () => {
@@ -173,6 +191,84 @@ describe("createTask", () => {
       requestBody: { title: "Pay rent" },
     });
     expect(result.id).toBe("t2");
+  });
+
+  it("creates a subtask under a parent task", async () => {
+    mockTaskItems.insert.mockResolvedValue({ data: { id: "t3", title: "Subtask", parent: "t2" } });
+    const result = await createTask(client, {
+      tasklistId: "tl1",
+      title: "Subtask",
+      parentTaskId: "t2",
+    });
+    expect(mockTaskItems.insert).toHaveBeenCalledWith({
+      tasklist: "tl1",
+      requestBody: { title: "Subtask", parent: "t2" },
+    });
+    expect(result.parent).toBe("t2");
+  });
+});
+
+describe("updateTask", () => {
+  it("patches title, notes, due, and status", async () => {
+    mockTaskItems.patch.mockResolvedValue({
+      data: {
+        id: "t1",
+        title: "Buy milk (2%), almond",
+        status: "needsAction",
+        due: "2026-08-12T00:00:00.000Z",
+      },
+    });
+    const result = await updateTask(client, {
+      tasklistId: "tl1",
+      taskId: "t1",
+      title: "Buy almond milk",
+      notes: "2% at corner store",
+      due: "2026-08-12T00:00:00.000Z",
+      status: "needsAction",
+    });
+    expect(mockTaskItems.patch).toHaveBeenCalledWith({
+      tasklist: "tl1",
+      task: "t1",
+      requestBody: {
+        title: "Buy almond milk",
+        notes: "2% at corner store",
+        due: "2026-08-12T00:00:00.000Z",
+        status: "needsAction",
+      },
+    });
+    expect(result.title).toBe("Buy milk (2%), almond");
+  });
+
+  it("throws when nothing to update", async () => {
+    await expect(updateTask(client, { tasklistId: "tl1", taskId: "t1" })).rejects.toThrow(
+      "Nothing to update",
+    );
+    expect(mockTaskItems.patch).not.toHaveBeenCalled();
+  });
+});
+
+describe("taskList CRUD", () => {
+  it("creates a task list", async () => {
+    mockTasksLists.insert.mockResolvedValue({ data: { id: "tl9", title: "Chores" } });
+    const result = await createTaskList(client, { title: "Chores" });
+    expect(mockTasksLists.insert).toHaveBeenCalledWith({ requestBody: { title: "Chores" } });
+    expect(result).toEqual({ id: "tl9", title: "Chores" });
+  });
+
+  it("renames a task list", async () => {
+    mockTasksLists.patch.mockResolvedValue({ data: { id: "tl9", title: "House chores" } });
+    const result = await updateTaskList(client, { tasklistId: "tl9", title: "House chores" });
+    expect(mockTasksLists.patch).toHaveBeenCalledWith({
+      tasklist: "tl9",
+      requestBody: { title: "House chores" },
+    });
+    expect(result.title).toBe("House chores");
+  });
+
+  it("deletes a task list", async () => {
+    mockTasksLists.delete.mockResolvedValue({ data: {} });
+    await deleteTaskList(client, { tasklistId: "tl9" });
+    expect(mockTasksLists.delete).toHaveBeenCalledWith({ tasklist: "tl9" });
   });
 });
 

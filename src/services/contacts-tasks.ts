@@ -27,6 +27,10 @@ export interface UpdateContactOptions {
 
 export interface ListTasksOptions {
   tasklistId?: string;
+  /** Only tasks due at or after this RFC3339 datetime. */
+  dueMin?: string;
+  /** Only tasks due at or before this RFC3339 datetime. */
+  dueMax?: string;
 }
 
 export interface CreateTaskOptions {
@@ -34,6 +38,30 @@ export interface CreateTaskOptions {
   title: string;
   notes?: string;
   due?: string;
+  /** Parent task ID for subtasks. */
+  parentTaskId?: string;
+}
+
+export interface UpdateTaskOptions {
+  tasklistId?: string;
+  taskId: string;
+  title?: string;
+  notes?: string;
+  due?: string;
+  status?: string;
+}
+
+export interface TaskListOptions {
+  tasklistId: string;
+}
+
+export interface CreateTaskListOptions {
+  title: string;
+}
+
+export interface UpdateTaskListOptions {
+  tasklistId: string;
+  title: string;
 }
 
 export interface TaskRefOptions {
@@ -54,6 +82,7 @@ export interface TaskSummary {
   status?: string;
   notes?: string;
   due?: string;
+  parent?: string;
 }
 
 /** List the signed-in user's contacts. */
@@ -174,17 +203,21 @@ export async function listTasks(
   opts: ListTasksOptions,
 ): Promise<TaskSummary[]> {
   const tasks = google.tasks({ version: "v1", auth: client });
-  const res = await tasks.tasks.list({ tasklist: opts.tasklistId ?? "@default" });
+  const params: Record<string, string> = { tasklist: opts.tasklistId ?? "@default" };
+  if (opts.dueMin !== undefined) params.dueMin = opts.dueMin;
+  if (opts.dueMax !== undefined) params.dueMax = opts.dueMax;
+  const res = await tasks.tasks.list(params);
   return (res.data.items ?? []).map((t) => ({
     id: t.id as string,
     title: t.title as string | undefined,
     status: t.status as string | undefined,
     notes: t.notes as string | undefined,
     due: t.due as string | undefined,
+    parent: t.parent as string | undefined,
   }));
 }
 
-/** Create a task. */
+/** Create a task (optionally a subtask via parentTaskId). */
 export async function createTask(
   client: Auth.OAuth2Client,
   opts: CreateTaskOptions,
@@ -193,12 +226,72 @@ export async function createTask(
   const requestBody: tasks_v1.Schema$Task = { title: opts.title };
   if (opts.notes) requestBody.notes = opts.notes;
   if (opts.due) requestBody.due = opts.due;
+  if (opts.parentTaskId) requestBody.parent = opts.parentTaskId;
   const res = await tasks.tasks.insert({ tasklist: opts.tasklistId ?? "@default", requestBody });
   return {
     id: res.data.id as string,
     title: res.data.title as string | undefined,
     status: res.data.status as string | undefined,
+    parent: res.data.parent as string | undefined,
   };
+}
+
+/** Update a task (title, notes, due, status). */
+export async function updateTask(
+  client: Auth.OAuth2Client,
+  opts: UpdateTaskOptions,
+): Promise<TaskSummary> {
+  const requestBody: tasks_v1.Schema$Task = {};
+  if (opts.title !== undefined) requestBody.title = opts.title;
+  if (opts.notes !== undefined) requestBody.notes = opts.notes;
+  if (opts.due !== undefined) requestBody.due = opts.due;
+  if (opts.status !== undefined) requestBody.status = opts.status;
+  if (Object.keys(requestBody).length === 0) {
+    throw new Error("Nothing to update: provide at least one of title, notes, due, or status.");
+  }
+  const tasks = google.tasks({ version: "v1", auth: client });
+  const res = await tasks.tasks.patch({
+    tasklist: opts.tasklistId ?? "@default",
+    task: opts.taskId,
+    requestBody,
+  });
+  return {
+    id: res.data.id as string,
+    title: res.data.title as string | undefined,
+    status: res.data.status as string | undefined,
+  };
+}
+
+/** Create a task list. */
+export async function createTaskList(
+  client: Auth.OAuth2Client,
+  opts: CreateTaskListOptions,
+): Promise<{ id: string; title?: string }> {
+  const tasks = google.tasks({ version: "v1", auth: client });
+  const res = await tasks.tasklists.insert({ requestBody: { title: opts.title } });
+  return { id: res.data.id as string, title: res.data.title as string | undefined };
+}
+
+/** Rename a task list. */
+export async function updateTaskList(
+  client: Auth.OAuth2Client,
+  opts: UpdateTaskListOptions,
+): Promise<{ id: string; title?: string }> {
+  const tasks = google.tasks({ version: "v1", auth: client });
+  const res = await tasks.tasklists.patch({
+    tasklist: opts.tasklistId,
+    requestBody: { title: opts.title },
+  });
+  return { id: res.data.id as string, title: res.data.title as string | undefined };
+}
+
+/** Delete a task list. */
+export async function deleteTaskList(
+  client: Auth.OAuth2Client,
+  opts: TaskListOptions,
+): Promise<void> {
+  const tasks = google.tasks({ version: "v1", auth: client });
+  await tasks.tasklists.delete({ tasklist: opts.tasklistId });
 }
 
 /** Mark a task as completed. */

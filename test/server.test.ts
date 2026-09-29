@@ -144,8 +144,12 @@ describe("server tool registration", () => {
     expect(names).toContain("google_tasks_list_lists");
     expect(names).toContain("google_tasks_list");
     expect(names).toContain("google_tasks_create");
+    expect(names).toContain("google_tasks_update");
     expect(names).toContain("google_tasks_complete");
     expect(names).toContain("google_tasks_delete");
+    expect(names).toContain("google_tasks_create_list");
+    expect(names).toContain("google_tasks_update_list");
+    expect(names).toContain("google_tasks_delete_list");
     expect(names).toContain("google_sheets_get");
     expect(names).toContain("google_sheets_read");
     expect(names).toContain("google_sheets_write");
@@ -180,7 +184,7 @@ describe("server tool registration", () => {
     expect(names).toContain("google_forms_responses");
     expect(names).toContain("google_forms_create");
     expect(names).toContain("google_forms_add_question");
-    expect(names.length).toBe(97);
+    expect(names.length).toBe(101);
   });
 });
 
