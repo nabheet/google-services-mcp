@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockConnections = { list: vi.fn(), create: vi.fn(), update: vi.fn(), get: vi.fn() };
-const mockPeople = { searchContacts: vi.fn() };
+const mockPeople = {
+  searchContacts: vi.fn(),
+  deleteContact: vi.fn(),
+  updateContactPhoto: vi.fn(),
+};
 const mockTasksLists = { list: vi.fn(), insert: vi.fn(), patch: vi.fn(), delete: vi.fn() };
 const mockTaskItems = { list: vi.fn(), insert: vi.fn(), patch: vi.fn(), delete: vi.fn() };
 
@@ -13,6 +17,8 @@ vi.mock("googleapis", () => ({
         createContact: mockConnections.create,
         updateContact: mockConnections.update,
         get: mockConnections.get,
+        deleteContact: mockPeople.deleteContact,
+        updateContactPhoto: mockPeople.updateContactPhoto,
       },
       otherContacts: { search: mockPeople.searchContacts },
     })),
@@ -28,8 +34,10 @@ import {
   createContact,
   createTask,
   createTaskList,
+  deleteContact,
   deleteTask,
   deleteTaskList,
+  getContact,
   listContacts,
   listTaskLists,
   listTasks,
@@ -141,6 +149,93 @@ describe("updateContact", () => {
       resourceName: "people/3",
       updatePersonFields: "phoneNumbers",
       requestBody: { etag: "etag-1", phoneNumbers: [{ value: "+1-555-0100" }] },
+    });
+  });
+
+  it("updates address and organization via rich fields", async () => {
+    mockConnections.get?.mockResolvedValue({ data: { resourceName: "people/3", etag: "abc" } });
+    mockConnections.update.mockResolvedValue({ data: { resourceName: "people/3" } });
+    await updateContact(client, {
+      resourceName: "people/3",
+      address: "1 Main St, Springfield",
+      organization: "ACME Corp",
+    });
+    expect(mockConnections.update).toHaveBeenCalledWith({
+      resourceName: "people/3",
+      updatePersonFields: "addresses,organizations",
+      requestBody: {
+        etag: "abc",
+        addresses: [{ formattedValue: "1 Main St, Springfield" }],
+        organizations: [{ name: "ACME Corp" }],
+      },
+    });
+  });
+
+  it("updates the photo via updateContactPhoto when photoBytes provided", async () => {
+    mockConnections.get?.mockResolvedValue({ data: { resourceName: "people/3", etag: "abc" } });
+    mockConnections.update.mockResolvedValue({ data: { resourceName: "people/3" } });
+    mockPeople.updateContactPhoto.mockResolvedValue({ data: { resourceName: "people/3" } });
+    await updateContact(client, {
+      resourceName: "people/3",
+      photoBytes: "aGVsbG8=",
+      etag: "abc",
+    });
+    expect(mockConnections.get).not.toHaveBeenCalled();
+    expect(mockPeople.updateContactPhoto).toHaveBeenCalledWith({
+      resourceName: "people/3",
+      requestBody: { photoBytes: "aGVsbG8=" },
+    });
+  });
+});
+
+describe("getContact", () => {
+  it("gets a contact by resourceName", async () => {
+    mockConnections.get.mockResolvedValue({
+      data: {
+        resourceName: "people/3",
+        names: [{ displayName: "Carol Renamed" }],
+        emailAddresses: [{ value: "__VG_EMAIL_2a3a9bd93ab9__" }],
+        phoneNumbers: [{ value: "+1-555-0100" }],
+        addresses: [{ formattedValue: "1 Main St" }],
+        organizations: [{ name: "ACME Corp" }],
+      },
+    });
+    const result = await getContact(client, { resourceName: "people/3" });
+    expect(mockConnections.get).toHaveBeenCalledWith({
+      resourceName: "people/3",
+      personFields: "names,emailAddresses,phoneNumbers,addresses,organizations",
+    });
+    expect(result.resourceName).toBe("people/3");
+    expect(result.names?.[0]?.displayName).toBe("Carol Renamed");
+  });
+});
+
+describe("deleteContact", () => {
+  it("deletes a contact by resourceName", async () => {
+    mockPeople.deleteContact.mockResolvedValue({ data: {} });
+    const result = await deleteContact(client, { resourceName: "people/3" });
+    expect(mockPeople.deleteContact).toHaveBeenCalledWith({ resourceName: "people/3" });
+    expect(result).toEqual({ deleted: true, resourceName: "people/3" });
+  });
+});
+
+describe("createContact rich fields", () => {
+  it("includes address and organization, then sets photo", async () => {
+    mockConnections.create.mockResolvedValue({ data: { resourceName: "people/9" } });
+    mockPeople.updateContactPhoto.mockResolvedValue({ data: { resourceName: "people/9" } });
+    await createContact(client, {
+      name: "Dan Example",
+      email: "__VG_EMAIL_2a3a9bd93ab9__",
+      address: "2 Oak Ave",
+      organization: "Globex",
+      photoBytes: "aGVsbG8=",
+    });
+    const call = mockConnections.create.mock.calls[0][0];
+    expect(call.requestBody.addresses[0].formattedValue).toBe("2 Oak Ave");
+    expect(call.requestBody.organizations[0].name).toBe("Globex");
+    expect(mockPeople.updateContactPhoto).toHaveBeenCalledWith({
+      resourceName: "people/9",
+      requestBody: { photoBytes: "aGVsbG8=" },
     });
   });
 });
