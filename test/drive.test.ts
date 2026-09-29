@@ -11,11 +11,14 @@ const mockFiles = {
 };
 const mockPermissions = { create: vi.fn(), list: vi.fn(), delete: vi.fn() };
 const mockFs = vi.hoisted(() => ({
-  readFile: vi.fn(),
   writeFile: vi.fn(),
+}));
+const mockNodeFs = vi.hoisted(() => ({
+  createReadStream: vi.fn(),
 }));
 
 vi.mock("node:fs/promises", () => mockFs);
+vi.mock("node:fs", () => mockNodeFs);
 
 vi.mock("googleapis", () => ({
   google: {
@@ -113,16 +116,16 @@ describe("uploadDriveFile", () => {
 
   it("uploads a local file by path (binary-safe)", async () => {
     mockFiles.create.mockResolvedValue({ data: { id: "f-bin", name: "img.png" } });
-    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    mockFs.readFile.mockResolvedValue(bytes);
+    const stream = { pipe: vi.fn() };
+    mockNodeFs.createReadStream.mockReturnValue(stream);
     const result = await uploadDriveFile(client, {
       name: "img.png",
       mimeType: "image/png",
       path: "/tmp/img.png",
     });
-    expect(mockFs.readFile).toHaveBeenCalledWith("/tmp/img.png");
+    expect(mockNodeFs.createReadStream).toHaveBeenCalledWith("/tmp/img.png");
     const call = mockFiles.create.mock.calls[0][0];
-    expect(call.media).toEqual({ mimeType: "image/png", body: bytes });
+    expect(call.media).toEqual({ mimeType: "image/png", body: stream });
     expect(result.id).toBe("f-bin");
   });
 });
@@ -139,18 +142,18 @@ describe("updateDriveFile", () => {
 
   it("replaces content from a local file path (binary-safe)", async () => {
     mockFiles.update.mockResolvedValue({ data: { id: "f1", name: "data.bin" } });
-    const bytes = Buffer.from([0x01, 0x02, 0x03, 0x04]);
-    mockFs.readFile.mockResolvedValue(bytes);
+    const stream = { pipe: vi.fn() };
+    mockNodeFs.createReadStream.mockReturnValue(stream);
     const result = await updateDriveFile(client, {
       fileId: "f1",
       mimeType: "application/octet-stream",
       path: "/tmp/data.bin",
     });
-    expect(mockFs.readFile).toHaveBeenCalledWith("/tmp/data.bin");
+    expect(mockNodeFs.createReadStream).toHaveBeenCalledWith("/tmp/data.bin");
     expect(mockFiles.update).toHaveBeenCalledWith(
       expect.objectContaining({
         fileId: "f1",
-        media: { mimeType: "application/octet-stream", body: bytes },
+        media: { mimeType: "application/octet-stream", body: stream },
       }),
     );
     expect(result.name).toBe("data.bin");

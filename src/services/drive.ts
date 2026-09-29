@@ -1,4 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import type { Auth, drive_v3 } from "googleapis";
 import { google } from "googleapis";
 
@@ -152,7 +153,7 @@ export async function uploadDriveFile(
   if (opts.parentFolderId) requestBody.parents = [opts.parentFolderId];
   const params: drive_v3.Params$Resource$Files$Create = { requestBody };
   if (opts.path !== undefined) {
-    params.media = { mimeType: opts.mimeType, body: await readFile(opts.path) };
+    params.media = { mimeType: opts.mimeType, body: createReadStream(opts.path) };
   } else if (opts.content !== undefined) {
     params.media = { mimeType: opts.mimeType, body: opts.content };
   }
@@ -173,7 +174,7 @@ export async function updateDriveFile(
   if (opts.path !== undefined) {
     params.media = {
       mimeType: opts.mimeType ?? "application/octet-stream",
-      body: await readFile(opts.path),
+      body: createReadStream(opts.path),
     };
   } else if (opts.content !== undefined) {
     params.media = { mimeType: opts.mimeType ?? "text/plain", body: opts.content };
