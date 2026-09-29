@@ -13,11 +13,11 @@ import {
 const ts = Date.now();
 const results = [];
 const step = (msg) => {
-  console.log("• " + msg);
+  console.log(`• ${msg}`);
   results.push(msg);
 };
 const fail = (msg) => {
-  console.error("✗ FAIL: " + msg);
+  console.error(`✗ FAIL: ${msg}`);
   process.exitCode = 1;
 };
 
