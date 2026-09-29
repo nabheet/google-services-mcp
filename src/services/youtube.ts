@@ -47,6 +47,39 @@ export async function getVideo(
   return res.data.items?.[0] ?? null;
 }
 
+export interface UpdateVideoArgs {
+  videoId: string;
+  title?: string;
+  description?: string;
+  tags?: string[];
+  privacyStatus?: "public" | "private" | "unlisted";
+}
+
+export async function updateVideo(
+  client: Auth.OAuth2Client,
+  { videoId, title, description, tags, privacyStatus }: UpdateVideoArgs,
+): Promise<youtube_v3.Schema$Video> {
+  const yt = google.youtube({ version: "v3", auth: client });
+  const part: string[] = [];
+  const snippet: Record<string, unknown> = {};
+  if (title !== undefined) snippet.title = title;
+  if (description !== undefined) snippet.description = description;
+  if (tags !== undefined) snippet.tags = tags;
+  if (Object.keys(snippet).length > 0) part.push("snippet");
+  const status: Record<string, unknown> = {};
+  if (privacyStatus !== undefined) status.privacyStatus = privacyStatus;
+  if (Object.keys(status).length > 0) part.push("status");
+  const res = await yt.videos.update({
+    part,
+    requestBody: {
+      id: videoId,
+      ...(Object.keys(snippet).length > 0 ? { snippet } : {}),
+      ...(Object.keys(status).length > 0 ? { status } : {}),
+    },
+  });
+  return res.data;
+}
+
 export async function getMyVideos(
   client: Auth.OAuth2Client,
   { maxResults = 25 }: { maxResults?: number },
