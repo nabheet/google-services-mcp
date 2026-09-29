@@ -190,3 +190,85 @@ export async function listSubscriptions(
     channelId: item.snippet?.resourceId?.channelId ?? undefined,
   }));
 }
+
+export interface ListCommentsArgs {
+  videoId: string;
+  maxResults?: number;
+}
+
+export interface CommentSummary {
+  id: string;
+  videoId: string;
+  text: string;
+  author: string;
+  publishedAt: string;
+}
+
+export async function listComments(
+  client: Auth.OAuth2Client,
+  { videoId, maxResults = 20 }: ListCommentsArgs,
+): Promise<{ items: CommentSummary[]; nextPageToken: string | null }> {
+  const yt = google.youtube({ version: "v3", auth: client });
+  const res = await yt.commentThreads.list({
+    part: ["snippet"],
+    videoId,
+    maxResults,
+  });
+  return {
+    items: (res.data.items ?? []).map((thread) => {
+      const comment = thread.snippet?.topLevelComment?.snippet;
+      return {
+        id: thread.id ?? "",
+        videoId: thread.snippet?.videoId ?? "",
+        text: comment?.textDisplay ?? "",
+        author: comment?.authorDisplayName ?? "",
+        publishedAt: comment?.publishedAt ?? "",
+      };
+    }),
+    nextPageToken: res.data.nextPageToken ?? null,
+  };
+}
+
+export interface InsertCommentArgs {
+  videoId: string;
+  text: string;
+}
+
+export async function insertComment(
+  client: Auth.OAuth2Client,
+  { videoId, text }: InsertCommentArgs,
+): Promise<{ id: string }> {
+  const yt = google.youtube({ version: "v3", auth: client });
+  const res = await yt.comments.insert({
+    part: ["snippet"],
+    requestBody: { snippet: { videoId, textOriginal: text } },
+  });
+  return { id: res.data.id ?? "" };
+}
+
+export interface SetCommentModerationArgs {
+  commentId: string;
+  moderationStatus: "heldForReview" | "published" | "rejected";
+}
+
+export async function setCommentModeration(
+  client: Auth.OAuth2Client,
+  { commentId, moderationStatus }: SetCommentModerationArgs,
+): Promise<{ commentId: string; moderationStatus: string }> {
+  const yt = google.youtube({ version: "v3", auth: client });
+  await yt.comments.setModerationStatus({ id: [commentId], moderationStatus });
+  return { commentId, moderationStatus };
+}
+
+export interface MarkCommentAsSpamArgs {
+  commentId: string;
+}
+
+export async function markCommentAsSpam(
+  client: Auth.OAuth2Client,
+  { commentId }: MarkCommentAsSpamArgs,
+): Promise<{ commentId: string; markedAsSpam: boolean }> {
+  const yt = google.youtube({ version: "v3", auth: client });
+  await yt.comments.markAsSpam({ id: [commentId] });
+  return { commentId, markedAsSpam: true };
+}

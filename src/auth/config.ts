@@ -36,6 +36,9 @@ export const DEFAULT_SCOPES: string[] = [
   "https://www.googleapis.com/auth/presentations",
   // YouTube: read/write the user's channel data and playlists
   "https://www.googleapis.com/auth/youtube",
+  // YouTube comments: commentThreads.list, comments.insert and moderation
+  // require force-ssl (the plain youtube scope does not cover comments)
+  "https://www.googleapis.com/auth/youtube.force-ssl",
   // Forms: read/write forms and responses
   "https://www.googleapis.com/auth/forms",
   // Identity: lets fetchUserInfo return the signed-in email for account display

@@ -82,6 +82,12 @@ describe("DEFAULT_SCOPES", () => {
     expect(all).toContain("/auth/contacts");
     expect(all).toContain("/auth/tasks");
   });
+
+  it("covers YouTube comments via force-ssl scope", () => {
+    const all = DEFAULT_SCOPES.join(" ");
+    expect(all).toContain("/auth/youtube");
+    expect(all).toContain("/auth/youtube.force-ssl");
+  });
 });
 
 describe("loadConfig / saveConfig", () => {

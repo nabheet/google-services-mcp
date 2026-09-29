@@ -89,10 +89,14 @@ import {
   deletePlaylist,
   getMyVideos,
   getVideo,
+  insertComment,
+  listComments,
   listPlaylists,
   listSubscriptions,
+  markCommentAsSpam,
   removeVideoFromPlaylist,
   searchVideos,
+  setCommentModeration,
   updateVideo,
 } from "../services/youtube.js";
 import { err, ok } from "../util/result.js";
@@ -1596,6 +1600,69 @@ export function registerTools(server: McpServer): void {
     },
     async ({ maxResults, account }) =>
       withClient(account, (client) => listSubscriptions(client, { maxResults })),
+  );
+
+  server.registerTool(
+    "google_youtube_list_comments",
+    {
+      title: "List YouTube video comments",
+      description: "List comment threads for a video, most recent first.",
+      inputSchema: {
+        videoId: z.string().describe("YouTube video ID."),
+        maxResults: z.number().min(1).max(100).optional().describe("Max results (default 20)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ videoId, maxResults, account }) =>
+      withClient(account, (client) => listComments(client, { videoId, maxResults })),
+  );
+
+  server.registerTool(
+    "google_youtube_insert_comment",
+    {
+      title: "Post a YouTube comment",
+      description: "Post a top-level comment on a video.",
+      inputSchema: {
+        videoId: z.string().describe("YouTube video ID."),
+        text: z.string().describe("Comment text."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ videoId, text, account }) =>
+      withClient(account, (client) => insertComment(client, { videoId, text })),
+  );
+
+  server.registerTool(
+    "google_youtube_set_comment_moderation",
+    {
+      title: "Set YouTube comment moderation status",
+      description: "Hold, reject, or flag a comment as likely spam.",
+      inputSchema: {
+        commentId: z.string().describe("Comment ID to moderate."),
+        moderationStatus: z
+          .enum(["heldForReview", "published", "rejected"])
+          .describe("Moderation status to apply."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ commentId, moderationStatus, account }) =>
+      withClient(account, (client) =>
+        setCommentModeration(client, { commentId, moderationStatus }),
+      ),
+  );
+
+  server.registerTool(
+    "google_youtube_mark_comment_spam",
+    {
+      title: "Mark YouTube comment as spam",
+      description: "Mark a comment as spam.",
+      inputSchema: {
+        commentId: z.string().describe("Comment ID to mark as spam."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ commentId, account }) =>
+      withClient(account, (client) => markCommentAsSpam(client, { commentId })),
   );
 
   // ---- Forms --------------------------------------------------------------
