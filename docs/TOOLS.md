@@ -293,6 +293,19 @@ optional (`summary`, `description`, `location`, `start`, `end`, `attendees`,
 
 Delete an event by ID. Args: `eventId` (required), `calendarId` (optional).
 
+### `google_calendar_respond`
+
+Accept, decline, or mark tentative an event invite by setting the attendee
+responseStatus.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `eventId` | string | required. |
+| `responseStatus` | `accepted` / `declined` / `tentative` | required. |
+| `email` | string | optional. Attendee email to respond as (defaults to signed-in account). |
+| `sendUpdates` | `all` / `externalOnly` / `none` | optional. Who to notify. |
+| `calendarId` | string | optional. Default primary. |
+
 ## Drive
 
 ### `google_drive_list`
