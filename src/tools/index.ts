@@ -21,8 +21,10 @@ import {
   createContact,
   createTask,
   createTaskList,
+  deleteContact,
   deleteTask,
   deleteTaskList,
+  getContact,
   listContacts,
   listTaskLists,
   listTasks,
@@ -1353,16 +1355,22 @@ export function registerTools(server: McpServer): void {
     "google_contacts_create",
     {
       title: "Create contact",
-      description: "Create a new contact with a name and optional email/phone.",
+      description:
+        "Create a new contact with a name and optional email/phone/address/organization/photo.",
       inputSchema: {
         name: z.string().describe("Contact full name."),
         email: z.string().email().optional(),
         phone: z.string().optional(),
+        address: z.string().optional().describe("Freeform postal address."),
+        organization: z.string().optional(),
+        photoBytes: z.string().optional().describe("Base64-encoded photo bytes (JPEG/PNG)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ name, email, phone, account }) =>
-      withClient(account, (client) => createContact(client, { name, email, phone })),
+    async ({ name, email, phone, address, organization, photoBytes, account }) =>
+      withClient(account, (client) =>
+        createContact(client, { name, email, phone, address, organization, photoBytes }),
+      ),
   );
 
   server.registerTool(
@@ -1370,7 +1378,7 @@ export function registerTools(server: McpServer): void {
     {
       title: "Update contact",
       description:
-        "Update an existing contact's name, email, or phone (partial update by resourceName).",
+        "Update an existing contact's name, email, phone, address, organization, or photo (partial update by resourceName).",
       inputSchema: {
         resourceName: z
           .string()
@@ -1378,11 +1386,57 @@ export function registerTools(server: McpServer): void {
         name: z.string().optional().describe("New full name."),
         email: z.string().email().optional().describe("New email."),
         phone: z.string().optional().describe("New phone number."),
+        address: z.string().optional().describe("Freeform postal address."),
+        organization: z.string().optional(),
+        photoBytes: z.string().optional().describe("Base64-encoded photo bytes (JPEG/PNG)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ resourceName, name, email, phone, account }) =>
-      withClient(account, (client) => updateContact(client, { resourceName, name, email, phone })),
+    async ({ resourceName, name, email, phone, address, organization, photoBytes, account }) =>
+      withClient(account, (client) =>
+        updateContact(client, {
+          resourceName,
+          name,
+          email,
+          phone,
+          address,
+          organization,
+          photoBytes,
+        }),
+      ),
+  );
+
+  server.registerTool(
+    "google_contacts_get",
+    {
+      title: "Get contact",
+      description:
+        "Get a contact by resourceName with rich fields (name, email, phone, address, org).",
+      inputSchema: {
+        resourceName: z
+          .string()
+          .describe("Contact resource name, e.g. people/123 (from list/search)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ resourceName, account }) =>
+      withClient(account, (client) => getContact(client, { resourceName })),
+  );
+
+  server.registerTool(
+    "google_contacts_delete",
+    {
+      title: "Delete contact",
+      description: "Delete a contact by resourceName.",
+      inputSchema: {
+        resourceName: z
+          .string()
+          .describe("Contact resource name, e.g. people/123 (from list/search)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ resourceName, account }) =>
+      withClient(account, (client) => deleteContact(client, { resourceName })),
   );
 
   // ---- Tasks --------------------------------------------------------------
