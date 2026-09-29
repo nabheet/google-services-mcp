@@ -7,21 +7,36 @@ const mockEvents = {
   update: vi.fn(),
   delete: vi.fn(),
 };
-const mockCalendarList = { list: vi.fn() };
+const mockCalendarList = {
+  list: vi.fn(),
+  patch: vi.fn(),
+};
+const mockCalendars = {
+  insert: vi.fn(),
+  patch: vi.fn(),
+  delete: vi.fn(),
+};
 
 vi.mock("googleapis", () => ({
   google: {
-    calendar: vi.fn(() => ({ events: mockEvents, calendarList: mockCalendarList })),
+    calendar: vi.fn(() => ({
+      events: mockEvents,
+      calendarList: mockCalendarList,
+      calendars: mockCalendars,
+    })),
   },
 }));
 
 import {
+  createCalendar,
   createEvent,
   createMeetLink,
+  deleteCalendar,
   deleteEvent,
   getEvent,
   listCalendars,
   listEvents,
+  updateCalendar,
   updateEvent,
 } from "../src/services/calendar.js";
 
@@ -45,6 +60,97 @@ describe("listCalendars", () => {
     expect(mockCalendarList.list).toHaveBeenCalled();
     expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({ id: "primary", summary: "My Calendar", isPrimary: true });
+  });
+});
+
+describe("createCalendar", () => {
+  it("creates a secondary calendar and returns its metadata", async () => {
+    mockCalendars.insert.mockResolvedValue({
+      data: {
+        id: "cal123",
+        summary: "Family",
+        timeZone: "America/Los_Angeles",
+        description: "Shared",
+      },
+    });
+    const result = await createCalendar(client, {
+      summary: "Family",
+      timeZone: "America/Los_Angeles",
+      description: "Shared",
+    });
+    expect(mockCalendars.insert).toHaveBeenCalledWith({
+      requestBody: {
+        summary: "Family",
+        timeZone: "America/Los_Angeles",
+        description: "Shared",
+      },
+    });
+    expect(result).toMatchObject({ id: "cal123", summary: "Family" });
+  });
+
+  it("omits undefined optional fields", async () => {
+    mockCalendars.insert.mockResolvedValue({ data: { id: "cal456", summary: "Minimal" } });
+    await createCalendar(client, { summary: "Minimal" });
+    expect(mockCalendars.insert).toHaveBeenCalledWith({
+      requestBody: { summary: "Minimal" },
+    });
+  });
+});
+
+describe("updateCalendar", () => {
+  it("patches summary, colorId, timeZone, and description", async () => {
+    mockCalendars.patch.mockResolvedValue({
+      data: { id: "cal123", summary: "Renamed", timeZone: "UTC", description: "New desc" },
+    });
+    mockCalendarList.patch.mockResolvedValue({ data: { id: "cal123", colorId: "7" } });
+    const result = await updateCalendar(client, {
+      calendarId: "cal123",
+      summary: "Renamed",
+      colorId: "7",
+      timeZone: "UTC",
+      description: "New desc",
+    });
+    expect(mockCalendars.patch).toHaveBeenCalledWith({
+      calendarId: "cal123",
+      requestBody: {
+        summary: "Renamed",
+        timeZone: "UTC",
+        description: "New desc",
+      },
+    });
+    expect(mockCalendarList.patch).toHaveBeenCalledWith({
+      calendarId: "cal123",
+      requestBody: { colorId: "7" },
+    });
+    expect(result).toMatchObject({ id: "cal123", summary: "Renamed" });
+  });
+
+  it("only sends fields that are provided (calendar-level)", async () => {
+    mockCalendars.patch.mockResolvedValue({ data: { id: "cal123", summary: "Renamed" } });
+    await updateCalendar(client, { calendarId: "cal123", summary: "Renamed" });
+    expect(mockCalendars.patch).toHaveBeenCalledWith({
+      calendarId: "cal123",
+      requestBody: { summary: "Renamed" },
+    });
+    expect(mockCalendarList.patch).not.toHaveBeenCalled();
+  });
+
+  it("only calls calendarList.patch when only colorId is provided", async () => {
+    mockCalendarList.patch.mockResolvedValue({ data: { id: "cal123", colorId: "9" } });
+    await updateCalendar(client, { calendarId: "cal123", colorId: "9" });
+    expect(mockCalendars.patch).not.toHaveBeenCalled();
+    expect(mockCalendarList.patch).toHaveBeenCalledWith({
+      calendarId: "cal123",
+      requestBody: { colorId: "9" },
+    });
+  });
+});
+
+describe("deleteCalendar", () => {
+  it("deletes the calendar by id", async () => {
+    mockCalendars.delete.mockResolvedValue({ data: {} });
+    await deleteCalendar(client, { calendarId: "cal123" });
+    expect(mockCalendars.delete).toHaveBeenCalledWith({ calendarId: "cal123" });
   });
 });
 
