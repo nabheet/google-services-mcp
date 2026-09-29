@@ -24,6 +24,7 @@ import {
   listTaskLists,
   listTasks,
   searchContacts,
+  updateContact,
 } from "../services/contacts-tasks.js";
 import {
   batchUpdateDocument,
@@ -1150,6 +1151,26 @@ export function registerTools(server: McpServer): void {
     },
     async ({ name, email, phone, account }) =>
       withClient(account, (client) => createContact(client, { name, email, phone })),
+  );
+
+  server.registerTool(
+    "google_contacts_update",
+    {
+      title: "Update contact",
+      description:
+        "Update an existing contact's name, email, or phone (partial update by resourceName).",
+      inputSchema: {
+        resourceName: z
+          .string()
+          .describe("Contact resource name, e.g. people/123 (from list/search)."),
+        name: z.string().optional().describe("New full name."),
+        email: z.string().email().optional().describe("New email."),
+        phone: z.string().optional().describe("New phone number."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ resourceName, name, email, phone, account }) =>
+      withClient(account, (client) => updateContact(client, { resourceName, name, email, phone })),
   );
 
   // ---- Tasks --------------------------------------------------------------
