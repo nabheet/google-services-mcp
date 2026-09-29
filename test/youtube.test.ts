@@ -6,6 +6,8 @@ const mockYouTube = {
   playlists: { list: vi.fn(), insert: vi.fn(), delete: vi.fn() },
   playlistItems: { list: vi.fn(), insert: vi.fn(), delete: vi.fn() },
   subscriptions: { list: vi.fn() },
+  commentThreads: { list: vi.fn() },
+  comments: { insert: vi.fn(), setModerationStatus: vi.fn(), markAsSpam: vi.fn() },
 };
 
 vi.mock("googleapis", () => ({
@@ -22,10 +24,14 @@ import {
   deletePlaylist,
   getMyVideos,
   getVideo,
+  insertComment,
+  listComments,
   listPlaylists,
   listSubscriptions,
+  markCommentAsSpam,
   removeVideoFromPlaylist,
   searchVideos,
+  setCommentModeration,
   updateVideo,
 } from "../src/services/youtube.js";
 
@@ -276,5 +282,88 @@ describe("youtube service", () => {
   it("propagates API errors", async () => {
     mockYouTube.search.list.mockRejectedValue(new Error("quota exceeded"));
     await expect(searchVideos(client, { query: "x" })).rejects.toThrow("quota exceeded");
+  });
+
+  it("listComments lists comment threads for a video", async () => {
+    mockYouTube.commentThreads.list.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "ct1",
+            snippet: {
+              videoId: "v1",
+              topLevelComment: {
+                snippet: {
+                  textDisplay: "Nice video!",
+                  authorDisplayName: "Alice",
+                  publishedAt: "2026-01-01T00:00:00Z",
+                },
+              },
+            },
+          },
+        ],
+        nextPageToken: "abc",
+      },
+    });
+    const result = await listComments(client, { videoId: "v1", maxResults: 25 });
+    expect(result).toEqual({
+      items: [
+        {
+          id: "ct1",
+          videoId: "v1",
+          text: "Nice video!",
+          author: "Alice",
+          publishedAt: "2026-01-01T00:00:00Z",
+        },
+      ],
+      nextPageToken: "abc",
+    });
+    expect(mockYouTube.commentThreads.list).toHaveBeenCalledWith({
+      part: ["snippet"],
+      videoId: "v1",
+      maxResults: 25,
+    });
+  });
+
+  it("listComments defaults maxResults to 20", async () => {
+    mockYouTube.commentThreads.list.mockResolvedValue({ data: { items: [] } });
+    await listComments(client, { videoId: "v1" });
+    expect(mockYouTube.commentThreads.list).toHaveBeenCalledWith({
+      part: ["snippet"],
+      videoId: "v1",
+      maxResults: 20,
+    });
+  });
+
+  it("insertComment posts a top-level comment", async () => {
+    mockYouTube.comments.insert.mockResolvedValue({ data: { id: "c1" } });
+    const result = await insertComment(client, { videoId: "v1", text: "Great content" });
+    expect(result.id).toBe("c1");
+    expect(mockYouTube.comments.insert).toHaveBeenCalledWith({
+      part: ["snippet"],
+      requestBody: {
+        snippet: { videoId: "v1", textOriginal: "Great content" },
+      },
+    });
+  });
+
+  it("setCommentModeration sets moderation status", async () => {
+    mockYouTube.comments.setModerationStatus.mockResolvedValue({ data: {} });
+    const result = await setCommentModeration(client, {
+      commentId: "c1",
+      moderationStatus: "heldForReview",
+    });
+    expect(result).toEqual({ commentId: "c1", moderationStatus: "heldForReview" });
+    expect(mockYouTube.comments.setModerationStatus).toHaveBeenCalledWith({
+      id: ["c1"],
+      moderationStatus: "heldForReview",
+    });
+  });
+
+  it("markCommentAsSpam flags a comment", async () => {
+    mockYouTube.comments.markAsSpam.mockResolvedValue({ data: {} });
+    const result = await markCommentAsSpam(client, { commentId: "c1" });
+    expect(result).toEqual({ commentId: "c1", markedAsSpam: true });
+    expect(mockYouTube.comments.markAsSpam).toHaveBeenCalledWith({ id: ["c1"] });
   });
 });
