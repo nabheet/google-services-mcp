@@ -5,6 +5,7 @@ const mockEvents = {
   insert: vi.fn(),
   get: vi.fn(),
   update: vi.fn(),
+  patch: vi.fn(),
   delete: vi.fn(),
 };
 const mockCalendarList = {
@@ -36,6 +37,7 @@ import {
   getEvent,
   listCalendars,
   listEvents,
+  respondToEvent,
   updateCalendar,
   updateEvent,
 } from "../src/services/calendar.js";
@@ -300,5 +302,69 @@ describe("createMeetLink", () => {
       },
     });
     expect(result.hangoutLink).toContain("meet.google.com");
+  });
+});
+
+describe("respondToEvent", () => {
+  it("accepts an invite by patching the signed-in attendee responseStatus", async () => {
+    mockEvents.get.mockResolvedValue({
+      data: {
+        id: "e1",
+        attendees: [
+          { email: "me@example.com", responseStatus: "needsAction" },
+          { email: "other@example.com", responseStatus: "accepted" },
+        ],
+      },
+    });
+    mockEvents.patch.mockResolvedValue({
+      data: {
+        id: "e1",
+        attendees: [
+          { email: "me@example.com", responseStatus: "accepted" },
+          { email: "other@example.com", responseStatus: "accepted" },
+        ],
+      },
+    });
+    const result = await respondToEvent(client, {
+      calendarId: "primary",
+      eventId: "e1",
+      email: "me@example.com",
+      responseStatus: "accepted",
+      sendUpdates: "all",
+    });
+    expect(mockEvents.get).toHaveBeenCalledWith({ calendarId: "primary", eventId: "e1" });
+    expect(mockEvents.patch).toHaveBeenCalledWith({
+      calendarId: "primary",
+      eventId: "e1",
+      requestBody: {
+        attendees: [
+          { email: "me@example.com", responseStatus: "accepted" },
+          { email: "other@example.com", responseStatus: "accepted" },
+        ],
+      },
+      sendUpdates: "all",
+    });
+    expect(result.attendees?.find((a) => a.email === "me@example.com")?.responseStatus).toBe(
+      "accepted",
+    );
+  });
+
+  it("declines without sendUpdates when omitted", async () => {
+    mockEvents.get.mockResolvedValue({
+      data: { id: "e1", attendees: [{ email: "me@example.com", responseStatus: "needsAction" }] },
+    });
+    mockEvents.patch.mockResolvedValue({
+      data: { id: "e1", attendees: [{ email: "me@example.com", responseStatus: "declined" }] },
+    });
+    await respondToEvent(client, {
+      eventId: "e1",
+      email: "me@example.com",
+      responseStatus: "declined",
+    });
+    expect(mockEvents.patch).toHaveBeenCalledWith({
+      calendarId: "primary",
+      eventId: "e1",
+      requestBody: { attendees: [{ email: "me@example.com", responseStatus: "declined" }] },
+    });
   });
 });
