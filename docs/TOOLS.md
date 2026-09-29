@@ -181,6 +181,65 @@ Delete a Gmail label.
 | --- | --- | --- |
 | `id` | string | required. Label ID. |
 
+### `google_gmail_labels_update`
+
+Update a Gmail label (partial).
+
+| arg | type | notes |
+| --- | --- | --- |
+| `id` | string | required. Label ID. |
+| `name` | string | optional. New label name. |
+| `messageListVisibility` | string | optional. e.g. `show` or `hide`. |
+| `labelListVisibility` | string | optional. e.g. `labelShow` or `labelHide`. |
+
+### `google_gmail_vacation_get`
+
+Get the Gmail vacation (out-of-office) responder settings. No args beyond `account`.
+
+### `google_gmail_vacation_update`
+
+Update the vacation responder.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `enableAutoReply` | boolean | optional. Turn auto-reply on/off. |
+| `responseSubject` | string | optional. |
+| `responseBodyPlainText` | string | optional. |
+| `responseBodyHtml` | string | optional. |
+| `startTime` | string | optional. ms epoch string. |
+| `endTime` | string | optional. ms epoch string. |
+
+### `google_gmail_sendas_list`
+
+List Gmail send-as aliases. No args beyond `account`.
+
+### `google_gmail_sendas_create`
+
+Create a Gmail send-as alias (subject to domain/verification rules).
+
+| arg | type | notes |
+| --- | --- | --- |
+| `sendAsEmail` | string | required. |
+| `displayName` | string | optional. |
+| `isDefault` | boolean | optional. |
+
+### `google_gmail_filters_list`
+
+List Gmail filters (auto-archive/apply rules). No args beyond `account`.
+
+### `google_gmail_filters_create`
+
+Create a Gmail filter with match criteria and an action.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `criteria` | object | optional. `from`, `to`, `subject`, `query`, `hasAttachment`. |
+| `action` | object | opt. `addLabelIds`, `removeLabelIds`, `forward`. |
+
+### `google_gmail_filters_delete`
+
+Delete a Gmail filter. Arg: `id` (required).
+
 ### `google_gmail_trash`
 
 Move a message to trash.

@@ -57,23 +57,31 @@ import {
 import { addQuestion, createForm, getForm, getFormResponses } from "../services/forms.js";
 import {
   createGmailDraft,
+  createGmailFilter,
   createGmailLabel,
+  createSendAs,
   deleteGmailDraft,
+  deleteGmailFilter,
   deleteGmailLabel,
   deleteGmailMessage,
   getGmailAttachment,
   getGmailDraft,
   getGmailMessage,
+  getVacationSettings,
   listGmailAttachments,
   listGmailDrafts,
+  listGmailFilters,
   listGmailLabels,
   listGmailMessages,
+  listSendAs,
   modifyGmailMessage,
   replyGmail,
   sendGmail,
   sendGmailDraft,
   trashGmailMessage,
   untrashGmailMessage,
+  updateGmailLabel,
+  updateVacationSettings,
 } from "../services/gmail.js";
 import {
   addSheet,
@@ -544,6 +552,168 @@ export function registerTools(server: McpServer): void {
       try {
         const client = await authManager.getClient(account);
         return ok(await deleteGmailLabel(client, { id }));
+      } catch (error) {
+        return err(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "google_gmail_labels_update",
+    {
+      title: "Update email label",
+      description: "Update a Gmail label's name or visibility (partial).",
+      inputSchema: {
+        id: z.string().describe("Label ID."),
+        name: z.string().optional().describe("New label name."),
+        messageListVisibility: z.string().optional().describe("e.g. show or hide."),
+        labelListVisibility: z.string().optional().describe("e.g. labelShow or labelHide."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ id, name, messageListVisibility, labelListVisibility, account }) =>
+      withClient(account, (client) =>
+        updateGmailLabel(client, { id, name, messageListVisibility, labelListVisibility }),
+      ),
+  );
+
+  server.registerTool(
+    "google_gmail_vacation_get",
+    {
+      title: "Get vacation responder",
+      description: "Get the Gmail vacation (out-of-office) responder settings.",
+      inputSchema: {
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ account }) => withClient(account, (client) => getVacationSettings(client)),
+  );
+
+  server.registerTool(
+    "google_gmail_vacation_update",
+    {
+      title: "Update vacation responder",
+      description: "Update the Gmail vacation (out-of-office) responder settings.",
+      inputSchema: {
+        enableAutoReply: z.boolean().optional().describe("Turn the auto-reply on/off."),
+        responseSubject: z.string().optional().describe("Subject of the auto-reply."),
+        responseBodyPlainText: z.string().optional().describe("Plain-text body of the auto-reply."),
+        responseBodyHtml: z.string().optional().describe("HTML body of the auto-reply."),
+        startTime: z.string().optional().describe("Start time as ms epoch string."),
+        endTime: z.string().optional().describe("End time as ms epoch string."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({
+      enableAutoReply,
+      responseSubject,
+      responseBodyPlainText,
+      responseBodyHtml,
+      startTime,
+      endTime,
+      account,
+    }) =>
+      withClient(account, (client) =>
+        updateVacationSettings(client, {
+          enableAutoReply,
+          responseSubject,
+          responseBodyPlainText,
+          responseBodyHtml,
+          startTime,
+          endTime,
+        }),
+      ),
+  );
+
+  server.registerTool(
+    "google_gmail_sendas_list",
+    {
+      title: "List send-as aliases",
+      description: "List Gmail send-as aliases.",
+      inputSchema: {
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ account }) => withClient(account, (client) => listSendAs(client)),
+  );
+
+  server.registerTool(
+    "google_gmail_sendas_create",
+    {
+      title: "Create send-as alias",
+      description: "Create a Gmail send-as alias (subject to domain/verification rules).",
+      inputSchema: {
+        sendAsEmail: z.string().describe("Email address for the alias."),
+        displayName: z.string().optional(),
+        isDefault: z.boolean().optional(),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ sendAsEmail, displayName, isDefault, account }) =>
+      withClient(account, (client) =>
+        createSendAs(client, { sendAsEmail, displayName, isDefault }),
+      ),
+  );
+
+  server.registerTool(
+    "google_gmail_filters_list",
+    {
+      title: "List Gmail filters",
+      description: "List Gmail filters (auto-archive/apply rules).",
+      inputSchema: {
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ account }) => withClient(account, (client) => listGmailFilters(client)),
+  );
+
+  server.registerTool(
+    "google_gmail_filters_create",
+    {
+      title: "Create Gmail filter",
+      description: "Create a Gmail filter with criteria and action (e.g. auto-archive).",
+      inputSchema: {
+        criteria: z
+          .object({
+            from: z.string().optional(),
+            to: z.string().optional(),
+            subject: z.string().optional(),
+            query: z.string().optional(),
+            negatedQuery: z.string().optional(),
+            hasAttachment: z.boolean().optional(),
+            excludeChats: z.boolean().optional(),
+          })
+          .optional()
+          .describe("Match criteria."),
+        action: z
+          .object({
+            addLabelIds: z.array(z.string()).optional(),
+            removeLabelIds: z.array(z.string()).optional(),
+            forward: z.string().optional(),
+          })
+          .optional()
+          .describe("Action to apply when matched (e.g. markAsRead via removeLabelIds UNREAD)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ criteria, action, account }) =>
+      withClient(account, (client) => createGmailFilter(client, { criteria, action })),
+  );
+
+  server.registerTool(
+    "google_gmail_filters_delete",
+    {
+      title: "Delete Gmail filter",
+      description: "Delete a Gmail filter by ID.",
+      inputSchema: {
+        id: z.string().describe("Filter ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ id, account }) => {
+      try {
+        const client = await authManager.getClient(account);
+        return ok(await deleteGmailFilter(client, { id }));
       } catch (error) {
         return err(error);
       }
