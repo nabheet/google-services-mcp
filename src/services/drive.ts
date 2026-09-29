@@ -1,3 +1,4 @@
+import { readFile, writeFile } from "node:fs/promises";
 import type { Auth, drive_v3 } from "googleapis";
 import { google } from "googleapis";
 
@@ -15,6 +16,8 @@ export interface UploadDriveOptions {
   mimeType: string;
   /** Text content to upload. Omit to create a blank Google-native file. */
   content?: string;
+  /** Local file path to upload. Reads raw bytes from disk (binary-safe). */
+  path?: string;
   parentFolderId?: string;
 }
 
@@ -23,6 +26,8 @@ export interface UpdateDriveOptions {
   name?: string;
   mimeType?: string;
   content?: string;
+  /** Local file path to upload as new content (binary-safe). */
+  path?: string;
 }
 
 export type DrivePermissionType = "user" | "group" | "anyone" | "domain";
@@ -80,8 +85,12 @@ export interface DownloadDriveResult {
   mimeType?: string;
 }
 
-async function mapDownload(res: { data: unknown }): Promise<DownloadDriveResult> {
-  let data = res.data;
+export interface DownloadDriveOptions extends GetDriveOptions {
+  /** Write raw bytes to this local path instead of returning data. */
+  saveToPath?: string;
+}
+
+async function responseToBytes(data: unknown): Promise<Buffer | string> {
   // googleapis returns a Blob (not Buffer/string) for alt=media and binary
   // exports. Its Blob comes from gaxios' bundled fetch implementation, which
   // is NOT an instanceof the global Blob class — so duck-type via arrayBuffer()
@@ -90,13 +99,19 @@ async function mapDownload(res: { data: unknown }): Promise<DownloadDriveResult>
   if (data && typeof data === "object") {
     const blobish = data as { arrayBuffer?: () => Promise<ArrayBuffer> };
     if (typeof blobish.arrayBuffer === "function") {
-      data = Buffer.from(await blobish.arrayBuffer());
+      return Buffer.from(await blobish.arrayBuffer());
     }
   }
-  if (Buffer.isBuffer(data)) {
-    return { data: data.toString("base64"), binary: true };
+  if (Buffer.isBuffer(data)) return data;
+  return String(data ?? "");
+}
+
+async function mapDownload(res: { data: unknown }): Promise<DownloadDriveResult> {
+  const bytes = await responseToBytes(res.data);
+  if (Buffer.isBuffer(bytes)) {
+    return { data: bytes.toString("base64"), binary: true };
   }
-  return { data: String(data ?? ""), binary: false };
+  return { data: bytes, binary: false };
 }
 
 /** List files, optionally filtered by a Drive query (e.g. "'<folderId>' in parents"). */
@@ -136,7 +151,9 @@ export async function uploadDriveFile(
   const requestBody: drive_v3.Schema$File = { name: opts.name, mimeType: opts.mimeType };
   if (opts.parentFolderId) requestBody.parents = [opts.parentFolderId];
   const params: drive_v3.Params$Resource$Files$Create = { requestBody };
-  if (opts.content !== undefined) {
+  if (opts.path !== undefined) {
+    params.media = { mimeType: opts.mimeType, body: await readFile(opts.path) };
+  } else if (opts.content !== undefined) {
     params.media = { mimeType: opts.mimeType, body: opts.content };
   }
   const res = await drive.files.create(params);
@@ -153,7 +170,12 @@ export async function updateDriveFile(
   if (opts.name !== undefined) requestBody.name = opts.name;
   if (opts.mimeType !== undefined) requestBody.mimeType = opts.mimeType;
   const params: drive_v3.Params$Resource$Files$Update = { fileId: opts.fileId, requestBody };
-  if (opts.content !== undefined) {
+  if (opts.path !== undefined) {
+    params.media = {
+      mimeType: opts.mimeType ?? "application/octet-stream",
+      body: await readFile(opts.path),
+    };
+  } else if (opts.content !== undefined) {
     params.media = { mimeType: opts.mimeType ?? "text/plain", body: opts.content };
   }
   const res = await drive.files.update(params);
@@ -248,10 +270,14 @@ function mapFile(f: drive_v3.Schema$File): DriveFile {
 /** Download a file's raw bytes (non-Google-native files). */
 export async function downloadDriveFile(
   client: Auth.OAuth2Client,
-  opts: GetDriveOptions,
-): Promise<DownloadDriveResult> {
+  opts: DownloadDriveOptions,
+): Promise<DownloadDriveResult | { savedTo: string }> {
   const drive = google.drive({ version: "v3", auth: client });
   const res = await drive.files.get({ fileId: opts.fileId, alt: "media" });
+  if (opts.saveToPath !== undefined) {
+    await writeFile(opts.saveToPath, await responseToBytes(res.data));
+    return { savedTo: opts.saveToPath };
+  }
   return mapDownload(res);
 }
 

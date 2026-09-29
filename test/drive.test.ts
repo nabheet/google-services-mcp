@@ -10,6 +10,12 @@ const mockFiles = {
   export: vi.fn(),
 };
 const mockPermissions = { create: vi.fn(), list: vi.fn(), delete: vi.fn() };
+const mockFs = vi.hoisted(() => ({
+  readFile: vi.fn(),
+  writeFile: vi.fn(),
+}));
+
+vi.mock("node:fs/promises", () => mockFs);
 
 vi.mock("googleapis", () => ({
   google: {
@@ -104,6 +110,21 @@ describe("uploadDriveFile", () => {
     );
     expect(mockFiles.create.mock.calls[0][0].media).toBeUndefined();
   });
+
+  it("uploads a local file by path (binary-safe)", async () => {
+    mockFiles.create.mockResolvedValue({ data: { id: "f-bin", name: "img.png" } });
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    mockFs.readFile.mockResolvedValue(bytes);
+    const result = await uploadDriveFile(client, {
+      name: "img.png",
+      mimeType: "image/png",
+      path: "/tmp/img.png",
+    });
+    expect(mockFs.readFile).toHaveBeenCalledWith("/tmp/img.png");
+    const call = mockFiles.create.mock.calls[0][0];
+    expect(call.media).toEqual({ mimeType: "image/png", body: bytes });
+    expect(result.id).toBe("f-bin");
+  });
 });
 
 describe("updateDriveFile", () => {
@@ -114,6 +135,25 @@ describe("updateDriveFile", () => {
       expect.objectContaining({ fileId: "f1", requestBody: { name: "renamed.md" } }),
     );
     expect(result.name).toBe("renamed.md");
+  });
+
+  it("replaces content from a local file path (binary-safe)", async () => {
+    mockFiles.update.mockResolvedValue({ data: { id: "f1", name: "data.bin" } });
+    const bytes = Buffer.from([0x01, 0x02, 0x03, 0x04]);
+    mockFs.readFile.mockResolvedValue(bytes);
+    const result = await updateDriveFile(client, {
+      fileId: "f1",
+      mimeType: "application/octet-stream",
+      path: "/tmp/data.bin",
+    });
+    expect(mockFs.readFile).toHaveBeenCalledWith("/tmp/data.bin");
+    expect(mockFiles.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileId: "f1",
+        media: { mimeType: "application/octet-stream", body: bytes },
+      }),
+    );
+    expect(result.name).toBe("data.bin");
   });
 });
 
@@ -240,6 +280,24 @@ describe("downloadDriveFile", () => {
     const result = await downloadDriveFile(client, { fileId: "f1" });
     expect(result.binary).toBe(true);
     expect(Buffer.from(result.data, "base64")).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  });
+
+  it("writes binary bytes to a local path when saveToPath is set", async () => {
+    mockFiles.get.mockResolvedValue({ data: new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])]) });
+    const result = await downloadDriveFile(client, { fileId: "f1", saveToPath: "/tmp/out.png" });
+    expect(mockFiles.get).toHaveBeenCalledWith({ fileId: "f1", alt: "media" });
+    expect(mockFs.writeFile).toHaveBeenCalledWith(
+      "/tmp/out.png",
+      Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+    );
+    expect(result).toEqual({ savedTo: "/tmp/out.png" });
+  });
+
+  it("writes text to a local path when saveToPath is set", async () => {
+    mockFiles.get.mockResolvedValue({ data: "plain file content" });
+    const result = await downloadDriveFile(client, { fileId: "f1", saveToPath: "/tmp/out.txt" });
+    expect(mockFs.writeFile).toHaveBeenCalledWith("/tmp/out.txt", "plain file content");
+    expect(result).toEqual({ savedTo: "/tmp/out.txt" });
   });
 });
 

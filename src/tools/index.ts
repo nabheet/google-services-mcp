@@ -888,20 +888,28 @@ export function registerTools(server: McpServer): void {
     {
       title: "Create/upload Drive file",
       description:
-        "Create a file in Drive, optionally with text content (blank Google-native file if omitted).",
+        "Create a file in Drive, optionally with text content (blank Google-native file if omitted) or by local file path (binary-safe).",
       inputSchema: {
         name: z.string().describe("File name."),
         mimeType: z
           .string()
-          .describe("MIME type (e.g. text/plain, application/vnd.google-apps.document)."),
+          .describe(
+            "MIME type (e.g. text/plain, image/png, application/vnd.google-apps.document).",
+          ),
         content: z.string().optional().describe("Text content to upload."),
+        path: z
+          .string()
+          .optional()
+          .describe(
+            "Local file path to upload (reads raw bytes from disk; use instead of content).",
+          ),
         parentFolderId: z.string().optional().describe("Parent folder ID."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ name, mimeType, content, parentFolderId, account }) =>
+    async ({ name, mimeType, content, path, parentFolderId, account }) =>
       withClient(account, (client) =>
-        uploadDriveFile(client, { name, mimeType, content, parentFolderId }),
+        uploadDriveFile(client, { name, mimeType, content, path, parentFolderId }),
       ),
   );
 
@@ -909,17 +917,25 @@ export function registerTools(server: McpServer): void {
     "google_drive_update",
     {
       title: "Update Drive file",
-      description: "Rename a file and/or replace its content.",
+      description: "Rename a file and/or replace its content (text or local file path).",
       inputSchema: {
         fileId: z.string().describe("Drive file ID."),
         name: z.string().optional().describe("New name."),
         mimeType: z.string().optional(),
         content: z.string().optional().describe("New content."),
+        path: z
+          .string()
+          .optional()
+          .describe(
+            "Local file path to upload as new content (reads raw bytes; use instead of content).",
+          ),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ fileId, name, mimeType, content, account }) =>
-      withClient(account, (client) => updateDriveFile(client, { fileId, name, mimeType, content })),
+    async ({ fileId, name, mimeType, content, path, account }) =>
+      withClient(account, (client) =>
+        updateDriveFile(client, { fileId, name, mimeType, content, path }),
+      ),
   );
 
   server.registerTool(
@@ -1030,14 +1046,18 @@ export function registerTools(server: McpServer): void {
     {
       title: "Download Drive file",
       description:
-        "Download a file's raw bytes (non-Google-native files). Text content returns decoded text; binary returns base64.",
+        "Download a file's raw bytes (non-Google-native files). Text content returns decoded text; binary returns base64. Pass saveToPath to write bytes to a local file instead.",
       inputSchema: {
         fileId: z.string().describe("Drive file ID."),
+        saveToPath: z
+          .string()
+          .optional()
+          .describe("Local path to write the raw bytes to (returns { savedTo } instead of data)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ fileId, account }) =>
-      withClient(account, (client) => downloadDriveFile(client, { fileId })),
+    async ({ fileId, saveToPath, account }) =>
+      withClient(account, (client) => downloadDriveFile(client, { fileId, saveToPath })),
   );
 
   server.registerTool(
