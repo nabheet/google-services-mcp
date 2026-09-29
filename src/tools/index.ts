@@ -814,13 +814,69 @@ export function registerTools(server: McpServer): void {
         description: z.string().optional(),
         location: z.string().optional(),
         attendees: z.array(z.string().email()).optional().describe("Attendee emails."),
+        timeZone: z
+          .string()
+          .optional()
+          .describe("IANA time zone, e.g. America/Denver. Required for recurring timed events."),
+        recurrence: z
+          .array(z.string())
+          .optional()
+          .describe('RRULE strings, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=TH"].'),
+        reminderMethod: z.enum(["email", "popup"]).optional().describe("Reminder delivery method."),
+        reminderMinutes: z.number().int().positive().optional().describe("Minutes before event."),
+        remindersUseDefault: z
+          .boolean()
+          .optional()
+          .describe("Use calendar default reminders instead of overrides."),
+        sendUpdates: z
+          .enum(["all", "externalOnly", "none"])
+          .optional()
+          .describe("Control attendee notification emails."),
+        transparency: z
+          .enum(["opaque", "transparent"])
+          .optional()
+          .describe("Show as busy (opaque) or free (transparent)."),
+        colorId: z.string().optional().describe("Event color ID (1-11)."),
         calendarId: z.string().optional().describe("Calendar ID (default primary)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ summary, start, end, description, location, attendees, calendarId, account }) =>
+    async ({
+      summary,
+      start,
+      end,
+      description,
+      location,
+      attendees,
+      timeZone,
+      recurrence,
+      reminderMethod,
+      reminderMinutes,
+      remindersUseDefault,
+      sendUpdates,
+      transparency,
+      colorId,
+      calendarId,
+      account,
+    }) =>
       withClient(account, (client) =>
-        createEvent(client, { summary, start, end, description, location, attendees, calendarId }),
+        createEvent(client, {
+          summary,
+          start,
+          end,
+          description,
+          location,
+          attendees,
+          timeZone,
+          recurrence,
+          reminderMethod,
+          reminderMinutes,
+          remindersUseDefault,
+          sendUpdates,
+          transparency,
+          colorId,
+          calendarId,
+        }),
       ),
   );
 
@@ -873,6 +929,31 @@ export function registerTools(server: McpServer): void {
         start: z.string().optional().describe("New start RFC3339 datetime."),
         end: z.string().optional().describe("New end RFC3339 datetime."),
         attendees: z.array(z.string().email()).optional().describe("Full attendee list."),
+        timeZone: z
+          .string()
+          .optional()
+          .describe(
+            "IANA time zone, e.g. America/Denver. Required when updating to recurring timed events.",
+          ),
+        recurrence: z
+          .array(z.string())
+          .optional()
+          .describe('RRULE strings, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=TH"].'),
+        reminderMethod: z.enum(["email", "popup"]).optional().describe("Reminder delivery method."),
+        reminderMinutes: z.number().int().positive().optional().describe("Minutes before event."),
+        remindersUseDefault: z
+          .boolean()
+          .optional()
+          .describe("Use calendar default reminders instead of overrides."),
+        sendUpdates: z
+          .enum(["all", "externalOnly", "none"])
+          .optional()
+          .describe("Control attendee notification emails."),
+        transparency: z
+          .enum(["opaque", "transparent"])
+          .optional()
+          .describe("Show as busy (opaque) or free (transparent)."),
+        colorId: z.string().optional().describe("Event color ID (1-11)."),
         calendarId: z.string().optional().describe("Calendar ID (default primary)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
@@ -885,6 +966,14 @@ export function registerTools(server: McpServer): void {
       start,
       end,
       attendees,
+      timeZone,
+      recurrence,
+      reminderMethod,
+      reminderMinutes,
+      remindersUseDefault,
+      sendUpdates,
+      transparency,
+      colorId,
       calendarId,
       account,
     }) =>
@@ -897,6 +986,14 @@ export function registerTools(server: McpServer): void {
           start,
           end,
           attendees,
+          timeZone,
+          recurrence,
+          reminderMethod,
+          reminderMinutes,
+          remindersUseDefault,
+          sendUpdates,
+          transparency,
+          colorId,
           calendarId,
         }),
       ),
