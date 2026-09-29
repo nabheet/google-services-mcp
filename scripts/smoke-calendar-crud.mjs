@@ -12,7 +12,7 @@ const client = await authManager.getClient("personal");
 
 // 1. Create
 const created = await createCalendar(client, {
-  summary: "MCP Smoke Test " + Date.now(),
+  summary: `MCP Smoke Test ${Date.now()}`,
   timeZone: "America/Los_Angeles",
   description: "temporary calendar for google_calendar_create/update/delete smoke",
 });
@@ -22,7 +22,7 @@ if (!created.id) throw new Error("create returned no id");
 // 2. Update metadata + color
 const updated = await updateCalendar(client, {
   calendarId: created.id,
-  summary: created.summary + " (renamed)",
+  summary: `${created.summary} (renamed)`,
   colorId: "7",
   timeZone: "UTC",
   description: "updated by smoke",
