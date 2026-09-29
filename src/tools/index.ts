@@ -11,6 +11,7 @@ import {
   getEvent,
   listCalendars,
   listEvents,
+  respondToEvent,
   updateCalendar,
   updateEvent,
 } from "../services/calendar.js";
@@ -737,6 +738,55 @@ export function registerTools(server: McpServer): void {
         const client = await authManager.getClient(account);
         await deleteEvent(client, { eventId, calendarId });
         return ok({ status: "deleted", eventId });
+      } catch (error) {
+        return err(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "google_calendar_respond",
+    {
+      title: "Respond to calendar event invite",
+      description:
+        "Accept, decline, or mark tentative an event invite by setting the attendee responseStatus.",
+      inputSchema: {
+        eventId: z.string().describe("Event ID."),
+        responseStatus: z
+          .enum(["accepted", "declined", "tentative"])
+          .describe("Attendance response to set."),
+        email: z
+          .string()
+          .email()
+          .optional()
+          .describe("Attendee email to respond as (defaults to signed-in account)."),
+        sendUpdates: z
+          .enum(["all", "externalOnly", "none"])
+          .optional()
+          .describe("Who to notify of the change (defaults to none)."),
+        calendarId: z.string().optional().describe("Calendar ID (default primary)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ eventId, responseStatus, email, sendUpdates, calendarId, account }) => {
+      try {
+        const client = await authManager.getClient(account);
+        const resolved = await authManager.resolveAccount(account);
+        const attendeeEmail = email ?? resolved.email;
+        if (!attendeeEmail) {
+          throw new Error(
+            "No attendee email resolved. Pass email explicitly or ensure the account has a known email.",
+          );
+        }
+        return ok(
+          await respondToEvent(client, {
+            eventId,
+            calendarId,
+            responseStatus,
+            email: attendeeEmail,
+            ...(sendUpdates ? { sendUpdates } : {}),
+          }),
+        );
       } catch (error) {
         return err(error);
       }
