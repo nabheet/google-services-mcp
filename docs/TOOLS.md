@@ -306,6 +306,18 @@ responseStatus.
 | `sendUpdates` | `all` / `externalOnly` / `none` | optional. Who to notify. |
 | `calendarId` | string | optional. Default primary. |
 
+### `google_calendar_free_busy`
+
+Query busy intervals across calendars to find free meeting windows. Everything
+outside the returned busy intervals is free.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `timeMin` | string | required. RFC3339 datetime. |
+| `timeMax` | string | required. RFC3339 datetime. |
+| `items` | string[] | optional. Calendar IDs to query (default primary). |
+| `timeZone` | string | optional. IANA timezone, e.g. America/Los_Angeles. |
+
 ## Drive
 
 ### `google_drive_list`
