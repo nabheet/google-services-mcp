@@ -25,11 +25,34 @@ export interface UpdateDriveOptions {
   content?: string;
 }
 
+export type DrivePermissionType = "user" | "group" | "anyone" | "domain";
+
 export interface ShareDriveOptions {
   fileId: string;
-  email: string;
-  role: "reader" | "writer" | "commenter";
+  /** Recipient email (required when type is user/group). */
+  email?: string;
+  role: "reader" | "writer" | "commenter" | "owner";
   sendNotificationEmail?: boolean;
+  /** Permission type. Default "user" for backward compatibility. */
+  type?: DrivePermissionType;
+  /** Domain for type=domain. */
+  domain?: string;
+  /** Transfer ownership to the recipient. Only valid with role=owner. */
+  transferOwnership?: boolean;
+}
+
+export interface PermissionSummary {
+  id: string;
+  type?: string;
+  role?: string;
+  emailAddress?: string;
+  domain?: string;
+  allowFileDiscovery?: boolean;
+}
+
+export interface GetPermissionOptions {
+  fileId: string;
+  permissionId: string;
 }
 
 export interface MoveDriveOptions {
@@ -162,22 +185,52 @@ export async function moveDriveFile(
   return mapFile(res.data);
 }
 
-/** Share a file with a user by email. */
+/** Share a file with a user by email (or anyone/domain via type). */
 export async function shareDriveFile(
   client: Auth.OAuth2Client,
   opts: ShareDriveOptions,
 ): Promise<{ id: string }> {
   const drive = google.drive({ version: "v3", auth: client });
-  const res = await drive.permissions.create({
+  const requestBody: drive_v3.Schema$Permission = {
+    type: opts.type ?? "user",
+    role: opts.role,
+  };
+  if (opts.email) requestBody.emailAddress = opts.email;
+  if (opts.domain) requestBody.domain = opts.domain;
+  const params: drive_v3.Params$Resource$Permissions$Create = {
     fileId: opts.fileId,
-    requestBody: {
-      type: "user",
-      role: opts.role,
-      emailAddress: opts.email,
-    },
+    requestBody,
     sendNotificationEmail: opts.sendNotificationEmail !== false,
-  });
+  };
+  if (opts.transferOwnership) params.transferOwnership = true;
+  const res = await drive.permissions.create(params);
   return { id: (res.data.id ?? "") as string };
+}
+
+/** List the permissions on a file. */
+export async function listDrivePermissions(
+  client: Auth.OAuth2Client,
+  opts: GetDriveOptions,
+): Promise<PermissionSummary[]> {
+  const drive = google.drive({ version: "v3", auth: client });
+  const res = await drive.permissions.list({ fileId: opts.fileId });
+  return (res.data.permissions ?? []).map((p) => ({
+    id: p.id as string,
+    type: p.type as string | undefined,
+    role: p.role as string | undefined,
+    emailAddress: p.emailAddress as string | undefined,
+    domain: p.domain as string | undefined,
+    allowFileDiscovery: p.allowFileDiscovery as boolean | undefined,
+  }));
+}
+
+/** Delete a permission from a file. */
+export async function deleteDrivePermission(
+  client: Auth.OAuth2Client,
+  opts: GetPermissionOptions,
+): Promise<void> {
+  const drive = google.drive({ version: "v3", auth: client });
+  await drive.permissions.delete({ fileId: opts.fileId, permissionId: opts.permissionId });
 }
 
 function mapFile(f: drive_v3.Schema$File): DriveFile {
