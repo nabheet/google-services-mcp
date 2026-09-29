@@ -149,6 +149,8 @@ describe("server tool registration", () => {
     expect(names).toContain("google_contacts_list");
     expect(names).toContain("google_contacts_search");
     expect(names).toContain("google_contacts_create");
+    expect(names).toContain("google_contacts_get");
+    expect(names).toContain("google_contacts_delete");
     expect(names).toContain("google_tasks_list_lists");
     expect(names).toContain("google_tasks_list");
     expect(names).toContain("google_tasks_create");
@@ -192,7 +194,7 @@ describe("server tool registration", () => {
     expect(names).toContain("google_forms_responses");
     expect(names).toContain("google_forms_create");
     expect(names).toContain("google_forms_add_question");
-    expect(names.length).toBe(109);
+    expect(names.length).toBe(111);
   });
 });
 

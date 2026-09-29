@@ -500,11 +500,13 @@ Search contacts (including non-connected) by name, email or phone. Arg: `query` 
 
 ### `google_contacts_create`
 
-Create a contact. `name` required; `email`, `phone` optional.
+Create a contact. `name` required; `email`, `phone`, `address`, `organization`,
+`photoBytes` optional. `photoBytes` is base64 JPEG/PNG set after creation.
 
 ### `google_contacts_update`
 
-Update an existing contact (name, email, or phone) by resourceName.
+Update an existing contact (name, email, phone, address, organization, photo) by
+resourceName. Partial update; etag fetched automatically unless supplied.
 
 | arg | type | notes |
 | --- | --- | --- |
@@ -512,6 +514,18 @@ Update an existing contact (name, email, or phone) by resourceName.
 | `name` | string | optional. New full name. |
 | `email` | string (email) | optional. New email. |
 | `phone` | string | optional. New phone number. |
+| `address` | string | optional. Freeform postal address. |
+| `organization` | string | optional. |
+| `photoBytes` | string | optional. Base64 JPEG/PNG photo. |
+
+### `google_contacts_get`
+
+Get a contact by resourceName with rich fields (name, email, phone, address,
+organization). Arg: `resourceName` (required).
+
+### `google_contacts_delete`
+
+Delete a contact by resourceName. Arg: `resourceName` (required).
 
 ## Tasks
 

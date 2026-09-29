@@ -14,6 +14,10 @@ export interface CreateContactOptions {
   name: string;
   email?: string;
   phone?: string;
+  address?: string;
+  organization?: string;
+  /** Base64-encoded photo bytes (JPEG/PNG). */
+  photoBytes?: string;
 }
 
 export interface UpdateContactOptions {
@@ -21,8 +25,20 @@ export interface UpdateContactOptions {
   name?: string;
   email?: string;
   phone?: string;
+  address?: string;
+  organization?: string;
+  /** Base64-encoded photo bytes (JPEG/PNG). */
+  photoBytes?: string;
   /** Contact etag for optimistic concurrency. Fetched automatically if omitted. */
   etag?: string;
+}
+
+export interface GetContactOptions {
+  resourceName: string;
+}
+
+export interface ContactRefOptions {
+  resourceName: string;
 }
 
 export interface ListTasksOptions {
@@ -137,14 +153,46 @@ export async function createContact(
   };
   if (opts.email) requestBody.emailAddresses = [{ value: opts.email }];
   if (opts.phone) requestBody.phoneNumbers = [{ value: opts.phone }];
+  if (opts.address) requestBody.addresses = [{ formattedValue: opts.address }];
+  if (opts.organization) requestBody.organizations = [{ name: opts.organization }];
   const res = await people.people.createContact({
     requestBody,
-    personFields: "names,emailAddresses,phoneNumbers",
+    personFields: "names,emailAddresses,phoneNumbers,addresses,organizations",
   });
-  return { resourceName: res.data.resourceName ?? "" };
+  const resourceName = res.data.resourceName ?? "";
+  if (opts.photoBytes && resourceName) {
+    await people.people.updateContactPhoto({
+      resourceName,
+      requestBody: { photoBytes: opts.photoBytes },
+    });
+  }
+  return { resourceName };
 }
 
-/** Update an existing contact (name, email, phone). */
+/** Get a contact by resourceName (rich fields: name, email, phone, address, org). */
+export async function getContact(
+  client: Auth.OAuth2Client,
+  opts: GetContactOptions,
+): Promise<people_v1.Schema$Person> {
+  const people = google.people({ version: "v1", auth: client });
+  const res = await people.people.get({
+    resourceName: opts.resourceName,
+    personFields: "names,emailAddresses,phoneNumbers,addresses,organizations",
+  });
+  return res.data;
+}
+
+/** Delete a contact by resourceName. */
+export async function deleteContact(
+  client: Auth.OAuth2Client,
+  opts: ContactRefOptions,
+): Promise<{ deleted: true; resourceName: string }> {
+  const people = google.people({ version: "v1", auth: client });
+  await people.people.deleteContact({ resourceName: opts.resourceName });
+  return { deleted: true, resourceName: opts.resourceName };
+}
+
+/** Update an existing contact (name, email, phone, address, organization, photo). */
 export async function updateContact(
   client: Auth.OAuth2Client,
   opts: UpdateContactOptions,
@@ -164,8 +212,18 @@ export async function updateContact(
     requestBody.phoneNumbers = [{ value: opts.phone }];
     updatePersonFields.push("phoneNumbers");
   }
-  if (updatePersonFields.length === 0) {
-    throw new Error("Nothing to update: provide at least one of name, email, or phone.");
+  if (opts.address !== undefined) {
+    requestBody.addresses = [{ formattedValue: opts.address }];
+    updatePersonFields.push("addresses");
+  }
+  if (opts.organization !== undefined) {
+    requestBody.organizations = [{ name: opts.organization }];
+    updatePersonFields.push("organizations");
+  }
+  if (updatePersonFields.length === 0 && !opts.photoBytes) {
+    throw new Error(
+      "Nothing to update: provide at least one of name, email, phone, address, or organization.",
+    );
   }
   // The People API requires the person etag on update (optimistic concurrency).
   if (!opts.etag) {
@@ -182,7 +240,14 @@ export async function updateContact(
     updatePersonFields: updatePersonFields.join(","),
     requestBody,
   });
-  return { resourceName: res.data.resourceName ?? "" };
+  const resourceName = res.data.resourceName ?? "";
+  if (opts.photoBytes && resourceName) {
+    await people.people.updateContactPhoto({
+      resourceName,
+      requestBody: { photoBytes: opts.photoBytes },
+    });
+  }
+  return { resourceName };
 }
 
 /** List the user's task lists. */
