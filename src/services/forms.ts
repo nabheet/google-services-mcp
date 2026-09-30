@@ -154,10 +154,14 @@ export async function updateFormQuestion(
   if (required !== undefined) mask.push("question_item.question.required");
   if (options !== undefined) {
     if (question.choiceQuestion) {
-      const q = updated.questionItem!.question!;
-      q.choiceQuestion = {
-        ...question.choiceQuestion,
-        options: options.map((value) => ({ value })),
+      updated.questionItem = {
+        question: {
+          ...question,
+          choiceQuestion: {
+            ...question.choiceQuestion,
+            options: options.map((value) => ({ value })),
+          },
+        },
       };
       mask.push("question_item.question.choice_question.options");
     } else {

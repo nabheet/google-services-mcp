@@ -141,7 +141,7 @@ function quotedPrintableEncode(input: string): string {
   // Iterate code points, not UTF-16 code units: surrogate pairs (emoji, rare
   // CJK) must encode as one codepoint, never as two lone surrogates.
   for (const ch of input) {
-    const code = ch.codePointAt(0)!;
+    const code = ch.codePointAt(0) ?? 0;
     if (code === 0x0d) continue; // normalize CRLF to LF below
     if (code === 0x0a) {
       flush();
@@ -157,11 +157,12 @@ function quotedPrintableEncode(input: string): string {
     } else {
       // Encode UTF-8 bytes, not UTF-16 code units: RFC 2045 allows exactly
       // 2 hex digits per =XX escape. U+2014 (—) is E2 80 94 in UTF-8.
-      enc = Buffer.from(ch, "utf8")
-        .toString("hex")
-        .match(/../g)!
-        .map((b) => `=${b.toUpperCase()}`)
-        .join("");
+      enc =
+        Buffer.from(ch, "utf8")
+          .toString("hex")
+          .match(/../g)
+          ?.map((b) => `=${b.toUpperCase()}`)
+          .join("") ?? "";
     }
     if (line.length + enc.length > MAX_LINE - 1) {
       line += "="; // soft break
