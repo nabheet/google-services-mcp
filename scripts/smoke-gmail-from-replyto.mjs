@@ -32,7 +32,7 @@ async function main() {
   const detail = await getGmailMessage(client, { id: sent.id });
   console.log(`VERIFY OK from="${detail.from}" subject="${detail.subject}"`);
   if (detail.subject !== subject) throw new Error(`Subject mismatch: ${detail.subject}`);
-  if (!detail.from || !detail.from.includes(acc.email.split("@")[0])) {
+  if (!detail.from?.includes(acc.email.split("@")[0])) {
     throw new Error(`From mismatch: ${detail.from}`);
   }
 }
