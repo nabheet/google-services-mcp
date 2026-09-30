@@ -181,6 +181,9 @@ describe("server tool registration", () => {
     expect(names).toContain("google_docs_insert_text");
     expect(names).toContain("google_docs_replace_text");
     expect(names).toContain("google_docs_batch_update");
+    expect(names).toContain("google_docs_delete_range");
+    expect(names).toContain("google_docs_insert_table");
+    expect(names).toContain("google_docs_insert_inline_image");
     expect(names).toContain("google_slides_get");
     expect(names).toContain("google_slides_create");
     expect(names).toContain("google_slides_replace_text");
@@ -211,7 +214,7 @@ describe("server tool registration", () => {
     expect(names).toContain("google_forms_rename");
     expect(names).toContain("google_forms_delete");
     expect(names).toContain("google_forms_export_responses");
-    expect(names.length).toBe(128);
+    expect(names.length).toBe(131);
   });
 });
 
