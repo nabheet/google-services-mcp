@@ -69,7 +69,7 @@ List messages, newest first, with an optional Gmail search query.
 
 ### `google_gmail_get`
 
-Fetch a single message with parsed headers, body and attachment flags.
+Fetch a single message with parsed headers, body and attachment metadata.
 
 | arg  | type   | notes                 |
 | ---  | ---    | ---                   |
@@ -146,7 +146,7 @@ List draft emails.
 
 ### `google_gmail_drafts_get`
 
-Fetch a single draft with parsed headers and body.
+Fetch a single draft with parsed headers, body and attachment metadata.
 
 | arg | type | notes |
 | --- | --- | --- |
