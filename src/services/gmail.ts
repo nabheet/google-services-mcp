@@ -19,6 +19,10 @@ export interface SendGmailOptions {
   to: string | string[];
   cc?: string | string[];
   bcc?: string | string[];
+  /** Send-as alias or address to set as the From header. */
+  from?: string;
+  /** Address to set as the Reply-To header. */
+  replyTo?: string;
   subject: string;
   body: string;
   bodyType?: "text" | "html";
@@ -51,6 +55,10 @@ export interface ReplyGmailOptions {
   attachments?: GmailAttachmentInput[];
   /** Drive file IDs to attach by reference (downloaded under the Gmail limit). */
   driveFileIds?: string[];
+  /** Send-as alias or address to set as the From header. */
+  from?: string;
+  /** Address to set as the Reply-To header. */
+  replyTo?: string;
 }
 
 export interface GmailMessageSummary {
@@ -176,6 +184,11 @@ function sanitizeFilename(name: string): string {
 /** Reject CR/LF and other control characters that would break headers. */
 function sanitizeMimeType(mimeType: string): string {
   return MIME_TYPE_RE.test(mimeType) ? mimeType : "";
+}
+
+/** Collapse CR/LF (header injection) in a raw header value. */
+function sanitizeHeaderValue(value: string | undefined): string {
+  return value ? value.replace(/[\r\n]+/g, " ").trim() : "";
 }
 
 /** Best-effort MIME type guess by extension; binary fallback when unknown. */
@@ -313,11 +326,15 @@ async function buildRawEmail(
     }
   }
   const lines: string[] = [];
+  const from = sanitizeHeaderValue(opts.from);
+  if (from) lines.push(`From: ${from}`);
   lines.push(`To: ${to}`);
   const cc = joinRecipients(opts.cc);
   if (cc) lines.push(`Cc: ${cc}`);
   const bcc = joinRecipients(opts.bcc);
   if (bcc) lines.push(`Bcc: ${bcc}`);
+  const replyTo = sanitizeHeaderValue(opts.replyTo);
+  if (replyTo) lines.push(`Reply-To: ${replyTo}`);
   lines.push(`Subject: ${encodeSubject(opts.subject)}`);
   if (extraHeaders?.length) lines.push(...extraHeaders);
 
@@ -489,6 +506,8 @@ export async function replyGmail(client: Auth.OAuth2Client, opts: ReplyGmailOpti
         bodyType: opts.bodyType,
         attachments: opts.attachments,
         driveFileIds: opts.driveFileIds,
+        from: opts.from,
+        replyTo: opts.replyTo,
       },
       client,
       [
