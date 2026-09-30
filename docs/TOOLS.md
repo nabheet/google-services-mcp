@@ -53,7 +53,7 @@ Send an email from the connected account.
 | `cc` | string \| string[] | optional. |
 | `bcc` | string \| string[] | optional. |
 | `bodyType` | `text` \| `html` | optional, default `text`. |
-| `attachments` | object[] | optional. Local files to attach: `{ path, filename?, mimeType? }`. |
+| `attachments` | object[] | optional. Files `{ path, filename?, mimeType?, disposition?, cid? }`. |
 | `driveFileIds` | string[] | optional. Drive files by ID (under Gmail limit). |
 | `from` | string | optional. Send-as alias or address for the From header. |
 | `replyTo` | string | optional. Address for the Reply-To header. |
@@ -95,7 +95,7 @@ Reply to an existing message inside its thread, preserving threading headers.
 | `messageId` | string | required. Message being replied to. |
 | `body` | string | required. |
 | `bodyType` | `text` \| `html` | optional, default `text`. |
-| `attachments` | object[] | optional. Local files to attach: `{ path, filename?, mimeType? }`. |
+| `attachments` | object[] | optional. Files `{ path, filename?, mimeType?, disposition?, cid? }`. |
 | `driveFileIds` | string[] | optional. Drive files by ID (under Gmail limit). |
 | `from` | string | optional. Send-as alias or address for the From header. |
 | `replyTo` | string | optional. Address for the Reply-To header. |
@@ -131,7 +131,7 @@ Create a draft email (not sent).
 | `cc` | string \| string[] | optional. |
 | `bcc` | string \| string[] | optional. |
 | `bodyType` | `text` \| `html` | optional, default `text`. |
-| `attachments` | object[] | optional. Local files to attach: `{ path, filename?, mimeType? }`. |
+| `attachments` | object[] | optional. Files `{ path, filename?, mimeType?, disposition?, cid? }`. |
 | `driveFileIds` | string[] | optional. Drive files by ID (under Gmail limit). |
 | `from` | string | optional. Send-as alias or address for the From header. |
 | `replyTo` | string | optional. Address for the Reply-To header. |

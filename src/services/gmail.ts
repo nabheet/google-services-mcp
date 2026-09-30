@@ -13,6 +13,10 @@ export interface GmailAttachmentInput {
   filename?: string;
   /** MIME type override (defaults to a guess based on the filename). */
   mimeType?: string;
+  /** How the part is presented: as a download ("attachment") or embedded in the body ("inline"). */
+  disposition?: "attachment" | "inline";
+  /** Content-ID for inline parts so HTML can reference the image as `cid:<cid>`. */
+  cid?: string;
 }
 
 export interface SendGmailOptions {
@@ -183,6 +187,11 @@ function sanitizeFilename(name: string): string {
   return name.replace(/["\r\n]/g, "").trim() || "attachment";
 }
 
+/** Derive a Content-ID from a filename (non-alphanumerics become dashes). */
+function cidFromFilename(filename: string): string {
+  return `${filename.replace(/[^A-Za-z0-9._-]/g, "-")}@mcp`;
+}
+
 /** Reject CR/LF and other control characters that would break headers. */
 function sanitizeMimeType(mimeType: string): string {
   return MIME_TYPE_RE.test(mimeType) ? mimeType : "";
@@ -253,6 +262,8 @@ interface ResolvedAttachment {
   buffer: Buffer;
   filename: string;
   mimeType: string;
+  disposition?: "attachment" | "inline";
+  cid?: string;
 }
 
 /** Resolve Drive file IDs into attachment bytes under the Gmail size cap. */
@@ -300,6 +311,8 @@ async function resolveAttachments(
         filename,
         mimeType:
           sanitizeMimeType(att.mimeType || guessMimeType(filename)) || guessMimeType(filename),
+        disposition: att.disposition,
+        cid: att.cid,
       };
     }),
   );
@@ -375,9 +388,14 @@ async function buildRawEmail(
     }
     const filename = att.filename;
     const mimeType = att.mimeType;
+    const disposition = att.disposition === "inline" ? "inline" : "attachment";
     lines.push(`--${boundary}`);
     lines.push(`Content-Type: ${mimeType}; name="${filename}"`);
-    lines.push(`Content-Disposition: attachment; filename="${filename}"`);
+    lines.push(`Content-Disposition: ${disposition}; filename="${filename}"`);
+    if (disposition === "inline") {
+      const cid = (att.cid ?? cidFromFilename(filename)).replace(/^<|>$/g, "");
+      lines.push(`Content-ID: <${cid}>`);
+    }
     lines.push("Content-Transfer-Encoding: base64");
     lines.push("");
     lines.push(foldBase64(buf.toString("base64")));
