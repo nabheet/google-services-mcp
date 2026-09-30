@@ -58,7 +58,18 @@ import {
   updateDriveFile,
   uploadDriveFile,
 } from "../services/drive.js";
-import { addQuestion, createForm, getForm, getFormResponses } from "../services/forms.js";
+import {
+  addQuestion,
+  createForm,
+  deleteForm,
+  deleteFormQuestion,
+  exportFormResponsesToSheet,
+  getForm,
+  getFormResponses,
+  moveFormQuestion,
+  renameForm,
+  updateFormQuestion,
+} from "../services/forms.js";
 import {
   createGmailDraft,
   createGmailFilter,
@@ -2560,6 +2571,104 @@ export function registerTools(server: McpServer): void {
     async ({ formId, title, description, type, options, required, account }) =>
       withClient(account, (client) =>
         addQuestion(client, { formId, title, description, type, options, required }),
+      ),
+  );
+
+  server.registerTool(
+    "google_forms_update_question",
+    {
+      title: "Update form question",
+      description: "Update a question's title, description, options or required flag.",
+      inputSchema: {
+        formId: z.string().describe("Form ID."),
+        questionId: z.string().describe("Question ID (from form structure)."),
+        title: z.string().optional().describe("New question text."),
+        description: z.string().optional().describe("New help text."),
+        options: z.array(z.string()).optional().describe("New choices (choice questions only)."),
+        required: z.boolean().optional().describe("Required flag."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ formId, questionId, title, description, options, required, account }) =>
+      withClient(account, (client) =>
+        updateFormQuestion(client, { formId, questionId, title, description, options, required }),
+      ),
+  );
+
+  server.registerTool(
+    "google_forms_delete_question",
+    {
+      title: "Delete form question",
+      description: "Delete a question from a form by questionId.",
+      inputSchema: {
+        formId: z.string().describe("Form ID."),
+        questionId: z.string().describe("Question ID to delete."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ formId, questionId, account }) =>
+      withClient(account, (client) => deleteFormQuestion(client, { formId, questionId })),
+  );
+
+  server.registerTool(
+    "google_forms_move_question",
+    {
+      title: "Move form question",
+      description: "Reorder a question to a new position in the form.",
+      inputSchema: {
+        formId: z.string().describe("Form ID."),
+        questionId: z.string().describe("Question ID to move."),
+        newIndex: z.number().min(0).describe("Destination item index (0-based)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ formId, questionId, newIndex, account }) =>
+      withClient(account, (client) => moveFormQuestion(client, { formId, questionId, newIndex })),
+  );
+
+  server.registerTool(
+    "google_forms_rename",
+    {
+      title: "Rename form",
+      description: "Update a form's title.",
+      inputSchema: {
+        formId: z.string().describe("Form ID."),
+        title: z.string().describe("New form title."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ formId, title, account }) =>
+      withClient(account, (client) => renameForm(client, { formId, title })),
+  );
+
+  server.registerTool(
+    "google_forms_delete",
+    {
+      title: "Delete form",
+      description: "Permanently delete a form.",
+      inputSchema: {
+        formId: z.string().describe("Form ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ formId, account }) => withClient(account, (client) => deleteForm(client, { formId })),
+  );
+
+  server.registerTool(
+    "google_forms_export_responses",
+    {
+      title: "Export form responses to Sheets",
+      description: "Append form responses (headers + rows) to a spreadsheet tab.",
+      inputSchema: {
+        formId: z.string().describe("Form ID."),
+        spreadsheetId: z.string().describe("Destination spreadsheet ID."),
+        sheetName: z.string().optional().describe("Tab name (default Sheet1)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ formId, spreadsheetId, sheetName, account }) =>
+      withClient(account, (client) =>
+        exportFormResponsesToSheet(client, { formId, spreadsheetId, sheetName }),
       ),
   );
 }
