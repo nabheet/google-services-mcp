@@ -721,6 +721,22 @@ Find and replace text. Args: `documentId` (required), `find` (required),
 
 Send raw Docs batchUpdate requests. Args: `documentId` (required), `requests` (required array).
 
+### `google_docs_delete_range`
+
+Delete a content range. Args: `documentId`, `startIndex` (required, inclusive),
+`endIndex` (required, exclusive).
+
+### `google_docs_insert_table`
+
+Insert an empty table. Args: `documentId`, `rows` (required), `columns`
+(required), `index` (required 0-based insertion point; a newline is added first).
+
+### `google_docs_insert_inline_image`
+
+Insert an inline image from a public URI. Args: `documentId`, `uri` (required
+PNG/JPEG/GIF, < 50MB, <= 25MP), `index` (required, inside an existing
+paragraph). Returns `{ objectId }`.
+
 ## Slides
 
 ### `google_slides_get`

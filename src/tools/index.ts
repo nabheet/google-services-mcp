@@ -36,8 +36,11 @@ import {
 import {
   batchUpdateDocument,
   createDocument,
+  deleteRange,
   getDocument,
   getDocumentText,
+  insertInlineImage,
+  insertTable,
   insertText,
   replaceAllText,
 } from "../services/docs.js";
@@ -2207,6 +2210,55 @@ export function registerTools(server: McpServer): void {
     },
     async ({ documentId, requests, account }) =>
       withClient(account, (client) => batchUpdateDocument(client, { documentId, requests })),
+  );
+
+  server.registerTool(
+    "google_docs_delete_range",
+    {
+      title: "Delete range",
+      description: "Delete a range of content from a document.",
+      inputSchema: {
+        documentId: z.string().describe("Document ID."),
+        startIndex: z.number().int().describe("0-based start index (inclusive)."),
+        endIndex: z.number().int().describe("0-based end index (exclusive)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ documentId, startIndex, endIndex, account }) =>
+      withClient(account, (client) => deleteRange(client, { documentId, startIndex, endIndex })),
+  );
+
+  server.registerTool(
+    "google_docs_insert_table",
+    {
+      title: "Insert table",
+      description: "Insert an empty table at a model index (a newline is added before it).",
+      inputSchema: {
+        documentId: z.string().describe("Document ID."),
+        rows: z.number().int().describe("Number of rows."),
+        columns: z.number().int().describe("Number of columns."),
+        index: z.number().int().describe("0-based index where the table is inserted."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ documentId, rows, columns, index, account }) =>
+      withClient(account, (client) => insertTable(client, { documentId, rows, columns, index })),
+  );
+
+  server.registerTool(
+    "google_docs_insert_inline_image",
+    {
+      title: "Insert inline image",
+      description: "Insert an inline image from a public URI and return the created object id.",
+      inputSchema: {
+        documentId: z.string().describe("Document ID."),
+        uri: z.string().describe("Publicly accessible PNG/JPEG/GIF URI (< 50MB, <= 25MP)."),
+        index: z.number().int().describe("0-based index inside an existing paragraph."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ documentId, uri, index, account }) =>
+      withClient(account, (client) => insertInlineImage(client, { documentId, uri, index })),
   );
 
   // ---- Slides -------------------------------------------------------------
