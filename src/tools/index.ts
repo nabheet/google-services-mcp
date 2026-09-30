@@ -296,6 +296,16 @@ export function registerTools(server: McpServer): void {
                 .string()
                 .optional()
                 .describe("MIME type override (defaults to a guess from the filename)."),
+              disposition: z
+                .enum(["attachment", "inline"])
+                .optional()
+                .describe(
+                  "How the part is presented (default attachment; inline embeds it in the body).",
+                ),
+              cid: z
+                .string()
+                .optional()
+                .describe("Content-ID for inline parts so HTML can reference them as cid:<cid>."),
             }),
           )
           .optional()
@@ -412,6 +422,16 @@ export function registerTools(server: McpServer): void {
                 .string()
                 .optional()
                 .describe("MIME type override (defaults to a guess from the filename)."),
+              disposition: z
+                .enum(["attachment", "inline"])
+                .optional()
+                .describe(
+                  "How the part is presented (default attachment; inline embeds it in the body).",
+                ),
+              cid: z
+                .string()
+                .optional()
+                .describe("Content-ID for inline parts so HTML can reference them as cid:<cid>."),
             }),
           )
           .optional()
@@ -520,6 +540,16 @@ export function registerTools(server: McpServer): void {
                 .string()
                 .optional()
                 .describe("MIME type override (defaults to a guess from the filename)."),
+              disposition: z
+                .enum(["attachment", "inline"])
+                .optional()
+                .describe(
+                  "How the part is presented (default attachment; inline embeds it in the body).",
+                ),
+              cid: z
+                .string()
+                .optional()
+                .describe("Content-ID for inline parts so HTML can reference them as cid:<cid>."),
             }),
           )
           .optional()
