@@ -52,7 +52,9 @@ import {
   listDriveFiles,
   listDrivePermissions,
   moveDriveFile,
+  restoreDriveFile,
   shareDriveFile,
+  trashDriveFile,
   updateDriveFile,
   uploadDriveFile,
 } from "../services/drive.js";
@@ -1234,7 +1236,8 @@ export function registerTools(server: McpServer): void {
     "google_drive_delete",
     {
       title: "Delete Drive file",
-      description: "Permanently delete a file from Drive.",
+      description:
+        "Permanently delete a file from Drive. IRREVERSIBLE — prefer google_drive_trash (recoverable).",
       inputSchema: {
         fileId: z.string().describe("Drive file ID."),
         account: z.string().optional().describe("Account nickname to use."),
@@ -1245,6 +1248,49 @@ export function registerTools(server: McpServer): void {
         const client = await authManager.getClient(account);
         await deleteDriveFile(client, { fileId });
         return ok({ status: "deleted", fileId });
+      } catch (error) {
+        return err(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "google_drive_trash",
+    {
+      title: "Move Drive file to trash",
+      description:
+        "Move a file to trash (recoverable via google_drive_restore). Safer than google_drive_delete.",
+      inputSchema: {
+        fileId: z.string().describe("Drive file ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ fileId, account }) => {
+      try {
+        const client = await authManager.getClient(account);
+        const file = await trashDriveFile(client, { fileId });
+        return ok({ status: "trashed", fileId, trashed: file.trashed });
+      } catch (error) {
+        return err(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "google_drive_restore",
+    {
+      title: "Restore Drive file from trash",
+      description: "Restore a trashed file (sets trashed: false).",
+      inputSchema: {
+        fileId: z.string().describe("Drive file ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ fileId, account }) => {
+      try {
+        const client = await authManager.getClient(account);
+        const file = await restoreDriveFile(client, { fileId });
+        return ok({ status: "restored", fileId, trashed: file.trashed });
       } catch (error) {
         return err(error);
       }

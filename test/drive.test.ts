@@ -37,7 +37,9 @@ import {
   listDriveFiles,
   listDrivePermissions,
   moveDriveFile,
+  restoreDriveFile,
   shareDriveFile,
+  trashDriveFile,
   updateDriveFile,
   uploadDriveFile,
 } from "../src/services/drive.js";
@@ -165,6 +167,36 @@ describe("deleteDriveFile", () => {
     mockFiles.delete.mockResolvedValue({ data: {} });
     await deleteDriveFile(client, { fileId: "f1" });
     expect(mockFiles.delete).toHaveBeenCalledWith({ fileId: "f1" });
+  });
+});
+
+describe("trashDriveFile", () => {
+  it("trashes a file via files.update trashed:true", async () => {
+    mockFiles.update.mockResolvedValue({
+      data: { id: "f1", name: "n", trashed: true },
+    });
+    const result = await trashDriveFile(client, { fileId: "f1" });
+    expect(mockFiles.update).toHaveBeenCalledWith({
+      fileId: "f1",
+      requestBody: { trashed: true },
+      fields: "id,name,mimeType,size,createdTime,modifiedTime,webViewLink,trashed",
+    });
+    expect(result.trashed).toBe(true);
+  });
+});
+
+describe("restoreDriveFile", () => {
+  it("restores a file via files.update trashed:false", async () => {
+    mockFiles.update.mockResolvedValue({
+      data: { id: "f1", name: "n", trashed: false },
+    });
+    const result = await restoreDriveFile(client, { fileId: "f1" });
+    expect(mockFiles.update).toHaveBeenCalledWith({
+      fileId: "f1",
+      requestBody: { trashed: false },
+      fields: "id,name,mimeType,size,createdTime,modifiedTime,webViewLink,trashed",
+    });
+    expect(result.trashed).toBe(false);
   });
 });
 
