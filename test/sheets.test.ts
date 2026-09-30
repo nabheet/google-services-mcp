@@ -24,10 +24,14 @@ import {
   appendSheetRange,
   batchUpdateSheet,
   createSpreadsheet,
+  deleteRows,
   deleteSheet,
+  getNamedRanges,
   getSpreadsheet,
+  insertRows,
   readSheetRange,
   renameSheet,
+  setNamedRange,
   writeSheetRange,
 } from "../src/services/sheets.js";
 
@@ -212,6 +216,96 @@ describe("sheets service", () => {
             },
           },
         ],
+      },
+    });
+  });
+
+  it("insertRows inserts rows at startIndex", async () => {
+    mockSpreadsheets.batchUpdate.mockResolvedValue({ data: { replies: [] } });
+    await insertRows(client, { spreadsheetId: "s1", sheetId: 0, startIndex: 3, numRows: 2 });
+    const body = mockSpreadsheets.batchUpdate.mock.calls[0][0].requestBody;
+    expect(body.requests[0].insertDimension).toEqual({
+      range: { sheetId: 0, dimension: "ROWS", startIndex: 3, endIndex: 5 },
+    });
+  });
+
+  it("insertRows defaults to one row", async () => {
+    mockSpreadsheets.batchUpdate.mockResolvedValue({ data: { replies: [] } });
+    await insertRows(client, { spreadsheetId: "s1", sheetId: 0, startIndex: 1 });
+    const body = mockSpreadsheets.batchUpdate.mock.calls[0][0].requestBody;
+    expect(body.requests[0].insertDimension.range).toEqual({
+      sheetId: 0,
+      dimension: "ROWS",
+      startIndex: 1,
+      endIndex: 2,
+    });
+  });
+
+  it("deleteRows removes rows at startIndex", async () => {
+    mockSpreadsheets.batchUpdate.mockResolvedValue({ data: { replies: [] } });
+    await deleteRows(client, { spreadsheetId: "s1", sheetId: 0, startIndex: 4, numRows: 3 });
+    const body = mockSpreadsheets.batchUpdate.mock.calls[0][0].requestBody;
+    expect(body.requests[0].deleteDimension).toEqual({
+      range: { sheetId: 0, dimension: "ROWS", startIndex: 4, endIndex: 7 },
+    });
+  });
+
+  it("getNamedRanges returns normalized named ranges", async () => {
+    mockSpreadsheets.get.mockResolvedValue({
+      data: {
+        spreadsheetId: "s1",
+        namedRanges: [
+          {
+            namedRangeId: "nr1",
+            name: "Header",
+            range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1 },
+          },
+        ],
+      },
+    });
+    const result = await getNamedRanges(client, { spreadsheetId: "s1" });
+    expect(result).toEqual([
+      {
+        namedRangeId: "nr1",
+        name: "Header",
+        range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1 },
+      },
+    ]);
+    expect(mockSpreadsheets.get).toHaveBeenCalledWith({
+      spreadsheetId: "s1",
+      includeGridData: false,
+    });
+  });
+
+  it("setNamedRange adds a named range", async () => {
+    mockSpreadsheets.batchUpdate.mockResolvedValue({
+      data: {
+        replies: [{ addNamedRange: { namedRange: { namedRangeId: "nr9" } } }],
+      },
+    });
+    const result = await setNamedRange(client, {
+      spreadsheetId: "s1",
+      name: "Data",
+      range: {
+        sheetId: 0,
+        startRowIndex: 0,
+        endRowIndex: 10,
+        startColumnIndex: 0,
+        endColumnIndex: 3,
+      },
+    });
+    expect(result.namedRangeId).toBe("nr9");
+    const body = mockSpreadsheets.batchUpdate.mock.calls[0][0].requestBody;
+    expect(body.requests[0].addNamedRange).toEqual({
+      namedRange: {
+        name: "Data",
+        range: {
+          sheetId: 0,
+          startRowIndex: 0,
+          endRowIndex: 10,
+          startColumnIndex: 0,
+          endColumnIndex: 3,
+        },
       },
     });
   });

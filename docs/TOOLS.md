@@ -667,6 +667,26 @@ metadata).
 Rename a tab (sheet) in a spreadsheet. Args: `spreadsheetId` (required),
 `sheetId` (required numeric sheet ID), `title` (required new tab title).
 
+### `google_sheets_insert_rows`
+
+Insert blank rows. Args: `spreadsheetId`, `sheetId`, `startIndex` (required,
+0-based), `numRows` (default 1).
+
+### `google_sheets_delete_rows`
+
+Delete rows. Args: `spreadsheetId`, `sheetId`, `startIndex` (required, 0-based),
+`numRows` (default 1).
+
+### `google_sheets_get_named_ranges`
+
+List named ranges. Arg: `spreadsheetId` (required). Returns
+`{ name, namedRangeId, range }` per range.
+
+### `google_sheets_set_named_range`
+
+Create a named range. Args: `spreadsheetId`, `name` (required), `range`
+(required grid region: `sheetId` plus optional row/column index bounds).
+
 ### `google_sheets_batch_update`
 
 Send raw Sheets batchUpdate requests. Args: `spreadsheetId` (required),
