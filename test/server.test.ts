@@ -171,6 +171,10 @@ describe("server tool registration", () => {
     expect(names).toContain("google_sheets_add_sheet");
     expect(names).toContain("google_sheets_delete_sheet");
     expect(names).toContain("google_sheets_rename_sheet");
+    expect(names).toContain("google_sheets_insert_rows");
+    expect(names).toContain("google_sheets_delete_rows");
+    expect(names).toContain("google_sheets_get_named_ranges");
+    expect(names).toContain("google_sheets_set_named_range");
     expect(names).toContain("google_docs_get");
     expect(names).toContain("google_docs_read");
     expect(names).toContain("google_docs_create");
@@ -207,7 +211,7 @@ describe("server tool registration", () => {
     expect(names).toContain("google_forms_rename");
     expect(names).toContain("google_forms_delete");
     expect(names).toContain("google_forms_export_responses");
-    expect(names.length).toBe(124);
+    expect(names.length).toBe(128);
   });
 });
 

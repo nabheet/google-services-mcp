@@ -177,3 +177,106 @@ export async function renameSheet(
     ],
   });
 }
+
+export interface RowRangeArgs {
+  spreadsheetId: string;
+  sheetId: number;
+  startIndex: number;
+  numRows?: number;
+}
+
+/** Insert blank rows starting at startIndex (0-based). */
+export async function insertRows(
+  client: Auth.OAuth2Client,
+  { spreadsheetId, sheetId, startIndex, numRows = 1 }: RowRangeArgs,
+): Promise<sheets_v4.Schema$BatchUpdateSpreadsheetResponse> {
+  return batchUpdateSheet(client, {
+    spreadsheetId,
+    requests: [
+      {
+        insertDimension: {
+          range: {
+            sheetId,
+            dimension: "ROWS",
+            startIndex,
+            endIndex: startIndex + numRows,
+          },
+        },
+      },
+    ],
+  });
+}
+
+/** Delete rows starting at startIndex (0-based). */
+export async function deleteRows(
+  client: Auth.OAuth2Client,
+  { spreadsheetId, sheetId, startIndex, numRows = 1 }: RowRangeArgs,
+): Promise<sheets_v4.Schema$BatchUpdateSpreadsheetResponse> {
+  return batchUpdateSheet(client, {
+    spreadsheetId,
+    requests: [
+      {
+        deleteDimension: {
+          range: {
+            sheetId,
+            dimension: "ROWS",
+            startIndex,
+            endIndex: startIndex + numRows,
+          },
+        },
+      },
+    ],
+  });
+}
+
+export interface GridRange {
+  sheetId: number;
+  startRowIndex?: number;
+  endRowIndex?: number;
+  startColumnIndex?: number;
+  endColumnIndex?: number;
+}
+
+export interface NamedRangeInfo {
+  namedRangeId?: string;
+  name?: string;
+  range?: GridRange;
+}
+
+/** List named ranges on a spreadsheet. */
+export async function getNamedRanges(
+  client: Auth.OAuth2Client,
+  { spreadsheetId }: GetSpreadsheetArgs,
+): Promise<NamedRangeInfo[]> {
+  const sheets = google.sheets({ version: "v4", auth: client });
+  const meta = await sheets.spreadsheets.get({ spreadsheetId, includeGridData: false });
+  return (meta.data.namedRanges ?? []).map((nr) => ({
+    namedRangeId: nr.namedRangeId ?? undefined,
+    name: nr.name ?? undefined,
+    range: {
+      sheetId: nr.range?.sheetId ?? 0,
+      ...(nr.range?.startRowIndex != null && { startRowIndex: nr.range.startRowIndex }),
+      ...(nr.range?.endRowIndex != null && { endRowIndex: nr.range.endRowIndex }),
+      ...(nr.range?.startColumnIndex != null && { startColumnIndex: nr.range.startColumnIndex }),
+      ...(nr.range?.endColumnIndex != null && { endColumnIndex: nr.range.endColumnIndex }),
+    },
+  }));
+}
+
+export interface SetNamedRangeArgs {
+  spreadsheetId: string;
+  name: string;
+  range: GridRange;
+}
+
+/** Create a named range on a spreadsheet. */
+export async function setNamedRange(
+  client: Auth.OAuth2Client,
+  { spreadsheetId, name, range }: SetNamedRangeArgs,
+): Promise<{ namedRangeId?: string | null }> {
+  const res = await batchUpdateSheet(client, {
+    spreadsheetId,
+    requests: [{ addNamedRange: { namedRange: { name, range } } }],
+  });
+  return res.replies?.[0]?.addNamedRange?.namedRange ?? { namedRangeId: undefined };
+}
