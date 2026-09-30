@@ -302,6 +302,47 @@ describe("sendGmail with Drive attachments", () => {
   });
 });
 
+describe("sendGmail with inline attachments", () => {
+  it("emits inline disposition and Content-ID when cid is provided", async () => {
+    const path = join(tmpDir, "logo.png");
+    writeFileSync(path, Buffer.from("png-bytes"));
+    mockMessages.send.mockResolvedValue({ data: { id: "m1" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "With image",
+      body: '<img src="cid:logo" />',
+      bodyType: "html",
+      attachments: [
+        { path, filename: "logo.png", mimeType: "image/png", disposition: "inline", cid: "logo" },
+      ],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain('Content-Disposition: inline; filename="logo.png"');
+    expect(raw).toContain("Content-ID: <logo>");
+    expect(raw).not.toContain('Content-Disposition: attachment; filename="logo.png"');
+  });
+
+  it("auto-generates a Content-ID from the filename when cid is missing", async () => {
+    const path = join(tmpDir, "logo.png");
+    writeFileSync(path, Buffer.from("png-bytes"));
+    mockMessages.send.mockResolvedValue({ data: { id: "m1" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "With image",
+      body: '<img src="cid:logo.png@mcp" />',
+      bodyType: "html",
+      attachments: [{ path, filename: "logo.png", mimeType: "image/png", disposition: "inline" }],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain('Content-Disposition: inline; filename="logo.png"');
+    expect(raw).toContain("Content-ID: <logo.png@mcp>");
+  });
+});
+
 describe("listGmailMessages", () => {
   it("passes query and maxResults and maps results", async () => {
     mockMessages.list.mockResolvedValue({
