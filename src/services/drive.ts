@@ -77,6 +77,7 @@ export interface DriveFile {
   createdTime?: string;
   modifiedTime?: string;
   webViewLink?: string;
+  trashed?: boolean;
 }
 
 export interface DownloadDriveResult {
@@ -183,13 +184,41 @@ export async function updateDriveFile(
   return mapFile(res.data);
 }
 
-/** Permanently delete a file. */
+/** Permanently delete a file. IRREVERSIBLE — prefer trashDriveFile. */
 export async function deleteDriveFile(
   client: Auth.OAuth2Client,
   opts: GetDriveOptions,
 ): Promise<void> {
   const drive = google.drive({ version: "v3", auth: client });
   await drive.files.delete({ fileId: opts.fileId });
+}
+
+/** Move a file to trash (recoverable via restoreDriveFile). */
+export async function trashDriveFile(
+  client: Auth.OAuth2Client,
+  opts: GetDriveOptions,
+): Promise<DriveFile> {
+  const drive = google.drive({ version: "v3", auth: client });
+  const res = await drive.files.update({
+    fileId: opts.fileId,
+    requestBody: { trashed: true },
+    fields: "id,name,mimeType,size,createdTime,modifiedTime,webViewLink,trashed",
+  });
+  return mapFile(res.data);
+}
+
+/** Restore a file from trash. */
+export async function restoreDriveFile(
+  client: Auth.OAuth2Client,
+  opts: GetDriveOptions,
+): Promise<DriveFile> {
+  const drive = google.drive({ version: "v3", auth: client });
+  const res = await drive.files.update({
+    fileId: opts.fileId,
+    requestBody: { trashed: false },
+    fields: "id,name,mimeType,size,createdTime,modifiedTime,webViewLink,trashed",
+  });
+  return mapFile(res.data);
 }
 
 /** Move a file into a folder (and optionally out of its current folder). */
@@ -265,6 +294,7 @@ function mapFile(f: drive_v3.Schema$File): DriveFile {
     createdTime: f.createdTime as string | undefined,
     modifiedTime: f.modifiedTime as string | undefined,
     webViewLink: f.webViewLink as string | undefined,
+    trashed: f.trashed as boolean | undefined,
   };
 }
 

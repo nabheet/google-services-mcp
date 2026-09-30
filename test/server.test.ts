@@ -141,6 +141,8 @@ describe("server tool registration", () => {
     expect(names).toContain("google_drive_upload");
     expect(names).toContain("google_drive_update");
     expect(names).toContain("google_drive_delete");
+    expect(names).toContain("google_drive_trash");
+    expect(names).toContain("google_drive_restore");
     expect(names).toContain("google_drive_share");
     expect(names).toContain("google_drive_download");
     expect(names).toContain("google_drive_export");
@@ -195,7 +197,7 @@ describe("server tool registration", () => {
     expect(names).toContain("google_forms_responses");
     expect(names).toContain("google_forms_create");
     expect(names).toContain("google_forms_add_question");
-    expect(names.length).toBe(112);
+    expect(names.length).toBe(114);
   });
 });
 
