@@ -100,6 +100,7 @@ import {
   sendGmailDraft,
   trashGmailMessage,
   untrashGmailMessage,
+  updateGmailDraft,
   updateGmailLabel,
   updateVacationSettings,
 } from "../services/gmail.js";
@@ -626,6 +627,99 @@ export function registerTools(server: McpServer): void {
           driveFileIds,
           from,
           replyTo,
+        }),
+      ),
+  );
+
+  server.registerTool(
+    "google_gmail_drafts_update",
+    {
+      title: "Update email draft",
+      description:
+        "Replace the contents of an existing draft (recipients, subject, body, attachments).",
+      inputSchema: {
+        id: z.string().describe("Draft ID to update."),
+        to: z.union([z.string(), z.array(z.string())]).describe("Recipient email(s)."),
+        subject: z.string().describe("Subject line."),
+        body: z.string().describe("Message body."),
+        cc: z
+          .union([z.string(), z.array(z.string())])
+          .optional()
+          .describe("CC recipient(s)."),
+        bcc: z
+          .union([z.string(), z.array(z.string())])
+          .optional()
+          .describe("BCC recipient(s)."),
+        bodyType: z.enum(["text", "html"]).optional().describe("Body format (default text)."),
+        attachments: z
+          .array(
+            z.object({
+              path: z.string().describe("Local filesystem path of the file to attach."),
+              filename: z
+                .string()
+                .optional()
+                .describe(
+                  "Attachment filename shown to recipients (defaults to the basename of path).",
+                ),
+              mimeType: z
+                .string()
+                .optional()
+                .describe("MIME type override (defaults to a guess from the filename)."),
+              disposition: z
+                .enum(["attachment", "inline"])
+                .optional()
+                .describe(
+                  "How the part is presented (default attachment; inline embeds it in the body).",
+                ),
+              cid: z
+                .string()
+                .optional()
+                .describe("Content-ID for inline parts so HTML can reference them as cid:<cid>."),
+            }),
+          )
+          .optional()
+          .describe("Local files to attach to the draft."),
+        driveFileIds: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Drive file IDs to attach by reference (downloaded under the Gmail size limit).",
+          ),
+        from: z.string().optional().describe("Send-as alias or address to set as the From header."),
+        replyTo: z.string().optional().describe("Address to set as the Reply-To header."),
+        threadId: z.string().optional().describe("Thread ID when the draft continues a thread."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({
+      id,
+      to,
+      subject,
+      body,
+      cc,
+      bcc,
+      bodyType,
+      attachments,
+      driveFileIds,
+      from,
+      replyTo,
+      threadId,
+      account,
+    }) =>
+      withClient(account, (client) =>
+        updateGmailDraft(client, {
+          id,
+          to,
+          subject,
+          body,
+          cc,
+          bcc,
+          bodyType,
+          attachments,
+          driveFileIds,
+          from,
+          replyTo,
+          threadId,
         }),
       ),
   );
