@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { google } from "googleapis";
 /**
  * Live smoke test for #49: Slides helpers.
  *

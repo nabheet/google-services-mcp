@@ -13,7 +13,6 @@ import {
   createSpreadsheet,
   deleteRows,
   getNamedRanges,
-  getSpreadsheet,
   insertRows,
   readSheetRange,
   setNamedRange,
