@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import type { Auth, gmail_v1 } from "googleapis";
 import { google } from "googleapis";
+import { downloadDriveFile, getDriveFile } from "./drive.js";
 
 /** A local file to attach to an outgoing message. */
 export interface GmailAttachmentInput {
@@ -22,6 +23,8 @@ export interface SendGmailOptions {
   body: string;
   bodyType?: "text" | "html";
   attachments?: GmailAttachmentInput[];
+  /** Drive file IDs to attach by reference (downloaded under the Gmail limit). */
+  driveFileIds?: string[];
 }
 
 export interface ListGmailOptions {
@@ -46,6 +49,8 @@ export interface ReplyGmailOptions {
   body: string;
   bodyType?: "text" | "html";
   attachments?: GmailAttachmentInput[];
+  /** Drive file IDs to attach by reference (downloaded under the Gmail limit). */
+  driveFileIds?: string[];
 }
 
 export interface GmailMessageSummary {
@@ -229,6 +234,64 @@ async function readAttachment(path: string): Promise<Buffer> {
   }
 }
 
+interface ResolvedAttachment {
+  buffer: Buffer;
+  filename: string;
+  mimeType: string;
+}
+
+/** Resolve Drive file IDs into attachment bytes under the Gmail size cap. */
+async function resolveDriveAttachments(
+  client: Auth.OAuth2Client,
+  fileIds: string[],
+): Promise<ResolvedAttachment[]> {
+  const out: ResolvedAttachment[] = [];
+  for (const fileId of fileIds) {
+    const meta = await getDriveFile(client, { fileId });
+    if (!meta?.name) {
+      throw new Error(`Drive file not found: ${fileId}`);
+    }
+    if (meta.size && Number(meta.size) > MAX_ATTACHMENT_BYTES) {
+      throw new Error(
+        `Drive file too large to attach: ${meta.name} (${meta.size} bytes). ` +
+          "Share the file (google_drive_share) and insert its webViewLink in the body instead.",
+      );
+    }
+    const dl = await downloadDriveFile(client, { fileId });
+    if ("savedTo" in dl) {
+      throw new Error(`Unexpected savedTo result while attaching Drive file ${fileId}`);
+    }
+    const buffer = dl.binary ? Buffer.from(dl.data, "base64") : Buffer.from(dl.data, "utf8");
+    out.push({
+      buffer,
+      filename: sanitizeFilename(meta.name),
+      mimeType: sanitizeMimeType(meta.mimeType ?? "") || guessMimeType(meta.name),
+    });
+  }
+  return out;
+}
+
+/** Resolve every attachment (local paths + Drive IDs) to buffers. */
+async function resolveAttachments(
+  client: Auth.OAuth2Client,
+  opts: SendGmailOptions,
+): Promise<ResolvedAttachment[]> {
+  const local = await Promise.all(
+    (opts.attachments ?? []).map(async (att) => {
+      const buffer = await readAttachment(att.path);
+      const filename = sanitizeFilename(att.filename ?? basename(att.path));
+      return {
+        buffer,
+        filename,
+        mimeType:
+          sanitizeMimeType(att.mimeType || guessMimeType(filename)) || guessMimeType(filename),
+      };
+    }),
+  );
+  const drive = await resolveDriveAttachments(client, opts.driveFileIds ?? []);
+  return [...local, ...drive];
+}
+
 /**
  * Build a raw RFC2822 message, emitting multipart/mixed when attachments are
  * present and the exact same single-part layout as `buildRawMessage` when not.
@@ -238,6 +301,7 @@ async function readAttachment(path: string): Promise<Buffer> {
  */
 async function buildRawEmail(
   opts: SendGmailOptions,
+  client: Auth.OAuth2Client,
   extraHeaders?: string[],
   skipValidation = false,
 ): Promise<string> {
@@ -257,7 +321,7 @@ async function buildRawEmail(
   lines.push(`Subject: ${encodeSubject(opts.subject)}`);
   if (extraHeaders?.length) lines.push(...extraHeaders);
 
-  const attachments = opts.attachments ?? [];
+  const attachments = await resolveAttachments(client, opts);
   const contentType = opts.bodyType === "html" ? "text/html" : "text/plain";
 
   if (attachments.length === 0) {
@@ -284,15 +348,14 @@ async function buildRawEmail(
   lines.push("");
   // Attachment parts (base64 always — safe for text and binary)
   for (const att of attachments) {
-    const buf = await readAttachment(att.path);
+    const buf = att.buffer;
     if (buf.length > MAX_ATTACHMENT_BYTES) {
       throw new Error(
-        `Attachment too large: ${att.path} (${buf.length} bytes); Gmail limit is ${GMAIL_MESSAGE_LIMIT_BYTES} bytes total`,
+        `Attachment too large: ${att.filename} (${buf.length} bytes); Gmail limit is ${GMAIL_MESSAGE_LIMIT_BYTES} bytes total`,
       );
     }
-    const filename = sanitizeFilename(att.filename ?? basename(att.path));
-    const mimeType =
-      sanitizeMimeType(att.mimeType || guessMimeType(filename)) || guessMimeType(filename);
+    const filename = att.filename;
+    const mimeType = att.mimeType;
     lines.push(`--${boundary}`);
     lines.push(`Content-Type: ${mimeType}; name="${filename}"`);
     lines.push(`Content-Disposition: attachment; filename="${filename}"`);
@@ -337,7 +400,7 @@ function parseHeaders(headers: Array<{ name?: string | null; value?: string | nu
 
 /** Send an email. Returns { id, threadId }. */
 export async function sendGmail(client: Auth.OAuth2Client, opts: SendGmailOptions) {
-  const raw = toBase64Url(await buildRawEmail(opts));
+  const raw = toBase64Url(await buildRawEmail(opts, client));
   const gmail = google.gmail({ version: "v1", auth: client });
   const res = await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
   return res.data as { id: string; threadId?: string };
@@ -425,7 +488,9 @@ export async function replyGmail(client: Auth.OAuth2Client, opts: ReplyGmailOpti
         body: opts.body,
         bodyType: opts.bodyType,
         attachments: opts.attachments,
+        driveFileIds: opts.driveFileIds,
       },
+      client,
       [
         `In-Reply-To: ${parsed.messageId}`,
         `References: ${[parsed.references, parsed.messageId].filter(Boolean).join(" ")}`,
@@ -556,7 +621,7 @@ export async function createGmailDraft(
   client: Auth.OAuth2Client,
   opts: SendGmailOptions,
 ): Promise<DraftSummary> {
-  const raw = toBase64Url(await buildRawEmail(opts));
+  const raw = toBase64Url(await buildRawEmail(opts, client));
   const gmail = google.gmail({ version: "v1", auth: client });
   const res = await gmail.users.drafts.create({
     userId: "me",
