@@ -19,8 +19,11 @@ const client = {} as never;
 import {
   batchUpdateDocument,
   createDocument,
+  deleteRange,
   getDocument,
   getDocumentText,
+  insertInlineImage,
+  insertTable,
   insertText,
   replaceAllText,
 } from "../src/services/docs.js";
@@ -116,6 +119,50 @@ describe("docs service", () => {
     expect(mockDocs.documents.batchUpdate).toHaveBeenCalledWith({
       documentId: "d1",
       requestBody: { requests },
+    });
+  });
+
+  it("deleteRange sends a deleteContentRange request", async () => {
+    mockDocs.documents.batchUpdate.mockResolvedValue({ data: { replies: [] } });
+    const result = await deleteRange(client, { documentId: "d1", startIndex: 3, endIndex: 10 });
+    expect(result.deleted).toBe(true);
+    expect(mockDocs.documents.batchUpdate).toHaveBeenCalledWith({
+      documentId: "d1",
+      requestBody: {
+        requests: [{ deleteContentRange: { range: { startIndex: 3, endIndex: 10 } } }],
+      },
+    });
+  });
+
+  it("insertTable sends an insertTable request with location", async () => {
+    mockDocs.documents.batchUpdate.mockResolvedValue({ data: { replies: [] } });
+    const result = await insertTable(client, { documentId: "d1", rows: 2, columns: 3, index: 5 });
+    expect(result.inserted).toBe(true);
+    expect(mockDocs.documents.batchUpdate).toHaveBeenCalledWith({
+      documentId: "d1",
+      requestBody: {
+        requests: [{ insertTable: { rows: 2, columns: 3, location: { index: 5 } } }],
+      },
+    });
+  });
+
+  it("insertInlineImage returns the created object id", async () => {
+    mockDocs.documents.batchUpdate.mockResolvedValue({
+      data: { replies: [{ insertInlineImage: { objectId: "kix.abc123" } }] },
+    });
+    const result = await insertInlineImage(client, {
+      documentId: "d1",
+      uri: "https://example.com/img.png",
+      index: 7,
+    });
+    expect(result.objectId).toBe("kix.abc123");
+    expect(mockDocs.documents.batchUpdate).toHaveBeenCalledWith({
+      documentId: "d1",
+      requestBody: {
+        requests: [
+          { insertInlineImage: { uri: "https://example.com/img.png", location: { index: 7 } } },
+        ],
+      },
     });
   });
 

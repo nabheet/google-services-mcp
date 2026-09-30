@@ -102,3 +102,63 @@ export async function batchUpdateDocument(
   const res = await docs.documents.batchUpdate({ documentId, requestBody: { requests } });
   return res.data;
 }
+
+export interface DeleteRangeArgs {
+  documentId: string;
+  /** 0-based start index (inclusive). */
+  startIndex: number;
+  /** 0-based end index (exclusive). */
+  endIndex: number;
+}
+
+/** Delete a range of content from a document. */
+export async function deleteRange(
+  client: Auth.OAuth2Client,
+  { documentId, startIndex, endIndex }: DeleteRangeArgs,
+): Promise<{ deleted: boolean }> {
+  await batchUpdateDocument(client, {
+    documentId,
+    requests: [{ deleteContentRange: { range: { startIndex, endIndex } } }],
+  });
+  return { deleted: true };
+}
+
+export interface InsertTableArgs {
+  documentId: string;
+  rows: number;
+  columns: number;
+  /** 0-based index where the table is inserted (a newline is added before it). */
+  index: number;
+}
+
+/** Insert an empty table at a model index. */
+export async function insertTable(
+  client: Auth.OAuth2Client,
+  { documentId, rows, columns, index }: InsertTableArgs,
+): Promise<{ inserted: boolean }> {
+  await batchUpdateDocument(client, {
+    documentId,
+    requests: [{ insertTable: { rows, columns, location: { index } } }],
+  });
+  return { inserted: true };
+}
+
+export interface InsertInlineImageArgs {
+  documentId: string;
+  /** Publicly accessible PNG/JPEG/GIF URI (< 50MB, <= 25MP). */
+  uri: string;
+  /** 0-based index inside an existing paragraph. */
+  index: number;
+}
+
+/** Insert an inline image and return the created object id. */
+export async function insertInlineImage(
+  client: Auth.OAuth2Client,
+  { documentId, uri, index }: InsertInlineImageArgs,
+): Promise<{ objectId?: string | null }> {
+  const res = await batchUpdateDocument(client, {
+    documentId,
+    requests: [{ insertInlineImage: { uri, location: { index } } }],
+  });
+  return res.replies?.[0]?.insertInlineImage ?? { objectId: undefined };
+}
