@@ -104,6 +104,8 @@ describe("server tool registration", () => {
     expect(names).toContain("google_gmail_send");
     expect(names).toContain("google_gmail_list");
     expect(names).toContain("google_gmail_get");
+    expect(names).toContain("google_gmail_threads_list");
+    expect(names).toContain("google_gmail_threads_get");
     expect(names).toContain("google_gmail_modify");
     expect(names).toContain("google_gmail_reply");
     expect(names).toContain("google_gmail_list_attachments");
@@ -214,7 +216,7 @@ describe("server tool registration", () => {
     expect(names).toContain("google_forms_rename");
     expect(names).toContain("google_forms_delete");
     expect(names).toContain("google_forms_export_responses");
-    expect(names.length).toBe(131);
+    expect(names.length).toBe(133);
   });
 });
 

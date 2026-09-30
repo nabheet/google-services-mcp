@@ -75,6 +75,25 @@ Fetch a single message with parsed headers, body and attachment metadata.
 | ---  | ---    | ---                   |
 | `id` | string | required. Message ID. |
 
+### `google_gmail_threads_list`
+
+List conversation threads, newest first, with an optional Gmail search query.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `query` | string | optional. Gmail syntax, e.g. `from:bob newer_than:2d`. |
+| `maxResults` | number (1–100) | optional, default 25. |
+
+### `google_gmail_threads_get`
+
+Fetch a full conversation thread with every message parsed (headers, body,
+attachments).
+
+| arg | type | notes |
+| --- | --- | --- |
+| `id` | string | required. Thread ID. |
+| `format` | `full` \| `metadata` \| `minimal` | optional, default `full`. |
+
 ### `google_gmail_modify`
 
 Add or remove labels on a message (mark read/unread, star, archive…).
