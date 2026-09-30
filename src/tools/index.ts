@@ -120,6 +120,7 @@ import {
   searchVideos,
   setCommentModeration,
   updateVideo,
+  uploadVideo,
 } from "../services/youtube.js";
 import { err, ok } from "../util/result.js";
 
@@ -2102,6 +2103,55 @@ export function registerTools(server: McpServer): void {
     },
     async ({ query, maxResults, account }) =>
       withClient(account, (client) => searchVideos(client, { query, maxResults })),
+  );
+
+  server.registerTool(
+    "google_youtube_upload",
+    {
+      title: "Upload YouTube video",
+      description:
+        "Upload a video to YouTube. Provide a local file path (preferred) or base64 content. Defaults to private.",
+      inputSchema: {
+        path: z.string().optional().describe("Local file path of the video (preferred)."),
+        content: z
+          .string()
+          .optional()
+          .describe("Base64-encoded video bytes (small files only). Mutually exclusive with path."),
+        title: z.string().describe("Video title."),
+        description: z.string().optional().describe("Video description."),
+        tags: z.array(z.string()).optional().describe("Video tags."),
+        privacyStatus: z
+          .enum(["public", "private", "unlisted"])
+          .optional()
+          .describe("Privacy (default private)."),
+        categoryId: z.string().optional().describe("YouTube category ID."),
+        notifySubscribers: z.boolean().optional().describe("Notify subscribers (default false)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({
+      path: filePath,
+      content,
+      title,
+      description,
+      tags,
+      privacyStatus,
+      categoryId,
+      notifySubscribers,
+      account,
+    }) =>
+      withClient(account, (client) =>
+        uploadVideo(client, {
+          path: filePath,
+          content,
+          title,
+          description,
+          tags,
+          privacyStatus,
+          categoryId,
+          notifySubscribers,
+        }),
+      ),
   );
 
   server.registerTool(

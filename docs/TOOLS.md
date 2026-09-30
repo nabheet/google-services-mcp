@@ -723,6 +723,26 @@ Returns `{ id, type, title, channelTitle }` per item.
 
 Get video details (snippet, contentDetails, statistics). Arg: `videoId` (required).
 
+### `google_youtube_upload`
+
+Upload a video to YouTube via `videos.insert` (multipart). Provide either a
+local `path` (preferred, streamed) or base64 `content` (small files only) —
+never both. Defaults to `private`; set `notifySubscribers` only if intended.
+
+| arg | type | notes |
+| --- | --- | --- |
+| `path` | string | optional. Local file path. |
+| `content` | string | optional. Base64 bytes. Mutually exclusive with `path`. |
+| `title` | string | required. |
+| `description` | string | optional. |
+| `tags` | string[] | optional. |
+| `privacyStatus` | enum | optional. `public`, `private`, or `unlisted` (default `private`). |
+| `categoryId` | string | optional. YouTube category ID. |
+| `notifySubscribers` | boolean | optional. Default `false`. |
+
+Note: uploading consumes significant YouTube API quota (~1600 units per
+video). Keep videos private until ready.
+
 ### `google_youtube_update_video`
 
 Update a video's title, description, tags, or privacy status. All fields

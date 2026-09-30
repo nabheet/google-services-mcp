@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { Auth, youtube_v3 } from "googleapis";
 import { google } from "googleapis";
 
@@ -53,6 +55,92 @@ export interface UpdateVideoArgs {
   description?: string;
   tags?: string[];
   privacyStatus?: "public" | "private" | "unlisted";
+}
+
+export interface UploadVideoArgs {
+  /** Local file path of the video to upload (preferred for large files). */
+  path?: string;
+  /** Base64-encoded video bytes (small files only). Mutually exclusive with path. */
+  content?: string;
+  title: string;
+  description?: string;
+  tags?: string[];
+  privacyStatus?: "public" | "private" | "unlisted";
+  categoryId?: string;
+  /** Notify subscribers (default false — safe). */
+  notifySubscribers?: boolean;
+}
+
+const MIME_BY_EXT: Record<string, string> = {
+  ".mp4": "video/mp4",
+  ".mov": "video/quicktime",
+  ".webm": "video/webm",
+  ".avi": "video/x-msvideo",
+  ".mkv": "video/x-matroska",
+  ".m4v": "video/x-m4v",
+  ".flv": "video/x-flv",
+};
+
+function mimeForPath(p: string): string {
+  const ext = path.extname(p).toLowerCase();
+  return MIME_BY_EXT[ext] ?? "video/mp4";
+}
+
+export async function uploadVideo(
+  client: Auth.OAuth2Client,
+  {
+    path: filePath,
+    content,
+    title,
+    description,
+    tags,
+    privacyStatus = "private",
+    categoryId,
+    notifySubscribers = false,
+  }: UploadVideoArgs,
+): Promise<youtube_v3.Schema$Video> {
+  if (filePath !== undefined && content !== undefined) {
+    throw new Error("Provide either path or content, not both.");
+  }
+  if (filePath === undefined && content === undefined) {
+    throw new Error("Provide either a file path or base64 content.");
+  }
+
+  let media: { mimeType: string; body: fs.ReadStream | Buffer };
+  if (filePath !== undefined) {
+    // Open synchronously so a missing file fails fast (openSync throws) and
+    // the stream is already open (no deferred open, no dangling ENOENT).
+    const fd = fs.openSync(filePath, "r");
+    media = {
+      mimeType: mimeForPath(filePath),
+      body: fs.createReadStream(filePath, { fd }),
+    };
+  } else {
+    media = { mimeType: "video/mp4", body: Buffer.from(content as string, "base64") };
+  }
+
+  const yt = google.youtube({ version: "v3", auth: client });
+  const res = await (
+    yt.videos.insert as unknown as (
+      params: youtube_v3.Params$Resource$Videos$Insert,
+    ) => Promise<{ data: youtube_v3.Schema$Video }>
+  )({
+    part: ["snippet", "status"],
+    requestBody: {
+      snippet: {
+        title,
+        ...(description !== undefined ? { description } : {}),
+        ...(tags !== undefined ? { tags } : {}),
+        ...(categoryId !== undefined ? { categoryId } : {}),
+      },
+      status: {
+        privacyStatus,
+      },
+    },
+    notifySubscribers,
+    media,
+  });
+  return res.data;
 }
 
 export async function updateVideo(
