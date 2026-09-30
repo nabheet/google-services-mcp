@@ -422,6 +422,18 @@ required; `name`, `mimeType`, `content`, `path` optional.
 
 Permanently delete a file. Args: `fileId` (required).
 
+> IRREVERSIBLE. Prefer `google_drive_trash` (recoverable) as the safer default.
+
+### `google_drive_trash`
+
+Move a file to trash (recoverable). Args: `fileId` (required). Sets
+`trashed: true` via `files.update`.
+
+### `google_drive_restore`
+
+Restore a trashed file. Args: `fileId` (required). Sets `trashed: false` via
+`files.update`.
+
 ### `google_drive_share`
 
 Share a file with a user/group by email, anyone with the link, or a domain;
