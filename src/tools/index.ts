@@ -284,12 +284,37 @@ export function registerTools(server: McpServer): void {
           .describe(
             "Drive file IDs to attach by reference (downloaded under the Gmail size limit).",
           ),
+        from: z.string().optional().describe("Send-as alias or address to set as the From header."),
+        replyTo: z.string().optional().describe("Address to set as the Reply-To header."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ to, subject, body, cc, bcc, bodyType, attachments, driveFileIds, account }) =>
+    async ({
+      to,
+      subject,
+      body,
+      cc,
+      bcc,
+      bodyType,
+      attachments,
+      driveFileIds,
+      from,
+      replyTo,
+      account,
+    }) =>
       withClient(account, (client) =>
-        sendGmail(client, { to, subject, body, cc, bcc, bodyType, attachments, driveFileIds }),
+        sendGmail(client, {
+          to,
+          subject,
+          body,
+          cc,
+          bcc,
+          bodyType,
+          attachments,
+          driveFileIds,
+          from,
+          replyTo,
+        }),
       ),
   );
 
@@ -375,12 +400,33 @@ export function registerTools(server: McpServer): void {
           .describe(
             "Drive file IDs to attach by reference (downloaded under the Gmail size limit).",
           ),
+        from: z.string().optional().describe("Send-as alias or address to set as the From header."),
+        replyTo: z.string().optional().describe("Address to set as the Reply-To header."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ threadId, messageId, body, bodyType, attachments, driveFileIds, account }) =>
+    async ({
+      threadId,
+      messageId,
+      body,
+      bodyType,
+      attachments,
+      driveFileIds,
+      from,
+      replyTo,
+      account,
+    }) =>
       withClient(account, (client) =>
-        replyGmail(client, { threadId, messageId, body, bodyType, attachments, driveFileIds }),
+        replyGmail(client, {
+          threadId,
+          messageId,
+          body,
+          bodyType,
+          attachments,
+          driveFileIds,
+          from,
+          replyTo,
+        }),
       ),
   );
 
@@ -462,10 +508,24 @@ export function registerTools(server: McpServer): void {
           .describe(
             "Drive file IDs to attach by reference (downloaded under the Gmail size limit).",
           ),
+        from: z.string().optional().describe("Send-as alias or address to set as the From header."),
+        replyTo: z.string().optional().describe("Address to set as the Reply-To header."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ to, subject, body, cc, bcc, bodyType, attachments, driveFileIds, account }) =>
+    async ({
+      to,
+      subject,
+      body,
+      cc,
+      bcc,
+      bodyType,
+      attachments,
+      driveFileIds,
+      from,
+      replyTo,
+      account,
+    }) =>
       withClient(account, (client) =>
         createGmailDraft(client, {
           to,
@@ -476,6 +536,8 @@ export function registerTools(server: McpServer): void {
           bodyType,
           attachments,
           driveFileIds,
+          from,
+          replyTo,
         }),
       ),
   );
