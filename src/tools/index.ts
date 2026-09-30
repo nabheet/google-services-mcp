@@ -103,10 +103,14 @@ import {
   appendSheetRange,
   batchUpdateSheet,
   createSpreadsheet,
+  deleteRows,
   deleteSheet,
+  getNamedRanges,
   getSpreadsheet,
+  insertRows,
   readSheetRange,
   renameSheet,
+  setNamedRange,
   writeSheetRange,
 } from "../services/sheets.js";
 import {
@@ -2029,6 +2033,82 @@ export function registerTools(server: McpServer): void {
     },
     async ({ spreadsheetId, sheetId, title, account }) =>
       withClient(account, (client) => renameSheet(client, { spreadsheetId, sheetId, title })),
+  );
+
+  server.registerTool(
+    "google_sheets_insert_rows",
+    {
+      title: "Insert rows",
+      description: "Insert blank rows into a sheet at a 0-based row index.",
+      inputSchema: {
+        spreadsheetId: z.string().describe("Spreadsheet ID."),
+        sheetId: z.number().int().describe("Numeric sheet ID (from google_sheets_get metadata)."),
+        startIndex: z.number().int().describe("0-based row index where rows are inserted."),
+        numRows: z.number().int().min(1).optional().describe("Number of rows (default 1)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ spreadsheetId, sheetId, startIndex, numRows, account }) =>
+      withClient(account, (client) =>
+        insertRows(client, { spreadsheetId, sheetId, startIndex, numRows }),
+      ),
+  );
+
+  server.registerTool(
+    "google_sheets_delete_rows",
+    {
+      title: "Delete rows",
+      description: "Delete rows from a sheet starting at a 0-based row index.",
+      inputSchema: {
+        spreadsheetId: z.string().describe("Spreadsheet ID."),
+        sheetId: z.number().int().describe("Numeric sheet ID (from google_sheets_get metadata)."),
+        startIndex: z.number().int().describe("0-based row index of the first row to delete."),
+        numRows: z.number().int().min(1).optional().describe("Number of rows (default 1)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ spreadsheetId, sheetId, startIndex, numRows, account }) =>
+      withClient(account, (client) =>
+        deleteRows(client, { spreadsheetId, sheetId, startIndex, numRows }),
+      ),
+  );
+
+  server.registerTool(
+    "google_sheets_get_named_ranges",
+    {
+      title: "Get named ranges",
+      description: "List named ranges on a spreadsheet.",
+      inputSchema: {
+        spreadsheetId: z.string().describe("Spreadsheet ID."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ spreadsheetId, account }) =>
+      withClient(account, (client) => getNamedRanges(client, { spreadsheetId })),
+  );
+
+  server.registerTool(
+    "google_sheets_set_named_range",
+    {
+      title: "Set named range",
+      description: "Create a named range over a grid region.",
+      inputSchema: {
+        spreadsheetId: z.string().describe("Spreadsheet ID."),
+        name: z.string().describe("Name of the named range."),
+        range: z
+          .object({
+            sheetId: z.number().int().describe("Numeric sheet ID."),
+            startRowIndex: z.number().int().optional().describe("Start row (inclusive)."),
+            endRowIndex: z.number().int().optional().describe("End row (exclusive)."),
+            startColumnIndex: z.number().int().optional().describe("Start column (inclusive)."),
+            endColumnIndex: z.number().int().optional().describe("End column (exclusive)."),
+          })
+          .describe("Grid region the range covers."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ spreadsheetId, name, range, account }) =>
+      withClient(account, (client) => setNamedRange(client, { spreadsheetId, name, range })),
   );
 
   // ---- Docs ---------------------------------------------------------------
