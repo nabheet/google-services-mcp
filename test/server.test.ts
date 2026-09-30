@@ -197,7 +197,13 @@ describe("server tool registration", () => {
     expect(names).toContain("google_forms_responses");
     expect(names).toContain("google_forms_create");
     expect(names).toContain("google_forms_add_question");
-    expect(names.length).toBe(114);
+    expect(names).toContain("google_forms_update_question");
+    expect(names).toContain("google_forms_delete_question");
+    expect(names).toContain("google_forms_move_question");
+    expect(names).toContain("google_forms_rename");
+    expect(names).toContain("google_forms_delete");
+    expect(names).toContain("google_forms_export_responses");
+    expect(names.length).toBe(120);
   });
 });
 
