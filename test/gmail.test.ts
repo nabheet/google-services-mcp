@@ -366,6 +366,55 @@ describe("getGmailMessage", () => {
       date: "Tue, 14 Nov 2023 10:00:00 +0000",
       body: "plain body",
     });
+    expect(result.attachments).toEqual([]);
+  });
+
+  it("exposes attachment metadata (filename, mimeType, size)", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        ...fullMessage.data,
+        payload: {
+          headers: [{ name: "Subject", value: "With attach" }],
+          mimeType: "multipart/mixed",
+          parts: [
+            {
+              mimeType: "text/plain",
+              body: { data: Buffer.from("body").toString("base64url") },
+            },
+            {
+              partId: "0.1",
+              filename: "report.pdf",
+              mimeType: "application/pdf",
+              body: { attachmentId: "ATT123", size: 2048 },
+            },
+            {
+              partId: "0.2",
+              filename: "photo.jpg",
+              mimeType: "image/jpeg",
+              body: { attachmentId: "ATT456", size: 4096 },
+            },
+          ],
+        },
+      },
+    });
+    const result = await getGmailMessage(client, { id: "m1" });
+    expect(result.hasAttachments).toBe(true);
+    expect(result.attachments).toEqual([
+      {
+        id: "ATT123",
+        partId: "0.1",
+        filename: "report.pdf",
+        mimeType: "application/pdf",
+        size: 2048,
+      },
+      {
+        id: "ATT456",
+        partId: "0.2",
+        filename: "photo.jpg",
+        mimeType: "image/jpeg",
+        size: 4096,
+      },
+    ]);
   });
 
   it("extracts text/plain from multipart parts", async () => {
@@ -664,6 +713,45 @@ describe("getGmailDraft", () => {
       subject: "Draft subject",
       body: "draft body",
     });
+    expect(result.attachments).toEqual([]);
+  });
+
+  it("exposes attachment metadata on drafts", async () => {
+    mockDrafts.get.mockResolvedValue({
+      data: {
+        id: "d1",
+        message: {
+          id: "m1",
+          threadId: "t1",
+          payload: {
+            headers: [{ name: "Subject", value: "Draft with file" }],
+            mimeType: "multipart/mixed",
+            parts: [
+              {
+                mimeType: "text/plain",
+                body: { data: Buffer.from("draft body").toString("base64url") },
+              },
+              {
+                partId: "0.1",
+                filename: "draft.csv",
+                mimeType: "text/csv",
+                body: { attachmentId: "ATT789", size: 128 },
+              },
+            ],
+          },
+        },
+      },
+    });
+    const result = await getGmailDraft(client, { id: "d1" });
+    expect(result.attachments).toEqual([
+      {
+        id: "ATT789",
+        partId: "0.1",
+        filename: "draft.csv",
+        mimeType: "text/csv",
+        size: 128,
+      },
+    ]);
   });
 });
 

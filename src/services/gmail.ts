@@ -75,6 +75,8 @@ export interface GmailMessageDetail extends GmailMessageSummary {
   date?: string;
   body: string;
   hasAttachments: boolean;
+  /** Attachment metadata (filename/mimeType/size). Empty when none. */
+  attachments: GmailAttachmentInfo[];
 }
 
 const CRLF = "\r\n";
@@ -470,6 +472,7 @@ export async function getGmailMessage(
     date: parsed.date,
     body: extractBody(payload),
     hasAttachments,
+    attachments: collectAttachments(payload),
   };
 }
 
@@ -695,6 +698,7 @@ export async function getGmailDraft(
     date: parsed.date,
     body: extractBody(payload),
     hasAttachments,
+    attachments: collectAttachments(payload),
   };
 }
 
