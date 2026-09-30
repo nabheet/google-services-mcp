@@ -16,11 +16,15 @@ vi.mock("googleapis", () => ({
 const client = {} as never;
 
 import {
+  createImage,
   createPresentation,
   createSlide,
+  createTextbox,
   deleteSlide,
+  duplicateSlide,
   getPresentation,
   getSlidePage,
+  moveSlide,
   replaceAllText,
 } from "../src/services/slides.js";
 
@@ -91,5 +95,77 @@ describe("slides service", () => {
   it("propagates API errors", async () => {
     mockPresentations.get.mockRejectedValue(new Error("denied"));
     await expect(getPresentation(client, { presentationId: "p1" })).rejects.toThrow("denied");
+  });
+
+  it("duplicateSlide duplicates a slide and returns the new id", async () => {
+    mockPresentations.batchUpdate.mockResolvedValue({
+      data: { replies: [{ duplicateObject: { objectId: "dup1" } }] },
+    });
+    const result = await duplicateSlide(client, {
+      presentationId: "p1",
+      slideObjectId: "s1",
+    });
+    expect(result.objectId).toBe("dup1");
+    const body = mockPresentations.batchUpdate.mock.calls[0][0].requestBody;
+    expect(body.requests[0].duplicateObject).toEqual({ objectId: "s1" });
+  });
+
+  it("moveSlide reorders a slide to insertionIndex", async () => {
+    mockPresentations.batchUpdate.mockResolvedValue({
+      data: { replies: [{ updateSlidesPosition: { slideObjectIds: ["s2"], insertionIndex: 1 } }] },
+    });
+    const result = await moveSlide(client, {
+      presentationId: "p1",
+      slideObjectId: "s2",
+      insertionIndex: 1,
+    });
+    expect(result.insertionIndex).toBe(1);
+    const body = mockPresentations.batchUpdate.mock.calls[0][0].requestBody;
+    expect(body.requests[0].updateSlidesPosition).toEqual({
+      slideObjectIds: ["s2"],
+      insertionIndex: 1,
+    });
+  });
+
+  it("createTextbox adds a text box with text", async () => {
+    mockPresentations.batchUpdate.mockResolvedValue({
+      data: { replies: [{ createShape: { objectId: "tb1" } }] },
+    });
+    const result = await createTextbox(client, {
+      presentationId: "p1",
+      pageObjectId: "page1",
+      text: "Hello",
+    });
+    expect(result.objectId).toBe("tb1");
+    const body = mockPresentations.batchUpdate.mock.calls[0][0].requestBody;
+    expect(body.requests[0].createShape.shapeType).toBe("TEXT_BOX");
+    expect(body.requests[0].createShape.elementProperties.pageObjectId).toBe("page1");
+    expect(body.requests[0].createShape.objectId).toBe(body.requests[1].insertText.objectId);
+    expect(body.requests[1].insertText).toMatchObject({
+      insertionIndex: 0,
+      text: "Hello",
+    });
+  });
+
+  it("createTextbox without text sends only the shape request", async () => {
+    mockPresentations.batchUpdate.mockResolvedValue({ data: { replies: [] } });
+    await createTextbox(client, { presentationId: "p1", pageObjectId: "page1" });
+    const body = mockPresentations.batchUpdate.mock.calls[0][0].requestBody;
+    expect(body.requests).toHaveLength(1);
+  });
+
+  it("createImage inserts an image by url", async () => {
+    mockPresentations.batchUpdate.mockResolvedValue({
+      data: { replies: [{ createImage: { objectId: "img1" } }] },
+    });
+    const result = await createImage(client, {
+      presentationId: "p1",
+      pageObjectId: "page1",
+      url: "https://example.com/pic.png",
+    });
+    expect(result.objectId).toBe("img1");
+    const body = mockPresentations.batchUpdate.mock.calls[0][0].requestBody;
+    expect(body.requests[0].createImage.url).toBe("https://example.com/pic.png");
+    expect(body.requests[0].createImage.elementProperties.pageObjectId).toBe("page1");
   });
 });
