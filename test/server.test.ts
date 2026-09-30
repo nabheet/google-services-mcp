@@ -183,6 +183,7 @@ describe("server tool registration", () => {
     expect(names).toContain("google_slides_get_page");
     expect(names).toContain("google_slides_batch_update");
     expect(names).toContain("google_youtube_search");
+    expect(names).toContain("google_youtube_upload");
     expect(names).toContain("google_youtube_get_video");
     expect(names).toContain("google_youtube_my_videos");
     expect(names).toContain("google_youtube_list_playlists");
@@ -194,7 +195,7 @@ describe("server tool registration", () => {
     expect(names).toContain("google_forms_responses");
     expect(names).toContain("google_forms_create");
     expect(names).toContain("google_forms_add_question");
-    expect(names.length).toBe(111);
+    expect(names.length).toBe(112);
   });
 });
 
