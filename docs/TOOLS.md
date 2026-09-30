@@ -55,6 +55,8 @@ Send an email from the connected account.
 | `bodyType` | `text` \| `html` | optional, default `text`. |
 | `attachments` | object[] | optional. Local files to attach: `{ path, filename?, mimeType? }`. |
 | `driveFileIds` | string[] | optional. Drive files by ID (under Gmail limit). |
+| `from` | string | optional. Send-as alias or address for the From header. |
+| `replyTo` | string | optional. Address for the Reply-To header. |
 
 ### `google_gmail_list`
 
@@ -95,6 +97,8 @@ Reply to an existing message inside its thread, preserving threading headers.
 | `bodyType` | `text` \| `html` | optional, default `text`. |
 | `attachments` | object[] | optional. Local files to attach: `{ path, filename?, mimeType? }`. |
 | `driveFileIds` | string[] | optional. Drive files by ID (under Gmail limit). |
+| `from` | string | optional. Send-as alias or address for the From header. |
+| `replyTo` | string | optional. Address for the Reply-To header. |
 
 ### `google_gmail_list_attachments`
 
@@ -129,6 +133,8 @@ Create a draft email (not sent).
 | `bodyType` | `text` \| `html` | optional, default `text`. |
 | `attachments` | object[] | optional. Local files to attach: `{ path, filename?, mimeType? }`. |
 | `driveFileIds` | string[] | optional. Drive files by ID (under Gmail limit). |
+| `from` | string | optional. Send-as alias or address for the From header. |
+| `replyTo` | string | optional. Address for the Reply-To header. |
 
 ### `google_gmail_drafts_list`
 

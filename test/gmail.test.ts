@@ -131,6 +131,47 @@ describe("sendGmail", () => {
     expect(raw).toContain("<b>Bold</b>");
   });
 
+  it("emits From override and Reply-To headers", async () => {
+    mockMessages.send.mockResolvedValue({ data: { id: "m3" } });
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "S",
+      body: "B",
+      from: "__VG_EMAIL_86102f646da5__",
+      replyTo: "__VG_EMAIL_3e935bfdc05a__",
+    });
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain("From: __VG_EMAIL_86102f646da5__");
+    expect(raw).toContain("Reply-To: __VG_EMAIL_3e935bfdc05a__");
+  });
+
+  it("omits From and Reply-To when not provided", async () => {
+    mockMessages.send.mockResolvedValue({ data: { id: "m4" } });
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "S",
+      body: "B",
+    });
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).not.toContain("From:");
+    expect(raw).not.toContain("Reply-To:");
+  });
+
+  it("strips CRLF from From/Reply-To to prevent header injection", async () => {
+    mockMessages.send.mockResolvedValue({ data: { id: "m5" } });
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "S",
+      body: "B",
+      from: "__VG_EMAIL_86102f646da5__\r\nBcc: c@example.com",
+      replyTo: "__VG_EMAIL_3e935bfdc05a__\r\nBcc: d@example.com",
+    });
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    const headerLines = raw.split("\r\n");
+    expect(headerLines.some((l) => l.startsWith("Bcc:"))).toBe(false);
+    expect(raw).toContain("From: __VG_EMAIL_86102f646da5__ Bcc: c@example.com");
+  });
+
   it("throws a helpful error when no recipient is given", async () => {
     await expect(sendGmail(client, { to: "", subject: "S", body: "B" })).rejects.toThrow(
       /recipient/i,
