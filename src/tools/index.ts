@@ -85,12 +85,14 @@ import {
   getGmailAttachment,
   getGmailDraft,
   getGmailMessage,
+  getGmailThread,
   getVacationSettings,
   listGmailAttachments,
   listGmailDrafts,
   listGmailFilters,
   listGmailLabels,
   listGmailMessages,
+  listGmailThreads,
   listSendAs,
   modifyGmailMessage,
   replyGmail,
@@ -377,6 +379,40 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ id, account }) => withClient(account, (client) => getGmailMessage(client, { id })),
+  );
+
+  server.registerTool(
+    "google_gmail_threads_list",
+    {
+      title: "List email threads",
+      description: "List conversation threads, newest first, with an optional Gmail search query.",
+      inputSchema: {
+        query: z.string().optional().describe("Gmail search query (e.g. from:bob, newer_than:2d)."),
+        maxResults: z.number().min(1).max(100).optional().describe("Max threads (default 25)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ query, maxResults, account }) =>
+      withClient(account, (client) => listGmailThreads(client, { query, maxResults })),
+  );
+
+  server.registerTool(
+    "google_gmail_threads_get",
+    {
+      title: "Read an email thread",
+      description:
+        "Fetch a full conversation thread with every message parsed (headers, body, attachments).",
+      inputSchema: {
+        id: z.string().describe("Thread ID."),
+        format: z
+          .enum(["full", "metadata", "minimal"])
+          .optional()
+          .describe("Payload format (default full)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ id, format, account }) =>
+      withClient(account, (client) => getGmailThread(client, { id, format })),
   );
 
   server.registerTool(
