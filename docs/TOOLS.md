@@ -54,6 +54,7 @@ Send an email from the connected account.
 | `bcc` | string \| string[] | optional. |
 | `bodyType` | `text` \| `html` | optional, default `text`. |
 | `attachments` | object[] | optional. Local files to attach: `{ path, filename?, mimeType? }`. |
+| `driveFileIds` | string[] | optional. Drive files by ID (under Gmail limit). |
 
 ### `google_gmail_list`
 
@@ -93,6 +94,7 @@ Reply to an existing message inside its thread, preserving threading headers.
 | `body` | string | required. |
 | `bodyType` | `text` \| `html` | optional, default `text`. |
 | `attachments` | object[] | optional. Local files to attach: `{ path, filename?, mimeType? }`. |
+| `driveFileIds` | string[] | optional. Drive files by ID (under Gmail limit). |
 
 ### `google_gmail_list_attachments`
 
@@ -126,6 +128,7 @@ Create a draft email (not sent).
 | `bcc` | string \| string[] | optional. |
 | `bodyType` | `text` \| `html` | optional, default `text`. |
 | `attachments` | object[] | optional. Local files to attach: `{ path, filename?, mimeType? }`. |
+| `driveFileIds` | string[] | optional. Drive files by ID (under Gmail limit). |
 
 ### `google_gmail_drafts_list`
 

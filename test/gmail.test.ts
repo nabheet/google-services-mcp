@@ -32,6 +32,7 @@ const mockSettings = {
   sendAs: { list: vi.fn(), create: vi.fn() },
   filters: { list: vi.fn(), create: vi.fn(), delete: vi.fn() },
 };
+const mockDriveFiles = { get: vi.fn(), list: vi.fn(), update: vi.fn(), create: vi.fn() };
 
 vi.mock("googleapis", () => ({
   google: {
@@ -43,6 +44,7 @@ vi.mock("googleapis", () => ({
         settings: mockSettings,
       },
     })),
+    drive: vi.fn(() => ({ files: mockDriveFiles })),
   },
 }));
 
@@ -202,6 +204,60 @@ describe("sendGmail", () => {
     expect(replyRaw).toContain(
       `Subject: =?UTF-8?B?${Buffer.from(`Re: ${subject}`, "utf8").toString("base64")}?=`,
     );
+  });
+});
+
+describe("sendGmail with Drive attachments", () => {
+  it("attaches a Drive file by ID", async () => {
+    mockDriveFiles.get
+      .mockResolvedValueOnce({
+        data: { id: "f1", name: "report.txt", mimeType: "text/plain", size: "100" },
+      })
+      .mockResolvedValueOnce({ data: Buffer.from("drive-attachment-bytes") });
+    mockMessages.send.mockResolvedValue({ data: { id: "m1" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "With drive",
+      body: "See attached",
+      driveFileIds: ["f1"],
+    });
+
+    expect(mockMessages.send).toHaveBeenCalledTimes(1);
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain('Content-Disposition: attachment; filename="report.txt"');
+    expect(raw).toContain(Buffer.from("drive-attachment-bytes").toString("base64"));
+  });
+
+  it("throws with link guidance when the Drive file exceeds the attachment limit", async () => {
+    mockDriveFiles.get.mockResolvedValueOnce({
+      data: {
+        id: "f1",
+        name: "big.bin",
+        mimeType: "application/octet-stream",
+        size: String(20 * 1024 * 1024),
+      },
+    });
+    await expect(
+      sendGmail(client, {
+        to: "bob@example.com",
+        subject: "S",
+        body: "B",
+        driveFileIds: ["f1"],
+      }),
+    ).rejects.toThrow(/too large|limit/i);
+  });
+
+  it("throws when the Drive file does not exist", async () => {
+    mockDriveFiles.get.mockResolvedValueOnce({ data: {} });
+    await expect(
+      sendGmail(client, {
+        to: "bob@example.com",
+        subject: "S",
+        body: "B",
+        driveFileIds: ["missing"],
+      }),
+    ).rejects.toThrow(/not found/i);
   });
 });
 

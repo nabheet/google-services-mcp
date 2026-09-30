@@ -278,12 +278,18 @@ export function registerTools(server: McpServer): void {
           )
           .optional()
           .describe("Local files to attach to the email."),
+        driveFileIds: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Drive file IDs to attach by reference (downloaded under the Gmail size limit).",
+          ),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ to, subject, body, cc, bcc, bodyType, attachments, account }) =>
+    async ({ to, subject, body, cc, bcc, bodyType, attachments, driveFileIds, account }) =>
       withClient(account, (client) =>
-        sendGmail(client, { to, subject, body, cc, bcc, bodyType, attachments }),
+        sendGmail(client, { to, subject, body, cc, bcc, bodyType, attachments, driveFileIds }),
       ),
   );
 
@@ -363,12 +369,18 @@ export function registerTools(server: McpServer): void {
           )
           .optional()
           .describe("Local files to attach to the reply."),
+        driveFileIds: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Drive file IDs to attach by reference (downloaded under the Gmail size limit).",
+          ),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ threadId, messageId, body, bodyType, attachments, account }) =>
+    async ({ threadId, messageId, body, bodyType, attachments, driveFileIds, account }) =>
       withClient(account, (client) =>
-        replyGmail(client, { threadId, messageId, body, bodyType, attachments }),
+        replyGmail(client, { threadId, messageId, body, bodyType, attachments, driveFileIds }),
       ),
   );
 
@@ -444,12 +456,27 @@ export function registerTools(server: McpServer): void {
           )
           .optional()
           .describe("Local files to attach to the draft."),
+        driveFileIds: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Drive file IDs to attach by reference (downloaded under the Gmail size limit).",
+          ),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ to, subject, body, cc, bcc, bodyType, attachments, account }) =>
+    async ({ to, subject, body, cc, bcc, bodyType, attachments, driveFileIds, account }) =>
       withClient(account, (client) =>
-        createGmailDraft(client, { to, subject, body, cc, bcc, bodyType, attachments }),
+        createGmailDraft(client, {
+          to,
+          subject,
+          body,
+          cc,
+          bcc,
+          bodyType,
+          attachments,
+          driveFileIds,
+        }),
       ),
   );
 
