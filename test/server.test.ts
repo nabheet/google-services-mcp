@@ -111,6 +111,7 @@ describe("server tool registration", () => {
     expect(names).toContain("google_gmail_list_attachments");
     expect(names).toContain("google_gmail_get_attachment");
     expect(names).toContain("google_gmail_drafts_create");
+    expect(names).toContain("google_gmail_drafts_update");
     expect(names).toContain("google_gmail_drafts_list");
     expect(names).toContain("google_gmail_drafts_get");
     expect(names).toContain("google_gmail_drafts_send");
@@ -216,7 +217,7 @@ describe("server tool registration", () => {
     expect(names).toContain("google_forms_rename");
     expect(names).toContain("google_forms_delete");
     expect(names).toContain("google_forms_export_responses");
-    expect(names.length).toBe(133);
+    expect(names.length).toBe(134);
   });
 });
 
