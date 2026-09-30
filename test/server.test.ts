@@ -184,6 +184,10 @@ describe("server tool registration", () => {
     expect(names).toContain("google_slides_delete_slide");
     expect(names).toContain("google_slides_get_page");
     expect(names).toContain("google_slides_batch_update");
+    expect(names).toContain("google_slides_duplicate_slide");
+    expect(names).toContain("google_slides_move_slide");
+    expect(names).toContain("google_slides_create_textbox");
+    expect(names).toContain("google_slides_create_image");
     expect(names).toContain("google_youtube_search");
     expect(names).toContain("google_youtube_upload");
     expect(names).toContain("google_youtube_get_video");
@@ -203,7 +207,7 @@ describe("server tool registration", () => {
     expect(names).toContain("google_forms_rename");
     expect(names).toContain("google_forms_delete");
     expect(names).toContain("google_forms_export_responses");
-    expect(names.length).toBe(120);
+    expect(names.length).toBe(124);
   });
 });
 

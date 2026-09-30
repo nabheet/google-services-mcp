@@ -111,11 +111,15 @@ import {
 } from "../services/sheets.js";
 import {
   batchUpdatePresentation,
+  createImage,
   createPresentation,
   createSlide,
+  createTextbox,
   deleteSlide,
+  duplicateSlide,
   getPresentation,
   getSlidePage,
+  moveSlide,
   replaceAllText as replaceSlidesText,
 } from "../services/slides.js";
 import {
@@ -2232,6 +2236,83 @@ export function registerTools(server: McpServer): void {
     async ({ presentationId, requests, account }) =>
       withClient(account, (client) =>
         batchUpdatePresentation(client, { presentationId, requests }),
+      ),
+  );
+
+  server.registerTool(
+    "google_slides_duplicate_slide",
+    {
+      title: "Duplicate slide",
+      description: "Duplicate a slide and return the new slide object ID.",
+      inputSchema: {
+        presentationId: z.string().describe("Presentation ID."),
+        slideObjectId: z.string().describe("Object ID of the slide to duplicate."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ presentationId, slideObjectId, account }) =>
+      withClient(account, (client) => duplicateSlide(client, { presentationId, slideObjectId })),
+  );
+
+  server.registerTool(
+    "google_slides_move_slide",
+    {
+      title: "Move slide",
+      description: "Move a slide to a new position in the deck by insertion index.",
+      inputSchema: {
+        presentationId: z.string().describe("Presentation ID."),
+        slideObjectId: z.string().describe("Object ID of the slide to move."),
+        insertionIndex: z.number().describe("0-based index where the slide should be inserted."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ presentationId, slideObjectId, insertionIndex, account }) =>
+      withClient(account, (client) =>
+        moveSlide(client, { presentationId, slideObjectId, insertionIndex }),
+      ),
+  );
+
+  server.registerTool(
+    "google_slides_create_textbox",
+    {
+      title: "Create textbox",
+      description: "Create a text box on a slide, optionally with initial text. Sizes in points.",
+      inputSchema: {
+        presentationId: z.string().describe("Presentation ID."),
+        pageObjectId: z.string().describe("Object ID of the slide to add the text box to."),
+        text: z.string().optional().describe("Initial text content."),
+        width: z.number().optional().describe("Width in points (default 100)."),
+        height: z.number().optional().describe("Height in points (default 50)."),
+        x: z.number().optional().describe("Left offset in points (default 0)."),
+        y: z.number().optional().describe("Top offset in points (default 0)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ presentationId, pageObjectId, text, width, height, x, y, account }) =>
+      withClient(account, (client) =>
+        createTextbox(client, { presentationId, pageObjectId, text, width, height, x, y }),
+      ),
+  );
+
+  server.registerTool(
+    "google_slides_create_image",
+    {
+      title: "Create image",
+      description: "Insert an image from a URL onto a slide. Sizes in points.",
+      inputSchema: {
+        presentationId: z.string().describe("Presentation ID."),
+        pageObjectId: z.string().describe("Object ID of the slide to add the image to."),
+        url: z.string().describe("Public URL of the image."),
+        width: z.number().optional().describe("Width in points (default 200)."),
+        height: z.number().optional().describe("Height in points (default 150)."),
+        x: z.number().optional().describe("Left offset in points (default 0)."),
+        y: z.number().optional().describe("Top offset in points (default 0)."),
+        account: z.string().optional().describe("Account nickname to use."),
+      },
+    },
+    async ({ presentationId, pageObjectId, url, width, height, x, y, account }) =>
+      withClient(account, (client) =>
+        createImage(client, { presentationId, pageObjectId, url, width, height, x, y }),
       ),
   );
 
