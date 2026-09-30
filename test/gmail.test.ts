@@ -22,6 +22,7 @@ const mockDrafts = {
   list: vi.fn(),
   get: vi.fn(),
   send: vi.fn(),
+  update: vi.fn(),
   delete: vi.fn(),
 };
 const mockLabels = {
@@ -80,6 +81,7 @@ import {
   sendGmailDraft,
   trashGmailMessage,
   untrashGmailMessage,
+  updateGmailDraft,
   updateGmailLabel,
   updateVacationSettings,
 } from "../src/services/gmail.js";
@@ -881,6 +883,44 @@ describe("getGmailDraft", () => {
         size: 128,
       },
     ]);
+  });
+});
+
+describe("updateGmailDraft", () => {
+  it("builds a raw message and updates the draft by id", async () => {
+    mockDrafts.update.mockResolvedValue({
+      data: { id: "d1", message: { id: "m1", threadId: "t1" } },
+    });
+    const result = await updateGmailDraft(client, {
+      id: "d1",
+      to: "bob@example.com",
+      subject: "Edited",
+      body: "Edited body",
+    });
+    const call = mockDrafts.update.mock.calls[0][0];
+    expect(call.userId).toBe("me");
+    expect(call.id).toBe("d1");
+    expect(call.requestBody.id).toBe("d1");
+    expect(call.requestBody.message.raw).toEqual(expect.any(String));
+    const raw = decodeRaw(call.requestBody.message.raw);
+    expect(raw).toContain("Subject: Edited");
+    expect(raw).toContain("Edited body");
+    expect(result).toEqual({ id: "d1", messageId: "m1", threadId: "t1" });
+  });
+
+  it("preserves threadId when the draft belongs to a thread", async () => {
+    mockDrafts.update.mockResolvedValue({
+      data: { id: "d1", message: { id: "m1", threadId: "t1" } },
+    });
+    await updateGmailDraft(client, {
+      id: "d1",
+      threadId: "t1",
+      to: "bob@example.com",
+      subject: "Re: Thread",
+      body: "Reply draft",
+    });
+    const call = mockDrafts.update.mock.calls[0][0];
+    expect(call.requestBody.message.threadId).toBe("t1");
   });
 });
 
