@@ -851,3 +851,31 @@ Create a new form. Arg: `title` (required). Returns the form ID and responder UR
 Add a question to a form. Args: `formId` (required), `title` (required),
 `description` (optional), `type` (`text`|`multiple_choice`, default `text`),
 `options` (array, required for multiple_choice), `required` (default `false`).
+
+### `google_forms_update_question`
+
+Update a question's title, description, options or required flag. Args:
+`formId`, `questionId` (required), `title`, `description`, `options`,
+`required` (all optional).
+
+### `google_forms_delete_question`
+
+Delete a question by `questionId`. Args: `formId`, `questionId` (required).
+
+### `google_forms_move_question`
+
+Reorder a question. Args: `formId`, `questionId`, `newIndex` (required,
+0-based item index).
+
+### `google_forms_rename`
+
+Rename a form. Args: `formId`, `title` (required).
+
+### `google_forms_delete`
+
+Permanently delete a form. Arg: `formId` (required).
+
+### `google_forms_export_responses`
+
+Append form responses to a spreadsheet. Args: `formId`, `spreadsheetId`
+(required), `sheetName` (default `Sheet1`).
