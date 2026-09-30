@@ -733,6 +733,27 @@ Get the contents of a single slide page by object ID. Args:
 
 Send raw Slides batchUpdate requests. Args: `presentationId` (required), `requests` (required array).
 
+### `google_slides_duplicate_slide`
+
+Duplicate a slide. Args: `presentationId`, `slideObjectId` (required).
+Returns the new slide object ID.
+
+### `google_slides_move_slide`
+
+Move a slide to a new position. Args: `presentationId`, `slideObjectId`,
+`insertionIndex` (required, 0-based).
+
+### `google_slides_create_textbox`
+
+Add a text box to a slide, optionally with initial text. Args: `presentationId`,
+`pageObjectId` (required), `text`, `width` (default 100), `height` (default 50),
+`x`, `y` (points).
+
+### `google_slides_create_image`
+
+Insert an image from a URL onto a slide. Args: `presentationId`, `pageObjectId`,
+`url` (required), `width` (default 200), `height` (default 150), `x`, `y` (points).
+
 ## YouTube
 
 ### `google_youtube_search`
