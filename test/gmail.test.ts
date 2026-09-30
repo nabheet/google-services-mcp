@@ -13,6 +13,10 @@ const mockMessages = {
   delete: vi.fn(),
   attachments: { get: vi.fn() },
 };
+const mockThreads = {
+  get: vi.fn(),
+  list: vi.fn(),
+};
 const mockDrafts = {
   create: vi.fn(),
   list: vi.fn(),
@@ -39,6 +43,7 @@ vi.mock("googleapis", () => ({
     gmail: vi.fn(() => ({
       users: {
         messages: mockMessages,
+        threads: mockThreads,
         drafts: mockDrafts,
         labels: mockLabels,
         settings: mockSettings,
@@ -60,12 +65,14 @@ import {
   getGmailAttachment,
   getGmailDraft,
   getGmailMessage,
+  getGmailThread,
   getVacationSettings,
   listGmailAttachments,
   listGmailDrafts,
   listGmailFilters,
   listGmailLabels,
   listGmailMessages,
+  listGmailThreads,
   listSendAs,
   modifyGmailMessage,
   replyGmail,
@@ -480,6 +487,87 @@ describe("getGmailMessage", () => {
     });
     const result = await getGmailMessage(client, { id: "m1" });
     expect(result.body).toBe("plain part");
+  });
+});
+
+describe("getGmailThread", () => {
+  it("maps each message with parsed headers and decoded bodies", async () => {
+    mockThreads.get.mockResolvedValue({
+      data: {
+        id: "t1",
+        historyId: "1234",
+        messages: [
+          {
+            id: "m1",
+            threadId: "t1",
+            labelIds: ["INBOX"],
+            snippet: "first",
+            payload: {
+              headers: [{ name: "Subject", value: "Hello" }],
+              mimeType: "text/plain",
+              body: { data: Buffer.from("first body").toString("base64url") },
+            },
+          },
+          {
+            id: "m2",
+            threadId: "t1",
+            snippet: "second",
+            payload: {
+              headers: [{ name: "Subject", value: "Re: Hello" }],
+              mimeType: "text/plain",
+              body: { data: Buffer.from("second body").toString("base64url") },
+            },
+          },
+        ],
+      },
+    });
+    const result = await getGmailThread(client, { id: "t1" });
+    expect(mockThreads.get).toHaveBeenCalledWith({ userId: "me", id: "t1", format: "full" });
+    expect(result).toEqual({
+      id: "t1",
+      historyId: "1234",
+      messages: [
+        expect.objectContaining({ id: "m1", subject: "Hello", body: "first body" }),
+        expect.objectContaining({ id: "m2", subject: "Re: Hello", body: "second body" }),
+      ],
+    });
+    expect(result.messages[0].attachments).toEqual([]);
+  });
+
+  it("returns an empty message list when the thread has none", async () => {
+    mockThreads.get.mockResolvedValue({ data: { id: "t2" } });
+    const result = await getGmailThread(client, { id: "t2", format: "metadata" });
+    expect(mockThreads.get).toHaveBeenCalledWith({ userId: "me", id: "t2", format: "metadata" });
+    expect(result).toEqual({ id: "t2", messages: [] });
+  });
+});
+
+describe("listGmailThreads", () => {
+  it("passes query and maxResults through and maps summaries", async () => {
+    mockThreads.list.mockResolvedValue({
+      data: {
+        threads: [
+          { id: "t1", snippet: "hello", historyId: "1" },
+          { id: "t2", snippet: "world", historyId: "2" },
+        ],
+      },
+    });
+    const result = await listGmailThreads(client, { query: "from:bob", maxResults: 5 });
+    expect(mockThreads.list).toHaveBeenCalledWith({
+      userId: "me",
+      q: "from:bob",
+      maxResults: 5,
+    });
+    expect(result).toEqual([
+      { id: "t1", snippet: "hello", historyId: "1" },
+      { id: "t2", snippet: "world", historyId: "2" },
+    ]);
+  });
+
+  it("returns an empty list when no threads exist", async () => {
+    mockThreads.list.mockResolvedValue({ data: {} });
+    const result = await listGmailThreads(client, {});
+    expect(result).toEqual([]);
   });
 });
 

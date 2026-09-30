@@ -472,7 +472,11 @@ export async function getGmailMessage(
     id: opts.id,
     format: opts.format ?? "full",
   });
-  const msg = res.data;
+  return mapGmailMessage(res.data);
+}
+
+/** Map a raw Gmail message into a parsed detail (headers, body, attachments). */
+function mapGmailMessage(msg: gmail_v1.Schema$Message): GmailMessageDetail {
   const payload = msg.payload ?? ({} as gmail_v1.Schema$MessagePart);
   const headers = payload.headers ?? [];
   const parsed = parseHeaders(headers);
@@ -492,6 +496,55 @@ export async function getGmailMessage(
     hasAttachments,
     attachments: collectAttachments(payload),
   };
+}
+
+// ---- Threads --------------------------------------------------------------
+
+export interface GmailThreadSummary {
+  id: string;
+  snippet?: string;
+  historyId?: string;
+}
+
+export interface GmailThreadDetail extends GmailThreadSummary {
+  messages: GmailMessageDetail[];
+}
+
+/** Get a thread with every message parsed (headers, body, attachments). */
+export async function getGmailThread(
+  client: Auth.OAuth2Client,
+  opts: { id: string; format?: "full" | "metadata" | "minimal" },
+): Promise<GmailThreadDetail> {
+  const gmail = google.gmail({ version: "v1", auth: client });
+  const res = await gmail.users.threads.get({
+    userId: "me",
+    id: opts.id,
+    format: opts.format ?? "full",
+  });
+  const thread = res.data;
+  return {
+    id: thread.id ?? "",
+    historyId: thread.historyId ?? undefined,
+    messages: (thread.messages ?? []).map(mapGmailMessage),
+  };
+}
+
+/** List threads, newest first, optionally filtered by a Gmail query. */
+export async function listGmailThreads(
+  client: Auth.OAuth2Client,
+  opts: { query?: string; maxResults?: number },
+): Promise<GmailThreadSummary[]> {
+  const gmail = google.gmail({ version: "v1", auth: client });
+  const res = await gmail.users.threads.list({
+    userId: "me",
+    q: opts.query || undefined,
+    maxResults: opts.maxResults ?? 25,
+  });
+  return (res.data.threads ?? []).map((t: gmail_v1.Schema$Thread) => ({
+    id: t.id as string,
+    snippet: t.snippet as string | undefined,
+    historyId: t.historyId as string | undefined,
+  }));
 }
 
 /** Add/remove labels on a message. Returns the updated labelIds. */
