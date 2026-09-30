@@ -727,6 +727,28 @@ export async function createGmailDraft(
   };
 }
 
+/** Update an existing draft (replaces the raw message, preserving id/threadId). */
+export async function updateGmailDraft(
+  client: Auth.OAuth2Client,
+  opts: SendGmailOptions & { id: string; threadId?: string },
+): Promise<DraftSummary> {
+  const raw = toBase64Url(await buildRawEmail(opts, client));
+  const gmail = google.gmail({ version: "v1", auth: client });
+  const res = await gmail.users.drafts.update({
+    userId: "me",
+    id: opts.id,
+    requestBody: {
+      id: opts.id,
+      message: { raw, threadId: opts.threadId },
+    },
+  });
+  return {
+    id: res.data.id as string,
+    messageId: res.data.message?.id as string | undefined,
+    threadId: res.data.message?.threadId as string | undefined,
+  };
+}
+
 /** List drafts, newest first. */
 export async function listGmailDrafts(
   client: Auth.OAuth2Client,

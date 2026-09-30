@@ -155,6 +155,16 @@ Create a draft email (not sent).
 | `from` | string | optional. Send-as alias or address for the From header. |
 | `replyTo` | string | optional. Address for the Reply-To header. |
 
+### `google_gmail_drafts_update`
+
+Replace the contents of an existing draft (recipients, subject, body,
+attachments). Same args as `google_gmail_drafts_create`, plus:
+
+| arg | type | notes |
+| --- | --- | --- |
+| `id` | string | required. Draft ID to update. |
+| `threadId` | string | optional. When the draft continues a thread. |
+
 ### `google_gmail_drafts_list`
 
 List draft emails.
