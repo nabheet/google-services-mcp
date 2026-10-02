@@ -8,10 +8,24 @@ Add one account, wire the server into any MCP-compatible AI client, and your
 agent can read and send email, manage your calendar, find files in Drive,
 create documents and spreadsheets, and more — using your real Google data.
 
+```bash
+npm install -g google-services-mcp     # or run without installing: npx -y google-services-mcp
+```
+
+## Google Workspace MCP
+
+One MCP server for your whole Google Workspace — Gmail, Calendar, Google Meet,
+Drive, Contacts, Tasks, Sheets, Docs, Slides, YouTube, and Forms — with
+multi-account OAuth. Every tool is prefixed `google_` (e.g. `google_gmail_list`,
+`google_calendar_list_events`), so agents can combine services freely: read
+email, then create a Calendar event from it, or attach a Drive file to a draft.
+
 ## Features
 
-- **Gmail** — send, draft, reply, list, read, search, label, and manage attachments
-- **Calendar** — list calendars, create/read/update/delete events, create Google Meet links
+- **Gmail** — full Gmail access: send, draft, reply, list, read, search,
+  label, and manage attachments
+- **Calendar** — Google Calendar events: list calendars,
+  create/read/update/delete events, create Google Meet links
 - **Drive** — list, read, upload, update, delete, and share files
 - **Contacts** — list, search, and create contacts
 - **Tasks** — list task lists, create/complete/delete tasks
