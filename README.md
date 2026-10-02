@@ -14,7 +14,7 @@ npm install -g google-services-mcp     # or run without installing: npx -y googl
 
 ## Google Workspace MCP
 
-One MCP server for your whole Google Workspace — Gmail, Calendar, Google Meet,
+One MCP server for your Google Workspace apps — Gmail, Calendar, Google Meet,
 Drive, Contacts, Tasks, Sheets, Docs, Slides, YouTube, and Forms — with
 multi-account OAuth. Every tool is prefixed `google_` (e.g. `google_gmail_list`,
 `google_calendar_list_events`), so agents can combine services freely: read
@@ -38,7 +38,7 @@ email, then create a Calendar event from it, or attach a Drive file to a draft.
   an `account` argument to any tool
 - **OAuth 2.0** — one-time browser authorization; tokens are stored locally and refreshed automatically
 
-> **114 tools** across 11 services, all prefixed `google_`. Full reference:
+> **134 tools** across 11 services, all prefixed `google_`. Full reference:
 > [docs/TOOLS.md](docs/TOOLS.md).
 
 ## Requirements
