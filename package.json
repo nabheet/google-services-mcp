@@ -1,7 +1,7 @@
 {
   "name": "google-services-mcp",
   "version": "0.1.0",
-  "description": "MCP server for Google consumer services — Gmail, Calendar, Meet, Drive, Contacts, Tasks, Sheets, Docs, Slides, YouTube, Forms — with multi-account OAuth support.",
+  "description": "Gmail MCP server for AI agents — Google Workspace MCP with 100+ tools for Gmail, Calendar, Drive, Docs, Sheets, Meet, and more, multi-account OAuth.",
   "type": "module",
   "main": "dist/main.js",
   "bin": {
@@ -25,25 +25,30 @@
   },
   "keywords": [
     "mcp",
-    "model-context-protocol",
-    "google",
+    "model context protocol",
+    "google workspace",
     "gmail",
-    "calendar",
+    "google calendar",
+    "google drive",
+    "google docs",
+    "google sheets",
     "meet",
-    "drive",
     "contacts",
     "tasks",
-    "sheets",
-    "docs",
-    "slides",
-    "youtube",
     "forms",
-    "oauth"
+    "youtube",
+    "oauth 2.0",
+    "ai agent",
+    "multi-account"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nabheet/google-services-mcp.git"
+  },
+  "homepage": "https://github.com/nabheet/google-services-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/nabheet/google-services-mcp/issues"
   },
   "engines": {
     "node": ">=24"

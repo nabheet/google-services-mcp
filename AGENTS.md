@@ -33,7 +33,7 @@ src/
     youtube.ts            # search/videos/playlists/playlistItems/subscriptions
     forms.ts              # forms: get/responses/create/add-question/batch
   tools/
-    index.ts              # registerTools(server): 79 tools, google_ prefix
+    index.ts              # registerTools(server): 134 tools, google_ prefix
   util/
     result.ts             # ok/text/err/noAccountsHint
 test/                     # vitest suites, mirrored layout
