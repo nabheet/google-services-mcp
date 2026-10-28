@@ -61,6 +61,9 @@ Data flow: MCP tool → `withClient(account, fn)` resolves a client via
 - **Errors**: return
   `{ isError: true, content: [{ type: "text", text: "Error: <message>" }] }`
   via `err()`.
+- **Local file I/O**: `path` reads a local file; `saveToPath` writes bytes to
+  one and returns `{ savedTo }` instead of the inline payload. New byte-returning
+  tools follow this pair.
 - **Vitest**: import `{ describe, expect, it, vi, beforeEach }` explicitly.
   Mock `googleapis` at module level with `vi.mock` factory and `vi.hoisted()`
   mocks.
