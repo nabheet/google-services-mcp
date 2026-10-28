@@ -201,21 +201,68 @@ jobs:
       - name: Show publishing target
         if: steps.changes.outputs.changed == 'true'
         run: 'echo "Publishing $(npm pkg get version) to tag ${{ steps.channel.outputs.tag }}"'
-      - name: Publish (retry transient only)
+      - name: Publish (retry version conflicts and transient failures)
         if: steps.changes.outputs.changed == 'true'
         timeout-minutes: 5
         run: |
-          for i in $(seq 1 3); do
-            OUT=$(npm publish --tag ${{ steps.channel.outputs.tag }} --provenance --access public 2>&1) && { echo "$OUT"; exit 0; }
-            if echo "$OUT" | grep -qE "cannot publish over|previously published"; then
-              echo "$OUT" >&2
-              echo "Version conflict — not retrying" >&2
-              exit 1
+          set -uo pipefail
+
+          # Two pushes to main can land close enough that both compute the same
+          # next version from the registry: one publishes, the other gets
+          # E409 "cannot publish over". That is not fatal, because versions may
+          # not repeat but the tree still has to ship — bump past whatever was
+          # published and try again. Re-read the registry with --prefer-online,
+          # otherwise npm's metadata cache can hand back the same stale `latest`
+          # and the retry collides again.
+          bump_past_latest() {
+            local latest cur base
+            latest="$(npm view google-services-mcp@latest version --prefer-online 2>/dev/null || true)"
+            [ -z "$latest" ] && return 0
+            cur="$(npm pkg get version | tr -d '"')"
+            # Never move backwards: an intentional minor/major bump in the tree
+            # must survive a conflict on some older patch version.
+            base="$latest"
+            if [ "$(printf '%s\n%s\n' "$cur" "$latest" | sort -V | tail -1)" = "$cur" ]; then
+              base="$cur"
             fi
+            if [ "$cur" != "$base" ]; then
+              npm version "$base" --no-git-tag-version --no-commit-hooks >/dev/null 2>&1 || true
+            fi
+            npm version patch --no-git-tag-version --no-commit-hooks >/dev/null
+          }
+
+          tag="${{ steps.channel.outputs.tag }}"
+
+          # Re-running a publish for a commit that is already `latest` should be
+          # a no-op, not a second release of the same tree.
+          if [ "$tag" = "latest" ]; then
+            head="$(npm view google-services-mcp@latest gitHead --prefer-online 2>/dev/null || true)"
+            if [ -n "$head" ] && [ "$head" = "$GITHUB_SHA" ]; then
+              echo "Already published as $(npm pkg get version) ($GITHUB_SHA); nothing to do."
+              exit 0
+            fi
+          fi
+
+          for i in $(seq 1 5); do
+            echo "Attempt $i with $(npm pkg get version) on tag $tag"
+            if OUT=$(npm publish --tag "$tag" --provenance --access public 2>&1); then
+              echo "$OUT"
+              exit 0
+            fi
+
+            if echo "$OUT" | grep -qE "cannot publish over|previously published|E409"; then
+              echo "$OUT" >&2
+              bump_past_latest
+              echo "Version taken; retrying as $(npm pkg get version)"
+              sleep $((i * 2))
+              continue
+            fi
+
             echo "$OUT"
-            echo "Publish failed (transient?), retrying ($i/3)..."
+            echo "Publish failed (transient?), retrying ($i/5)..."
             sleep 3
           done
+          echo "::error::could not publish after 5 attempts"
           exit 1
       - name: Push tag (stable only)
         id: tag
