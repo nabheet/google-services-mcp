@@ -32,7 +32,7 @@ describe("calendar E2E (nock)", () => {
 
     const res = await listCalendars(client);
 
-    expect(res).toEqual([
+    expect(res.items).toEqual([
       { id: "primary", summary: "My Calendar", isPrimary: true, accessRole: "owner" },
       { id: "c2", summary: "Work", isPrimary: false, accessRole: "reader" },
     ]);
@@ -60,8 +60,8 @@ describe("calendar E2E (nock)", () => {
 
     const res = await listEvents(client, {});
 
-    expect(res).toHaveLength(1);
-    expect(res[0]).toMatchObject({
+    expect(res.items).toHaveLength(1);
+    expect(res.items[0]).toMatchObject({
       id: "ev1",
       summary: "Standup",
       start: { dateTime: "2026-09-21T09:00:00Z" },

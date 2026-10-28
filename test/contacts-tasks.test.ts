@@ -70,7 +70,7 @@ describe("listContacts", () => {
     expect(mockConnections.list).toHaveBeenCalledWith(
       expect.objectContaining({ personFields: "names,emailAddresses,phoneNumbers" }),
     );
-    expect(result).toEqual([
+    expect(result.items).toEqual([
       { resourceName: "people/1", name: "Alice Example", emails: ["bob@example.com"], phones: [] },
     ]);
   });
@@ -246,7 +246,7 @@ describe("taskLists", () => {
   it("lists task lists", async () => {
     mockTasksLists.list.mockResolvedValue({ data: { items: [{ id: "tl1", title: "Errands" }] } });
     const result = await listTaskLists(client);
-    expect(result).toEqual([{ id: "tl1", title: "Errands" }]);
+    expect(result.items).toEqual([{ id: "tl1", title: "Errands" }]);
   });
 });
 
@@ -261,7 +261,7 @@ describe("listTasks", () => {
     });
     const result = await listTasks(client, { tasklistId: "tl1" });
     expect(mockTaskItems.list).toHaveBeenCalledWith({ tasklist: "tl1" });
-    expect(result[0]).toMatchObject({ id: "t1", title: "Buy milk" });
+    expect(result.items[0]).toMatchObject({ id: "t1", title: "Buy milk" });
   });
 
   it("passes due window filters to the API", async () => {
@@ -478,5 +478,30 @@ describe("updateContact merging", () => {
       resourceName: "people/3",
       requestBody: { photoBytes: "aGVsbG8=" },
     });
+  });
+});
+
+describe("list pagination", () => {
+  it("pages contacts", async () => {
+    mockConnections.list.mockResolvedValue({
+      data: { connections: [{ resourceName: "people/9" }], nextPageToken: "p2" },
+    });
+    const result = await listContacts(client, { pageToken: "p1" });
+    expect(mockConnections.list).toHaveBeenCalledWith(expect.objectContaining({ pageToken: "p1" }));
+    expect(result.nextPageToken).toBe("p2");
+  });
+
+  it("pages task lists", async () => {
+    mockTasksLists.list.mockResolvedValue({ data: { items: [], nextPageToken: "p2" } });
+    const result = await listTaskLists(client, { pageToken: "p1" });
+    expect(mockTasksLists.list).toHaveBeenCalledWith({ pageToken: "p1" });
+    expect(result.nextPageToken).toBe("p2");
+  });
+
+  it("pages tasks", async () => {
+    mockTaskItems.list.mockResolvedValue({ data: { items: [], nextPageToken: "p2" } });
+    const result = await listTasks(client, { tasklistId: "tl1", pageToken: "p1" });
+    expect(mockTaskItems.list).toHaveBeenCalledWith({ tasklist: "tl1", pageToken: "p1" });
+    expect(result.nextPageToken).toBe("p2");
   });
 });

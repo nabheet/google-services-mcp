@@ -279,6 +279,8 @@ export async function listSubscriptions(
 export interface ListCommentsArgs {
   videoId: string;
   maxResults?: number;
+  /** Token from a previous page's `nextPageToken`. */
+  pageToken?: string;
 }
 
 export interface CommentSummary {
@@ -291,13 +293,14 @@ export interface CommentSummary {
 
 export async function listComments(
   client: Auth.OAuth2Client,
-  { videoId, maxResults = 20 }: ListCommentsArgs,
+  { videoId, maxResults = 20, pageToken }: ListCommentsArgs,
 ): Promise<{ items: CommentSummary[]; nextPageToken: string | null }> {
   const yt = google.youtube({ version: "v3", auth: client });
   const res = await yt.commentThreads.list({
     part: ["snippet"],
     videoId,
     maxResults,
+    ...(pageToken !== undefined ? { pageToken } : {}),
   });
   return {
     items: (res.data.items ?? []).map((thread) => {

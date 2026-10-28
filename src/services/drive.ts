@@ -3,11 +3,14 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Auth, drive_v3 } from "googleapis";
 import { google } from "googleapis";
+import type { ListPage } from "../util/pagination.js";
 import { resolveSavePath } from "../util/save-path.js";
 
 export interface ListDriveOptions {
   query?: string;
   pageSize?: number;
+  /** Token from a previous page's `nextPageToken`. */
+  pageToken?: string;
 }
 
 export interface GetDriveOptions {
@@ -136,15 +139,22 @@ async function saveOrMap(
 export async function listDriveFiles(
   client: Auth.OAuth2Client,
   opts: ListDriveOptions,
-): Promise<DriveFile[]> {
+): Promise<ListPage<DriveFile>> {
   const drive = google.drive({ version: "v3", auth: client });
   const res = await drive.files.list({
     q: opts.query || undefined,
     pageSize: opts.pageSize ?? 25,
     orderBy: "modifiedTime desc",
-    fields: "files(id,name,mimeType,size,createdTime,modifiedTime,webViewLink)",
+    // Shared-drive files are invisible unless both flags are set.
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+    fields: "nextPageToken, files(id,name,mimeType,size,createdTime,modifiedTime,webViewLink)",
+    ...(opts.pageToken !== undefined ? { pageToken: opts.pageToken } : {}),
   });
-  return (res.data.files ?? []).map((f) => mapFile(f));
+  return {
+    items: (res.data.files ?? []).map((f) => mapFile(f)),
+    ...(res.data.nextPageToken ? { nextPageToken: res.data.nextPageToken } : {}),
+  };
 }
 
 /** Get metadata for a single file. */

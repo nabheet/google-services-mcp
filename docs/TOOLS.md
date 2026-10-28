@@ -9,6 +9,19 @@ other than letters, digits, `_` and `-` replaced by `_`. `Work Account` and
 `work_account` are the same account, and any spelling that normalizes to it
 works in tool calls.
 
+## Paginated lists
+
+Every tool that lists many items returns one page in a fixed shape:
+
+```json
+{ "items": [ ... ], "nextPageToken": "..." }
+```
+
+`nextPageToken` is present only when another page exists. Pass it back as
+`pageToken` to fetch that page; when it is absent you have everything. Nothing
+is truncated silently: a full page always comes with the token for the next
+one.
+
 ## Local file I/O
 
 Tools that touch the local filesystem share one pair of arg names.
@@ -111,6 +124,7 @@ List messages, newest first, with an optional Gmail search query.
 | --- | --- | --- |
 | `query` | string | optional. Gmail syntax, e.g. `from:bob newer_than:2d`. |
 | `maxResults` | number (1–100) | optional, default 25. |
+| `pageToken` | string | optional. From a previous page's `nextPageToken`. |
 
 ### `google_gmail_get`
 
@@ -128,6 +142,7 @@ List conversation threads, newest first, with an optional Gmail search query.
 | --- | --- | --- |
 | `query` | string | optional. Gmail syntax, e.g. `from:bob newer_than:2d`. |
 | `maxResults` | number (1–100) | optional, default 25. |
+| `pageToken` | string | optional. From a previous page's `nextPageToken`. |
 
 ### `google_gmail_threads_get`
 
@@ -376,7 +391,8 @@ Permanently delete a message (irreversible).
 
 ### `google_calendar_list_calendars`
 
-List calendars the account can access. No args beyond `account`.
+List calendars the account can access. Args: `pageToken` (optional, from a
+previous page's `nextPageToken`).
 
 ### `google_calendar_create`
 
@@ -418,6 +434,7 @@ List upcoming events, optionally filtered by time range or query.
 | `maxResults` | number (1–250) | optional, default 25. |
 | `q` | string | optional free-text search. |
 | `calendarId` | string | optional, default primary. |
+| `pageToken` | string | optional. From a previous page's `nextPageToken`. |
 
 ### `google_calendar_create_event`
 
@@ -510,6 +527,9 @@ List files, newest first, with an optional query.
 | --- | --- | --- |
 | `query` | string | optional. Drive query, e.g. `name contains "report"`. |
 | `pageSize` | number (1–100) | optional, default 25. |
+| `pageToken` | string | optional. From a previous page's `nextPageToken`. |
+
+Files in shared drives are included, not only files in My Drive.
 
 ### `google_drive_get`
 
@@ -631,8 +651,9 @@ additional folder.
 
 ### `google_contacts_list`
 
-List the account's contacts with names, emails and phones. Arg: `pageSize`
-(1–100, optional, default 100).
+List the account's contacts with names, emails and phones. Args: `pageSize`
+(1–100, optional, default 100), `pageToken` (optional, from a previous page's
+`nextPageToken`).
 
 ### `google_contacts_search`
 
@@ -678,7 +699,8 @@ Delete a contact by resourceName. Arg: `resourceName` (required).
 
 ### `google_tasks_list_lists`
 
-List the account's Google Tasks lists. No args beyond `account`.
+List the account's Google Tasks lists. Args: `pageToken` (optional, from a
+previous page's `nextPageToken`).
 
 ### `google_tasks_list`
 
@@ -689,6 +711,7 @@ List tasks in a task list.
 | `tasklistId` | string | optional, default `@default`. |
 | `dueBefore` | string (RFC3339) | optional. Only tasks due at or before this time. |
 | `dueAfter` | string (RFC3339) | optional. Only tasks due at or after this time. |
+| `pageToken` | string | optional. From a previous page's `nextPageToken`. |
 
 ### `google_tasks_create`
 
@@ -983,8 +1006,10 @@ playlist item ID for a video, list the playlist and match the item by video ID.
 ### `google_youtube_list_comments`
 
 List comment threads for a video, most recent first. Args: `videoId`
-(required), `maxResults` (1–100, optional, default 20). Returns
-`{ id, authorDisplayName, textDisplay, likeCount, publishedAt }` per thread.
+(required), `maxResults` (1–100, optional, default 20), `pageToken` (optional,
+from a previous page's `nextPageToken`). Returns
+`{ id, authorDisplayName, textDisplay, likeCount, publishedAt }` per thread plus
+`nextPageToken`.
 
 ### `google_youtube_insert_comment`
 

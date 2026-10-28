@@ -1,8 +1,11 @@
 import type { Auth, people_v1, tasks_v1 } from "googleapis";
 import { google } from "googleapis";
+import type { ListPage } from "../util/pagination.js";
 
 export interface ListContactsOptions {
   pageSize?: number;
+  /** Token from a previous page's `nextPageToken`. */
+  pageToken?: string;
 }
 
 export interface SearchContactsOptions {
@@ -47,6 +50,13 @@ export interface ListTasksOptions {
   dueMin?: string;
   /** Only tasks due at or before this RFC3339 datetime. */
   dueMax?: string;
+  /** Token from a previous page's `nextPageToken`. */
+  pageToken?: string;
+}
+
+export interface ListTaskListsOptions {
+  /** Token from a previous page's `nextPageToken`. */
+  pageToken?: string;
 }
 
 export interface CreateTaskOptions {
@@ -105,19 +115,23 @@ export interface TaskSummary {
 export async function listContacts(
   client: Auth.OAuth2Client,
   opts: ListContactsOptions,
-): Promise<ContactSummary[]> {
+): Promise<ListPage<ContactSummary>> {
   const people = google.people({ version: "v1", auth: client });
   const res = await people.people.connections.list({
     resourceName: "people/me",
     personFields: "names,emailAddresses,phoneNumbers",
     pageSize: opts.pageSize ?? 100,
+    ...(opts.pageToken !== undefined ? { pageToken: opts.pageToken } : {}),
   });
-  return (res.data.connections ?? []).map((c) => ({
-    resourceName: c.resourceName as string,
-    name: c.names?.[0]?.displayName as string | undefined,
-    emails: (c.emailAddresses ?? []).map((e) => e.value as string),
-    phones: (c.phoneNumbers ?? []).map((p) => p.value as string),
-  }));
+  return {
+    items: (res.data.connections ?? []).map((c) => ({
+      resourceName: c.resourceName as string,
+      name: c.names?.[0]?.displayName as string | undefined,
+      emails: (c.emailAddresses ?? []).map((e) => e.value as string),
+      phones: (c.phoneNumbers ?? []).map((p) => p.value as string),
+    })),
+    ...(res.data.nextPageToken ? { nextPageToken: res.data.nextPageToken } : {}),
+  };
 }
 
 /** Search all contacts (including not-connected ones) by name/email/phone. */
@@ -292,33 +306,43 @@ export async function updateContact(
 /** List the user's task lists. */
 export async function listTaskLists(
   client: Auth.OAuth2Client,
-): Promise<Array<{ id: string; title?: string }>> {
+  opts: ListTaskListsOptions = {},
+): Promise<ListPage<{ id: string; title?: string }>> {
   const tasks = google.tasks({ version: "v1", auth: client });
-  const res = await tasks.tasklists.list();
-  return (res.data.items ?? []).map((l) => ({
-    id: l.id as string,
-    title: l.title as string | undefined,
-  }));
+  const res = await tasks.tasklists.list({
+    ...(opts.pageToken !== undefined ? { pageToken: opts.pageToken } : {}),
+  });
+  return {
+    items: (res.data.items ?? []).map((l) => ({
+      id: l.id as string,
+      title: l.title as string | undefined,
+    })),
+    ...(res.data.nextPageToken ? { nextPageToken: res.data.nextPageToken } : {}),
+  };
 }
 
 /** List tasks in a task list. */
 export async function listTasks(
   client: Auth.OAuth2Client,
   opts: ListTasksOptions,
-): Promise<TaskSummary[]> {
+): Promise<ListPage<TaskSummary>> {
   const tasks = google.tasks({ version: "v1", auth: client });
   const params: Record<string, string> = { tasklist: opts.tasklistId ?? "@default" };
   if (opts.dueMin !== undefined) params.dueMin = opts.dueMin;
   if (opts.dueMax !== undefined) params.dueMax = opts.dueMax;
+  if (opts.pageToken !== undefined) params.pageToken = opts.pageToken;
   const res = await tasks.tasks.list(params);
-  return (res.data.items ?? []).map((t) => ({
-    id: t.id as string,
-    title: t.title as string | undefined,
-    status: t.status as string | undefined,
-    notes: t.notes as string | undefined,
-    due: t.due as string | undefined,
-    parent: t.parent as string | undefined,
-  }));
+  return {
+    items: (res.data.items ?? []).map((t) => ({
+      id: t.id as string,
+      title: t.title as string | undefined,
+      status: t.status as string | undefined,
+      notes: t.notes as string | undefined,
+      due: t.due as string | undefined,
+      parent: t.parent as string | undefined,
+    })),
+    ...(res.data.nextPageToken ? { nextPageToken: res.data.nextPageToken } : {}),
+  };
 }
 
 /** Create a task (optionally a subtask via parentTaskId). */

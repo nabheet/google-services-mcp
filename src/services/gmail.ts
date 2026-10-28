@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import type { Auth, gmail_v1 } from "googleapis";
 import { google } from "googleapis";
+import type { ListPage } from "../util/pagination.js";
 import { resolveSavePath } from "../util/save-path.js";
 import { downloadDriveFile, getDriveFile } from "./drive.js";
 
@@ -39,6 +40,8 @@ export interface SendGmailOptions {
 export interface ListGmailOptions {
   query?: string;
   maxResults?: number;
+  /** Token from a previous page's `nextPageToken`. */
+  pageToken?: string;
 }
 
 export interface GetGmailOptions {
@@ -532,18 +535,22 @@ export async function sendGmail(client: Auth.OAuth2Client, opts: SendGmailOption
 export async function listGmailMessages(
   client: Auth.OAuth2Client,
   opts: ListGmailOptions,
-): Promise<GmailMessageSummary[]> {
+): Promise<ListPage<GmailMessageSummary>> {
   const gmail = google.gmail({ version: "v1", auth: client });
   const res = await gmail.users.messages.list({
     userId: "me",
     q: opts.query || undefined,
     maxResults: opts.maxResults ?? 25,
+    ...(opts.pageToken !== undefined ? { pageToken: opts.pageToken } : {}),
   });
-  return (res.data.messages ?? []).map((m: gmail_v1.Schema$Message) => ({
-    id: m.id as string,
-    threadId: m.threadId as string | undefined,
-    snippet: m.snippet as string | undefined,
-  }));
+  return {
+    items: (res.data.messages ?? []).map((m: gmail_v1.Schema$Message) => ({
+      id: m.id as string,
+      threadId: m.threadId as string | undefined,
+      snippet: m.snippet as string | undefined,
+    })),
+    ...(res.data.nextPageToken ? { nextPageToken: res.data.nextPageToken } : {}),
+  };
 }
 
 /** Get a single message with parsed headers, body and attachment flags. */
@@ -622,19 +629,23 @@ export async function getGmailThread(
 /** List threads, newest first, optionally filtered by a Gmail query. */
 export async function listGmailThreads(
   client: Auth.OAuth2Client,
-  opts: { query?: string; maxResults?: number },
-): Promise<GmailThreadSummary[]> {
+  opts: { query?: string; maxResults?: number; pageToken?: string },
+): Promise<ListPage<GmailThreadSummary>> {
   const gmail = google.gmail({ version: "v1", auth: client });
   const res = await gmail.users.threads.list({
     userId: "me",
     q: opts.query || undefined,
     maxResults: opts.maxResults ?? 25,
+    ...(opts.pageToken !== undefined ? { pageToken: opts.pageToken } : {}),
   });
-  return (res.data.threads ?? []).map((t: gmail_v1.Schema$Thread) => ({
-    id: t.id as string,
-    snippet: t.snippet as string | undefined,
-    historyId: t.historyId as string | undefined,
-  }));
+  return {
+    items: (res.data.threads ?? []).map((t: gmail_v1.Schema$Thread) => ({
+      id: t.id as string,
+      snippet: t.snippet as string | undefined,
+      historyId: t.historyId as string | undefined,
+    })),
+    ...(res.data.nextPageToken ? { nextPageToken: res.data.nextPageToken } : {}),
+  };
 }
 
 /** Add/remove labels on a message. Returns the updated labelIds. */

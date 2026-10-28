@@ -76,8 +76,8 @@ describe("listDriveFiles", () => {
         fields: expect.stringContaining("id"),
       }),
     );
-    expect(result).toHaveLength(2);
-    expect(result[0]).toMatchObject({ id: "f1", name: "notes.md" });
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]).toMatchObject({ id: "f1", name: "notes.md" });
   });
 
   it("supports a folder filter via query", async () => {
@@ -503,5 +503,20 @@ describe("shareDriveFile extended", () => {
       sendNotificationEmail: true,
       transferOwnership: true,
     });
+  });
+});
+
+describe("drive pagination", () => {
+  it("passes pageToken and returns nextPageToken", async () => {
+    mockFiles.list.mockResolvedValue({ data: { files: [{ id: "f9" }], nextPageToken: "p2" } });
+    const result = await listDriveFiles(client, { pageToken: "p1" });
+    expect(mockFiles.list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pageToken: "p1",
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      }),
+    );
+    expect(result.nextPageToken).toBe("p2");
   });
 });

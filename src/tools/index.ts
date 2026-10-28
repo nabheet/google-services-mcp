@@ -363,11 +363,15 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         query: z.string().optional().describe("Gmail search query (e.g. from:bob, newer_than:2d)."),
         maxResults: z.number().min(1).max(100).optional().describe("Max messages (default 25)."),
+        pageToken: z
+          .string()
+          .optional()
+          .describe("Page token from a previous result's nextPageToken."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ query, maxResults, account }) =>
-      withClient(account, (client) => listGmailMessages(client, { query, maxResults })),
+    async ({ query, maxResults, pageToken, account }) =>
+      withClient(account, (client) => listGmailMessages(client, { query, maxResults, pageToken })),
   );
 
   server.registerTool(
@@ -391,11 +395,15 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         query: z.string().optional().describe("Gmail search query (e.g. from:bob, newer_than:2d)."),
         maxResults: z.number().min(1).max(100).optional().describe("Max threads (default 25)."),
+        pageToken: z
+          .string()
+          .optional()
+          .describe("Page token from a previous result's nextPageToken."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ query, maxResults, account }) =>
-      withClient(account, (client) => listGmailThreads(client, { query, maxResults })),
+    async ({ query, maxResults, pageToken, account }) =>
+      withClient(account, (client) => listGmailThreads(client, { query, maxResults, pageToken })),
   );
 
   server.registerTool(
@@ -1066,10 +1074,15 @@ export function registerTools(server: McpServer): void {
       title: "List calendars",
       description: "List calendars the account can access.",
       inputSchema: {
+        pageToken: z
+          .string()
+          .optional()
+          .describe("Page token from a previous result's nextPageToken."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ account }) => withClient(account, (client) => listCalendars(client)),
+    async ({ pageToken, account }) =>
+      withClient(account, (client) => listCalendars(client, { pageToken })),
   );
 
   server.registerTool(
@@ -1084,12 +1097,16 @@ export function registerTools(server: McpServer): void {
         maxResults: z.number().min(1).max(250).optional().describe("Max events (default 25)."),
         q: z.string().optional().describe("Free-text search (e.g. meeting)."),
         calendarId: z.string().optional().describe("Calendar ID (default primary)."),
+        pageToken: z
+          .string()
+          .optional()
+          .describe("Page token from a previous result's nextPageToken."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ timeMin, timeMax, maxResults, q, calendarId, account }) =>
+    async ({ timeMin, timeMax, maxResults, q, calendarId, pageToken, account }) =>
       withClient(account, (client) =>
-        listEvents(client, { timeMin, timeMax, maxResults, q, calendarId }),
+        listEvents(client, { timeMin, timeMax, maxResults, q, calendarId, pageToken }),
       ),
   );
 
@@ -1455,11 +1472,15 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         query: z.string().optional().describe("Drive query (e.g. 'name contains \"report\"')."),
         pageSize: z.number().min(1).max(100).optional().describe("Max files (default 25)."),
+        pageToken: z
+          .string()
+          .optional()
+          .describe("Page token from a previous result's nextPageToken."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ query, pageSize, account }) =>
-      withClient(account, (client) => listDriveFiles(client, { query, pageSize })),
+    async ({ query, pageSize, pageToken, account }) =>
+      withClient(account, (client) => listDriveFiles(client, { query, pageSize, pageToken })),
   );
 
   server.registerTool(
@@ -1781,11 +1802,15 @@ export function registerTools(server: McpServer): void {
       description: "List the account's contacts with names, emails and phones.",
       inputSchema: {
         pageSize: z.number().min(1).max(100).optional().describe("Max contacts (default 100)."),
+        pageToken: z
+          .string()
+          .optional()
+          .describe("Page token from a previous result's nextPageToken."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ pageSize, account }) =>
-      withClient(account, (client) => listContacts(client, { pageSize })),
+    async ({ pageSize, pageToken, account }) =>
+      withClient(account, (client) => listContacts(client, { pageSize, pageToken })),
   );
 
   server.registerTool(
@@ -1897,10 +1922,15 @@ export function registerTools(server: McpServer): void {
       title: "List task lists",
       description: "List the account's Google Tasks lists.",
       inputSchema: {
+        pageToken: z
+          .string()
+          .optional()
+          .describe("Page token from a previous result's nextPageToken."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ account }) => withClient(account, (client) => listTaskLists(client)),
+    async ({ pageToken, account }) =>
+      withClient(account, (client) => listTaskLists(client, { pageToken })),
   );
 
   server.registerTool(
@@ -1918,15 +1948,20 @@ export function registerTools(server: McpServer): void {
           .string()
           .optional()
           .describe("Only tasks due at or after this RFC3339 datetime."),
+        pageToken: z
+          .string()
+          .optional()
+          .describe("Page token from a previous result's nextPageToken."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ tasklistId, dueBefore, dueAfter, account }) =>
+    async ({ tasklistId, dueBefore, dueAfter, pageToken, account }) =>
       withClient(account, (client) =>
         listTasks(client, {
           tasklistId,
           dueMax: dueBefore,
           dueMin: dueAfter,
+          pageToken,
         }),
       ),
   );
@@ -2863,11 +2898,15 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         videoId: z.string().describe("YouTube video ID."),
         maxResults: z.number().min(1).max(100).optional().describe("Max results (default 20)."),
+        pageToken: z
+          .string()
+          .optional()
+          .describe("Page token from a previous result's nextPageToken."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ videoId, maxResults, account }) =>
-      withClient(account, (client) => listComments(client, { videoId, maxResults })),
+    async ({ videoId, maxResults, pageToken, account }) =>
+      withClient(account, (client) => listComments(client, { videoId, maxResults, pageToken })),
   );
 
   server.registerTool(

@@ -65,8 +65,13 @@ describe("listCalendars", () => {
     });
     const result = await listCalendars(client);
     expect(mockCalendarList.list).toHaveBeenCalled();
-    expect(result).toHaveLength(2);
-    expect(result[0]).toMatchObject({ id: "primary", summary: "My Calendar", isPrimary: true });
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]).toMatchObject({
+      id: "primary",
+      summary: "My Calendar",
+      isPrimary: true,
+    });
+    expect(result.nextPageToken).toBeUndefined();
   });
 });
 
@@ -189,7 +194,7 @@ describe("listEvents", () => {
         orderBy: "startTime",
       }),
     );
-    expect(result[0]).toMatchObject({ id: "e1", summary: "Standup" });
+    expect(result.items[0]).toMatchObject({ id: "e1", summary: "Standup" });
   });
 });
 
@@ -662,5 +667,34 @@ describe("respondToEvent email matching", () => {
         attendees: [{ email: "Me@Example.com", responseStatus: "accepted" }],
       },
     });
+  });
+});
+
+describe("calendar pagination", () => {
+  it("passes pageToken and returns nextPageToken for events", async () => {
+    mockEvents.list.mockResolvedValue({
+      data: { items: [{ id: "e2" }], nextPageToken: "page-2" },
+    });
+
+    const result = await listEvents(client, { pageToken: "page-1" });
+
+    expect(mockEvents.list).toHaveBeenCalledWith(expect.objectContaining({ pageToken: "page-1" }));
+    expect(result.nextPageToken).toBe("page-2");
+  });
+
+  it("omits nextPageToken on the last page", async () => {
+    mockEvents.list.mockResolvedValue({ data: { items: [] } });
+    const result = await listEvents(client, {});
+    expect(result).toEqual({ items: [] });
+    expect(mockEvents.list.mock.calls[0][0]).not.toHaveProperty("pageToken");
+  });
+
+  it("pages the calendar list", async () => {
+    mockCalendarList.list.mockResolvedValue({
+      data: { items: [], nextPageToken: "next-cal" },
+    });
+    const result = await listCalendars(client, { pageToken: "prev-cal" });
+    expect(mockCalendarList.list).toHaveBeenCalledWith({ pageToken: "prev-cal" });
+    expect(result.nextPageToken).toBe("next-cal");
   });
 });

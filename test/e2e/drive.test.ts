@@ -38,8 +38,8 @@ describe("drive E2E (nock)", () => {
 
     const res = await listDriveFiles(client, {});
 
-    expect(res).toHaveLength(1);
-    expect(res[0]).toMatchObject({
+    expect(res.items).toHaveLength(1);
+    expect(res.items[0]).toMatchObject({
       id: "f1",
       name: "report.pdf",
       mimeType: "application/pdf",
