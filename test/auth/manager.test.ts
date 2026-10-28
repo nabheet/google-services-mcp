@@ -231,6 +231,16 @@ describe("setDefaultAccount / removeAccount / getStatus", () => {
     await expect(authManager.removeAccount("")).resolves.toBe(false);
   });
 
+  it("removeAccount clears a legacy raw default that names the removed account", async () => {
+    await saveAccount(account("work_account"));
+    const configPath = path.join(tmp, "config.json");
+    const raw = JSON.parse(await fs.readFile(configPath, "utf8")) as Record<string, unknown>;
+    raw.defaultAccount = "Work Account";
+    await fs.writeFile(configPath, JSON.stringify(raw, null, 2));
+    await authManager.removeAccount("Work Account");
+    expect((await authManager.getConfig()).defaultAccount).toBeUndefined();
+  });
+
   it("removeAccount deletes the account", async () => {
     await saveAccount(account("doomed"));
     expect(await authManager.removeAccount("doomed")).toBe(true);
