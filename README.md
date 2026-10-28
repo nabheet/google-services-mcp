@@ -86,7 +86,8 @@ everywhere below.
 
 ### Release channels
 
-- `latest` — stable releases, published automatically on every merge to `main`
+- `latest` — stable releases, published automatically when a merge to `main`
+  changes something the package ships
 - `beta` — staging builds, published manually from `main`
   (e.g. `0.x.x-beta.0`)
 
@@ -294,7 +295,8 @@ See [AGENTS.md](AGENTS.md) for architecture and conventions.
 
 All publishing happens from GitHub Actions — no local npm login needed:
 
-1. **Stable** — every merge to `main` auto-publishes the next patch version
+1. **Stable** — a merge to `main` that changes shipping files auto-publishes the
+   next patch version
    to `latest` with provenance, then creates a `vX.Y.Z` tag and GitHub
    release. No manual steps. The next version is derived from the last
    published `latest` on npm, so repeated merges never collide; an
