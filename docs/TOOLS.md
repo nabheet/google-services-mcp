@@ -855,8 +855,12 @@ Create a new document. Arg: `title` (required).
 ### `google_docs_insert_text`
 
 Insert text into a document. Args: `documentId` (required), `text`
-(required), `index` (optional 0-based character index; defaults to end of
+(required), `index` (optional 1-based character index; defaults to end of
 document).
+
+Google Docs counts from 1, not 0: the body's first character is index 1, so an
+index of 0 is refused rather than inserted one character early. Read exact
+positions from `google_docs_get`.
 
 ### `google_docs_replace_text`
 
@@ -866,21 +870,24 @@ Find and replace text. Args: `documentId` (required), `find` (required),
 ### `google_docs_batch_update`
 
 Send raw Docs batchUpdate requests. Args: `documentId` (required), `requests` (required array).
+Indices inside these requests are passed through unvalidated.
 
 ### `google_docs_delete_range`
 
-Delete a content range. Args: `documentId`, `startIndex` (required, inclusive),
-`endIndex` (required, exclusive).
+Delete a content range. Args: `documentId`, `startIndex` (required, 1-based,
+inclusive), `endIndex` (required, 1-based, exclusive, and greater than
+`startIndex`).
 
 ### `google_docs_insert_table`
 
 Insert an empty table. Args: `documentId`, `rows` (required), `columns`
-(required), `index` (required 0-based insertion point; a newline is added first).
+(required), `index` (required 1-based insertion point; a newline is added
+first).
 
 ### `google_docs_insert_inline_image`
 
 Insert an inline image from a public URI. Args: `documentId`, `uri` (required
-PNG/JPEG/GIF, < 50MB, <= 25MP), `index` (required, inside an existing
+PNG/JPEG/GIF, < 50MB, <= 25MP), `index` (required, 1-based, inside an existing
 paragraph). Returns `{ objectId }`.
 
 ## Slides

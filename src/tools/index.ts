@@ -2404,9 +2404,9 @@ export function registerTools(server: McpServer): void {
         index: z
           .number()
           .int()
-          .min(0)
+          .min(1)
           .optional()
-          .describe("Character index to insert at (default end of document)."),
+          .describe("1-based character index to insert at (default end of document)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
@@ -2455,8 +2455,8 @@ export function registerTools(server: McpServer): void {
       description: "Delete a range of content from a document.",
       inputSchema: {
         documentId: z.string().describe("Document ID."),
-        startIndex: z.number().int().describe("0-based start index (inclusive)."),
-        endIndex: z.number().int().describe("0-based end index (exclusive)."),
+        startIndex: z.number().int().min(1).describe("1-based start index (inclusive)."),
+        endIndex: z.number().int().min(2).describe("1-based end index (exclusive)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
@@ -2473,7 +2473,7 @@ export function registerTools(server: McpServer): void {
         documentId: z.string().describe("Document ID."),
         rows: z.number().int().describe("Number of rows."),
         columns: z.number().int().describe("Number of columns."),
-        index: z.number().int().describe("0-based index where the table is inserted."),
+        index: z.number().int().min(1).describe("1-based index where the table is inserted."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
@@ -2489,7 +2489,7 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         documentId: z.string().describe("Document ID."),
         uri: z.string().describe("Publicly accessible PNG/JPEG/GIF URI (< 50MB, <= 25MP)."),
-        index: z.number().int().describe("0-based index inside an existing paragraph."),
+        index: z.number().int().min(1).describe("1-based index inside an existing paragraph."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },

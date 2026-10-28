@@ -222,3 +222,41 @@ describe("docs service", () => {
     await expect(getDocument(client, { documentId: "nope" })).rejects.toThrow("not found");
   });
 });
+
+describe("docs index validation", () => {
+  it("rejects insertText at index 0", async () => {
+    await expect(insertText(client, { documentId: "d1", text: "X", index: 0 })).rejects.toThrow(
+      /1-based/,
+    );
+    expect(mockDocs.documents.batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects insertTable at index 0", async () => {
+    await expect(
+      insertTable(client, { documentId: "d1", rows: 1, columns: 1, index: 0 }),
+    ).rejects.toThrow(/1-based/);
+    expect(mockDocs.documents.batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects insertInlineImage at index 0", async () => {
+    await expect(
+      insertInlineImage(client, { documentId: "d1", uri: "https://example.com/i.png", index: 0 }),
+    ).rejects.toThrow(/1-based/);
+  });
+
+  it("rejects a delete range that starts at 0 or ends before it starts", async () => {
+    await expect(
+      deleteRange(client, { documentId: "d1", startIndex: 0, endIndex: 5 }),
+    ).rejects.toThrow(/1-based/);
+    await expect(
+      deleteRange(client, { documentId: "d1", startIndex: 8, endIndex: 8 }),
+    ).rejects.toThrow(/endIndex/);
+    expect(mockDocs.documents.batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a fractional index", async () => {
+    await expect(insertText(client, { documentId: "d1", text: "X", index: 2.5 })).rejects.toThrow(
+      /1-based/,
+    );
+  });
+});
