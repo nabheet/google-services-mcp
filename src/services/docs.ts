@@ -33,22 +33,41 @@ export async function getDocument(
   return res.data;
 }
 
-/** Extract plain text from the body's paragraph elements (text runs only). */
+function paragraphText(paragraph: docs_v1.Schema$Paragraph): string {
+  return (paragraph.elements ?? []).map((e) => e.textRun?.content ?? "").join("");
+}
+
+/** Collect text from body or cell content, flattening tables one row per line. */
+function collectText(elements: docs_v1.Schema$StructuralElement[], lines: string[]): void {
+  for (const element of elements) {
+    if (element.paragraph) {
+      lines.push(paragraphText(element.paragraph));
+      continue;
+    }
+    for (const row of element.table?.tableRows ?? []) {
+      const cells = (row.tableCells ?? []).map((cell) => {
+        const cellLines: string[] = [];
+        collectText(cell.content ?? [], cellLines);
+        return cellLines
+          .map((line) => line.replace(/\n+$/, ""))
+          .join(" ")
+          .trim();
+      });
+      lines.push(cells.join("\t"));
+    }
+  }
+}
+
+/** Extract plain text from the body's paragraphs and tables (text runs only). */
 export async function getDocumentText(
   client: Auth.OAuth2Client,
   { documentId }: GetDocumentArgs,
 ): Promise<string> {
   const docs = google.docs({ version: "v1", auth: client });
   const doc = await docs.documents.get({ documentId });
-  const content = doc.data.body?.content ?? [];
-  const parts: string[] = [];
-  for (const element of content) {
-    if (element.paragraph) {
-      const line = (element.paragraph.elements ?? []).map((e) => e.textRun?.content ?? "").join("");
-      parts.push(line);
-    }
-  }
-  return parts.join("\n") + (parts.length ? "\n" : "");
+  const lines: string[] = [];
+  collectText(doc.data.body?.content ?? [], lines);
+  return lines.join("\n") + (lines.length ? "\n" : "");
 }
 
 export async function createDocument(

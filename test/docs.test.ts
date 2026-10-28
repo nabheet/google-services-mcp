@@ -52,13 +52,64 @@ describe("docs service", () => {
               },
             },
             { paragraph: { elements: [{ textRun: { content: "Line two" } }] } },
-            { table: { rows: [] } },
+            {
+              table: {
+                tableRows: [
+                  {
+                    tableCells: [
+                      {
+                        content: [
+                          { paragraph: { elements: [{ textRun: { content: "Cell A\n" } }] } },
+                        ],
+                      },
+                      {
+                        content: [
+                          { paragraph: { elements: [{ textRun: { content: "Cell B\n" } }] } },
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    tableCells: [
+                      {
+                        content: [
+                          { paragraph: { elements: [{ textRun: { content: "Cell C\n" } }] } },
+                        ],
+                      },
+                      {
+                        content: [
+                          {
+                            table: {
+                              tableRows: [
+                                {
+                                  tableCells: [
+                                    {
+                                      content: [
+                                        {
+                                          paragraph: {
+                                            elements: [{ textRun: { content: "Nested\n" } }],
+                                          },
+                                        },
+                                      ],
+                                    },
+                                  ],
+                                },
+                              ],
+                            },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
           ],
         },
       },
     });
     const result = await getDocumentText(client, { documentId: "d1" });
-    expect(result).toBe("Hello world\nLine two\n");
+    expect(result).toBe("Hello world\nLine two\nCell A\tCell B\nCell C\tNested\n");
   });
 
   it("getDocumentText returns empty string for empty body", async () => {
