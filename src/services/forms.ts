@@ -154,14 +154,13 @@ export async function updateFormQuestion(
   if (required !== undefined) mask.push("question_item.question.required");
   if (options !== undefined) {
     if (question.choiceQuestion) {
-      updated.questionItem = {
-        question: {
-          ...question,
-          choiceQuestion: {
-            ...question.choiceQuestion,
-            options: options.map((value) => ({ value })),
-          },
-        },
+      // Set the field on the question built above instead of replacing the
+      // whole questionItem, which would drop a `required` change from this call.
+      const updatedQuestion = updated.questionItem?.question;
+      if (!updatedQuestion) throw new Error(`Item at index ${idx} has no question`);
+      updatedQuestion.choiceQuestion = {
+        ...question.choiceQuestion,
+        options: options.map((value) => ({ value })),
       };
       mask.push("question_item.question.choice_question.options");
     } else {
