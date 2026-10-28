@@ -220,6 +220,8 @@ Optional:
 ```text
 GOOGLE_MCP_DIR=~/.google-services-mcp   # where config and tokens live (default ~/.google-services-mcp)
 GOOGLE_MCP_REDIRECT_PORT=8787          # local loopback port for OAuth (default 8787)
+# A client secret supplied through the environment is never written to
+# config.json; an invalid port fails at startup instead of binding a NaN port.
 # Full redirect URI override. Takes precedence over REDIRECT_PORT and must
 # exactly match a URI registered for this OAuth client in the Cloud Console.
 # GOOGLE_MCP_REDIRECT_URI=http://127.0.0.1:8787/oauth2callback

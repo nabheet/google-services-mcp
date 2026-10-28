@@ -48,6 +48,12 @@ export const DEFAULT_SCOPES: string[] = [
 export interface Config {
   clientId: string;
   clientSecret: string;
+  /**
+   * True when `clientSecret` came from GOOGLE_MCP_CLIENT_SECRET rather than the
+   * config file. Not persisted: `saveConfig` refuses to write an environment
+   * secret to disk.
+   */
+  clientSecretFromEnv?: boolean;
   /** Loopback port used during the OAuth redirect. Default 8787. Ignored when redirectUri is set. */
   redirectPort?: number;
   /**
@@ -97,6 +103,26 @@ export async function ensureDirs(): Promise<void> {
   await fs.chmod(getDataDir(), 0o700).catch(() => {});
 }
 
+/** Parse a redirect port, rejecting values that would silently become NaN. */
+function requirePort(value: unknown, source: string): number {
+  const port = typeof value === "string" ? Number(value.trim()) : value;
+  if (typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`${source} must be a port number between 1 and 65535, got "${String(value)}".`);
+  }
+  return port;
+}
+
+/** The secret already stored in config.json, if any (used to avoid writing an
+ *  environment secret to disk while keeping a previously saved one). */
+async function readStoredSecret(): Promise<string | undefined> {
+  try {
+    const raw = JSON.parse(await fs.readFile(getConfigPath(), "utf8")) as Partial<Config>;
+    return raw.clientSecret;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function loadConfig(): Promise<Config> {
   await ensureDirs();
   let file: Partial<Config> = {};
@@ -112,10 +138,18 @@ export async function loadConfig(): Promise<Config> {
   const envPort = process.env.GOOGLE_MCP_REDIRECT_PORT;
   const envUri = process.env.GOOGLE_MCP_REDIRECT_URI;
 
+  const redirectPort =
+    envPort !== undefined && envPort !== ""
+      ? requirePort(envPort, "GOOGLE_MCP_REDIRECT_PORT")
+      : file.redirectPort !== undefined
+        ? requirePort(file.redirectPort, "config.json redirectPort")
+        : DEFAULT_REDIRECT_PORT;
+
   const config: Config = {
     clientId: envId || file.clientId || "",
     clientSecret: envSecret || file.clientSecret || "",
-    redirectPort: envPort ? Number(envPort) : file.redirectPort || DEFAULT_REDIRECT_PORT,
+    ...(envSecret ? { clientSecretFromEnv: true } : {}),
+    redirectPort,
     redirectUri: envUri || file.redirectUri || undefined,
     defaultAccount: file.defaultAccount,
     scopes: file.scopes || DEFAULT_SCOPES,
@@ -125,7 +159,10 @@ export async function loadConfig(): Promise<Config> {
 
 export async function saveConfig(config: Config): Promise<void> {
   await ensureDirs();
-  const { clientId, clientSecret, redirectPort, redirectUri, defaultAccount, scopes } = config;
+  const { clientId, redirectPort, redirectUri, defaultAccount, scopes } = config;
+  // An environment secret is never written to disk: it belongs to the shell,
+  // not this file. A secret already in the file is left as it was.
+  const clientSecret = config.clientSecretFromEnv ? await readStoredSecret() : config.clientSecret;
   await fs.writeFile(
     getConfigPath(),
     JSON.stringify(
@@ -142,6 +179,9 @@ export async function saveClientCredentials(clientId: string, clientSecret: stri
   const config = await loadConfig();
   config.clientId = clientId || config.clientId;
   config.clientSecret = clientSecret || config.clientSecret;
+  // An explicit save is a request to store the secret, so it is no longer
+  // treated as an environment-only value.
+  if (clientSecret) config.clientSecretFromEnv = false;
   await saveConfig(config);
 }
 

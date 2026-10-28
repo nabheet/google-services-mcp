@@ -46,7 +46,9 @@ shell rc files and SSH keys.
 
 ### `google_account_add`
 
-Start the OAuth consent flow to connect a new Google account. Opens a browser for sign-in.
+Start the OAuth consent flow to connect a new Google account. Opens a browser for
+sign-in. An existing account name is refused rather than overwritten: remove it
+first or pick a different nickname.
 
 | arg | type | notes |
 | --- | --- | --- |

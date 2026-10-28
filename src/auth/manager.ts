@@ -152,6 +152,15 @@ class AuthManager {
     // by the sanitized name, and a bad name should fail before a browser opens.
     const key = sanitizeName(name);
     const config = await this.getConfig();
+    // Silently replacing an account would drop its tokens and email; make the
+    // caller choose a different name or remove the old account first.
+    const existing = await loadAccount(key);
+    if (existing) {
+      throw new Error(
+        `Account "${key}" already exists${existing.email ? ` (${existing.email})` : ""}. ` +
+          "Choose another name, or remove it first with account_remove.",
+      );
+    }
     if (!hasCredentials(config)) {
       throw new Error(
         "Google OAuth credentials are not configured. Set GOOGLE_MCP_CLIENT_ID and " +
