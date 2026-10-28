@@ -6,6 +6,12 @@ updates:
       interval: "weekly"
       day: "monday"
     versioning-strategy: increase
+    ignore:
+      # `engines.node` is >=24, so @types/node tracks the minimum supported
+      # runtime. A major bump would let code call APIs that do not exist on
+      # Node 24. Patch/minor updates within the current major still flow.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore"
       include: "scope"
