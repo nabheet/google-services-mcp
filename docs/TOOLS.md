@@ -4,6 +4,32 @@ All tools are prefixed `google_` to avoid collisions with client-native tools.
 Every tool that talks to a Google service accepts an optional `account`
 argument (nickname) — when omitted, the default account is used.
 
+## Local file I/O
+
+Tools that touch the local filesystem share one pair of arg names.
+
+| direction | arg | result |
+| --- | --- | --- |
+| read a local file | `path` | — |
+| write bytes to a local file | `saveToPath` | `{ savedTo }` in place of the inline payload |
+
+With `saveToPath` the raw bytes are written to that path and the inline payload
+(`data`, `dataBase64`, `text`) is omitted; the result carries `savedTo` alongside
+the tool's metadata.
+
+| tool | reads `path` | writes `saveToPath` |
+| --- | --- | --- |
+| `google_gmail_send` | yes | — |
+| `google_gmail_reply` | yes | — |
+| `google_gmail_drafts_create` | yes | — |
+| `google_gmail_drafts_update` | yes | — |
+| `google_drive_upload` | yes | — |
+| `google_drive_update` | yes | — |
+| `google_youtube_upload` | yes | — |
+| `google_drive_download` | — | yes |
+| `google_gmail_get_attachment` | — | pending #119 |
+| `google_drive_export` | — | pending #120 |
+
 ## Account management
 
 ### `google_account_add`
@@ -514,11 +540,14 @@ local file instead (returns `{ savedTo }`).
 ### `google_drive_export`
 
 Export a Google-native file (Docs/Sheets/Slides/Drawings) to another format.
+Pass `saveToPath` to write the exported bytes to a local file instead (returns
+`{ savedTo }`).
 
 | arg | type | notes |
 | --- | --- | --- |
 | `fileId` | string | required. Drive file ID. |
 | `mimeType` | string | required. Target MIME type, e.g. `application/pdf`. |
+| `saveToPath` | string | optional. Local path to write the exported bytes to. |
 
 ### `google_drive_create_folder`
 
