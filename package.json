@@ -72,6 +72,7 @@
     "access": "public"
   },
   "overrides": {
-    "katex": "^0.19.1"
+    "katex": "^0.19.1",
+    "re2js": "2.8.7"
   }
 }
