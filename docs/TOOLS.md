@@ -13,9 +13,9 @@ Tools that touch the local filesystem share one pair of arg names.
 | read a local file | `path` | — |
 | write bytes to a local file | `saveToPath` | `{ savedTo }` in place of the inline payload |
 
-With `saveToPath` the raw bytes are written to that path and the tool returns
-its usual metadata plus `savedTo`; the inline payload (`data`, `dataBase64`,
-`text`) is omitted. Without it, behaviour is unchanged.
+With `saveToPath` the raw bytes are written to that path and the inline payload
+(`data`, `dataBase64`, `text`) is omitted; the result carries `savedTo` alongside
+the tool's metadata.
 
 | tool | reads `path` | writes `saveToPath` |
 | --- | --- | --- |
@@ -23,10 +23,12 @@ its usual metadata plus `savedTo`; the inline payload (`data`, `dataBase64`,
 | `google_gmail_reply` | yes | — |
 | `google_gmail_drafts_create` | yes | — |
 | `google_gmail_drafts_update` | yes | — |
+| `google_drive_upload` | yes | — |
+| `google_drive_update` | yes | — |
 | `google_youtube_upload` | yes | — |
-| `google_gmail_get_attachment` | — | yes |
 | `google_drive_download` | — | yes |
-| `google_drive_export` | — | yes |
+| `google_gmail_get_attachment` | — | pending #119 |
+| `google_drive_export` | — | pending #120 |
 
 ## Account management
 
