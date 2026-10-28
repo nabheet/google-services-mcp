@@ -23,7 +23,12 @@ on:
   # Any base branch, not just main: a stacked PR (one whose base is another
   # feature branch) still needs the test job. publish and prerelease stay
   # gated to non-PR / non-draft events, so this cannot publish from a PR.
+  #
+  # ready_for_review is listed because a draft PR skips the prerelease job, and
+  # without this event a PR opened as a draft and then marked ready would never
+  # publish a beta build for the commit that is about to be merged.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 jobs:
@@ -342,6 +347,9 @@ jobs:
   # (`npm i google-services-mcp@beta`). run_number increases per workflow run, so
   # each push gets a unique version; re-runs collide with themselves and are
   # deduped (conflict = exit 0). Same-repo, non-draft, non-dependabot PRs only.
+  #
+  # `beta` is a preview channel, not a snapshot of main: it points at whichever
+  # branch build ran last. Stable installs use `latest`.
   prerelease:
     runs-on: ubuntu-latest
     needs: test
