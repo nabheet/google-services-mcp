@@ -297,7 +297,8 @@ describe("createTask", () => {
     });
     expect(mockTaskItems.insert).toHaveBeenCalledWith({
       tasklist: "tl1",
-      requestBody: { title: "Subtask", parent: "t2" },
+      parent: "t2",
+      requestBody: { title: "Subtask" },
     });
     expect(result.parent).toBe("t2");
   });

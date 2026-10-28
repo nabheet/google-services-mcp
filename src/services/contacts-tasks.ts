@@ -291,8 +291,14 @@ export async function createTask(
   const requestBody: tasks_v1.Schema$Task = { title: opts.title };
   if (opts.notes) requestBody.notes = opts.notes;
   if (opts.due) requestBody.due = opts.due;
-  if (opts.parentTaskId) requestBody.parent = opts.parentTaskId;
-  const res = await tasks.tasks.insert({ tasklist: opts.tasklistId ?? "@default", requestBody });
+  // `parent` is a query parameter on tasks.insert; Schema$Task.parent is
+  // output-only, so putting it in the body creates a top-level task.
+  const params: tasks_v1.Params$Resource$Tasks$Insert = {
+    tasklist: opts.tasklistId ?? "@default",
+    requestBody,
+  };
+  if (opts.parentTaskId) params.parent = opts.parentTaskId;
+  const res = await tasks.tasks.insert(params);
   return {
     id: res.data.id as string,
     title: res.data.title as string | undefined,
