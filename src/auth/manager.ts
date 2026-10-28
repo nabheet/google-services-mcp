@@ -4,6 +4,7 @@ import {
   getDataDir,
   hasCredentials,
   loadConfig,
+  sanitizeName,
   saveClientCredentials,
   saveConfig,
 } from "./config.js";
@@ -25,6 +26,24 @@ import {
   type StoredAccount,
   saveAccount,
 } from "./store.js";
+
+/** Sanitized key for a legacy or user-supplied name, falling back to the raw string. */
+function normalizeKey(name: string): string {
+  try {
+    return sanitizeName(name);
+  } catch {
+    return name;
+  }
+}
+
+function canSanitize(name: string): boolean {
+  try {
+    sanitizeName(name);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export interface AddAccountOptions {
   /** Set to false to skip opening the browser (headless). */
@@ -68,10 +87,13 @@ class AuthManager {
   async resolveAccount(name?: string): Promise<StoredAccount> {
     const accounts = await loadAllAccounts();
     if (name) {
-      const found = accounts.find((a) => a.name === name);
+      // Account names are stored sanitized (lowercased, non-alphanumerics
+      // replaced), so match the caller's spelling against the same form.
+      const key = sanitizeName(name);
+      const found = accounts.find((a) => a.name === key);
       if (!found) {
         const available = accounts.length ? accounts.map((a) => a.name).join(", ") : "none";
-        throw new Error(`Account "${name}" not found. Available accounts: ${available}`);
+        throw new Error(`Account "${key}" not found. Available accounts: ${available}`);
       }
       return found;
     }
@@ -81,8 +103,12 @@ class AuthManager {
       );
     }
     const config = await this.getConfig();
-    if (config.defaultAccount) {
-      const found = accounts.find((a) => a.name === config.defaultAccount);
+    const storedDefault = config.defaultAccount;
+    if (storedDefault) {
+      // Configs written before names were normalized can hold a raw value
+      // ("Work Account"); normalize on read so they keep resolving.
+      const key = normalizeKey(storedDefault);
+      const found = accounts.find((a) => a.name === key);
       if (found) return found;
     }
     if (accounts.length === 1) return accounts[0];
@@ -122,6 +148,9 @@ class AuthManager {
    * the account alongside the signed-in email.
    */
   async addAccount(name: string, options: AddAccountOptions = {}): Promise<StoredAccount> {
+    // Normalize before the OAuth flow: the record and the file are both keyed
+    // by the sanitized name, and a bad name should fail before a browser opens.
+    const key = sanitizeName(name);
     const config = await this.getConfig();
     if (!hasCredentials(config)) {
       throw new Error(
@@ -144,7 +173,7 @@ class AuthManager {
       } catch {
         // Browser unavailable (headless server) — the error message carries the URL.
         throw new Error(
-          `Could not open a browser. Open this URL manually to authorize "${name}": ${authUrl}`,
+          `Could not open a browser. Open this URL manually to authorize "${key}": ${authUrl}`,
         );
       }
     }
@@ -155,7 +184,7 @@ class AuthManager {
     const user = await fetchUserInfo(tokens.accessToken);
 
     const account: StoredAccount = {
-      name,
+      name: key,
       email: user.email,
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken ?? "",
@@ -168,16 +197,34 @@ class AuthManager {
   }
 
   async removeAccount(name: string): Promise<boolean> {
-    return deleteAccount(name);
+    // Keep the old contract: a name that cannot be an account is simply absent,
+    // not an error (callers and the CLI treat false as "nothing to remove").
+    if (!canSanitize(name)) return false;
+    const key = sanitizeName(name);
+    const removed = await deleteAccount(key);
+    // A default pointing at a deleted account makes every subsequent call fail
+    // with "multiple accounts but no default" while `status` still shows one.
+    if (removed) {
+      const config = await this.getConfig();
+      const current = config.defaultAccount;
+      if (current && normalizeKey(current) === key) {
+        config.defaultAccount = undefined;
+        await saveConfig(config);
+      }
+    }
+    return removed;
   }
 
   async setDefaultAccount(name: string): Promise<void> {
     const config = await this.getConfig();
-    if (name) {
-      const exists = await loadAccount(name);
-      if (!exists) throw new Error(`Cannot set default: account "${name}" does not exist.`);
+    // An empty name clears the default; anything else is stored in the same
+    // sanitized form the account record uses, or resolveAccount cannot match it.
+    const key = name ? sanitizeName(name) : "";
+    if (key) {
+      const exists = await loadAccount(key);
+      if (!exists) throw new Error(`Cannot set default: account "${key}" does not exist.`);
     }
-    config.defaultAccount = name || undefined;
+    config.defaultAccount = key || undefined;
     await saveConfig(config);
   }
 

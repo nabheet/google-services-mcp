@@ -119,6 +119,23 @@ describe("resolveAccount", () => {
   it("throws with setup instructions when no accounts exist", async () => {
     await expect(authManager.resolveAccount()).rejects.toThrow(/add one/i);
   });
+
+  it("matches a caller's spelling to the sanitized account name", async () => {
+    await saveAccount(account("work_account"));
+    const resolved = await authManager.resolveAccount("Work Account");
+    expect(resolved.name).toBe("work_account");
+  });
+
+  it("resolves a legacy raw default written before names were normalized", async () => {
+    await saveAccount(account("work_account"));
+    await saveAccount(account("personal"));
+    // Simulate a config.json from an older version.
+    const configPath = path.join(tmp, "config.json");
+    const raw = JSON.parse(await fs.readFile(configPath, "utf8")) as Record<string, unknown>;
+    raw.defaultAccount = "Work Account";
+    await fs.writeFile(configPath, JSON.stringify(raw, null, 2));
+    expect((await authManager.resolveAccount()).name).toBe("work_account");
+  });
 });
 
 describe("getClient", () => {
@@ -167,6 +184,12 @@ describe("addAccount", () => {
     expect(oauth.openBrowser).toHaveBeenCalledWith(expect.stringContaining("accounts.google.com"));
   });
 
+  it("stores the sanitized name so later lookups match", async () => {
+    const added = await authManager.addAccount("Work Account", { openBrowser: false });
+    expect(added.name).toBe("work_account");
+    expect((await authManager.resolveAccount("Work Account")).email).toBe("alice@example.com");
+  });
+
   it("throws a helpful error when credentials are not configured", async () => {
     // beforeEach's setDefaultAccount("") persisted test creds to config.json,
     // so remove the file and the env to simulate an unconfigured server.
@@ -186,6 +209,36 @@ describe("setDefaultAccount / removeAccount / getStatus", () => {
     await saveAccount(account("primary"));
     await authManager.setDefaultAccount("primary");
     expect((await authManager.getConfig()).defaultAccount).toBe("primary");
+  });
+
+  it("setDefaultAccount stores the sanitized form so resolution can match it", async () => {
+    await saveAccount(account("work_account"));
+    await saveAccount(account("personal"));
+    await authManager.setDefaultAccount("Work Account");
+    expect((await authManager.getConfig()).defaultAccount).toBe("work_account");
+    expect((await authManager.resolveAccount()).name).toBe("work_account");
+  });
+
+  it("removeAccount drops a default that pointed at the deleted account", async () => {
+    await saveAccount(account("gone"));
+    await authManager.setDefaultAccount("gone");
+    await authManager.removeAccount("gone");
+    expect((await authManager.getConfig()).defaultAccount).toBeUndefined();
+  });
+
+  it("removeAccount returns false for a name that cannot be an account", async () => {
+    await expect(authManager.removeAccount("!!!")).resolves.toBe(false);
+    await expect(authManager.removeAccount("")).resolves.toBe(false);
+  });
+
+  it("removeAccount clears a legacy raw default that names the removed account", async () => {
+    await saveAccount(account("work_account"));
+    const configPath = path.join(tmp, "config.json");
+    const raw = JSON.parse(await fs.readFile(configPath, "utf8")) as Record<string, unknown>;
+    raw.defaultAccount = "Work Account";
+    await fs.writeFile(configPath, JSON.stringify(raw, null, 2));
+    await authManager.removeAccount("Work Account");
+    expect((await authManager.getConfig()).defaultAccount).toBeUndefined();
   });
 
   it("removeAccount deletes the account", async () => {
