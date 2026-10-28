@@ -65,7 +65,7 @@
     "nock": "^14.0.17",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.5"
   },
   "author": "Nabheet S. Sandhu",
   "publishConfig": {
