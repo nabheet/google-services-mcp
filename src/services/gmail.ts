@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import type { Auth, gmail_v1 } from "googleapis";
 import { google } from "googleapis";
+import { resolveSavePath } from "../util/save-path.js";
 import { downloadDriveFile, getDriveFile } from "./drive.js";
 
 /** A local file to attach to an outgoing message. */
@@ -682,7 +683,8 @@ export async function getGmailAttachment(
     maxBytes?: number;
   },
 ): Promise<GmailAttachmentData> {
-  const savePath = opts.saveToPath;
+  const savePath =
+    opts.saveToPath === undefined ? undefined : await resolveSavePath(opts.saveToPath);
   const maxBytes = opts.maxBytes ?? DEFAULT_GMAIL_ATTACHMENT_MAX_BYTES;
   const gmail = google.gmail({ version: "v1", auth: client });
   const msg = (await gmail.users.messages.get({ userId: "me", id: opts.id, format: "full" })).data;

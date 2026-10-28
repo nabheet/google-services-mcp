@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockFiles = {
   list: vi.fn(),
@@ -12,6 +12,8 @@ const mockFiles = {
 const mockPermissions = { create: vi.fn(), list: vi.fn(), delete: vi.fn() };
 const mockFs = vi.hoisted(() => ({
   writeFile: vi.fn(),
+  mkdir: vi.fn(),
+  realpath: vi.fn(async (p: string) => p),
 }));
 const mockNodeFs = vi.hoisted(() => ({
   createReadStream: vi.fn(),
@@ -48,6 +50,12 @@ const client = {} as never;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // saveToPath is confined to the save root; these tests write under /tmp.
+  vi.stubEnv("GOOGLE_MCP_SAVE_ROOT", "/tmp");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("listDriveFiles", () => {
@@ -333,6 +341,14 @@ describe("downloadDriveFile", () => {
     const result = await downloadDriveFile(client, { fileId: "f1", saveToPath: "/tmp/out.txt" });
     expect(mockFs.writeFile).toHaveBeenCalledWith("/tmp/out.txt", "plain file content");
     expect(result).toEqual({ savedTo: "/tmp/out.txt" });
+  });
+
+  it("refuses a saveToPath outside the save root", async () => {
+    mockFiles.get.mockResolvedValue({ data: "x" });
+    await expect(
+      downloadDriveFile(client, { fileId: "f1", saveToPath: "/etc/passwd" }),
+    ).rejects.toThrow(/inside/);
+    expect(mockFs.writeFile).not.toHaveBeenCalled();
   });
 });
 
