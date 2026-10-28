@@ -1686,15 +1686,21 @@ export function registerTools(server: McpServer): void {
     {
       title: "Export Drive file",
       description:
-        "Export a Google-native file (Docs/Sheets/Slides/Drawings) to another format (e.g. application/pdf, text/plain, application/vnd.openxmlformats-officedocument.wordprocessingml.document).",
+        "Export a Google-native file (Docs/Sheets/Slides/Drawings) to another format (e.g. application/pdf, text/plain, application/vnd.openxmlformats-officedocument.wordprocessingml.document). Pass saveToPath to write the exported bytes to a local file instead.",
       inputSchema: {
         fileId: z.string().describe("Drive file ID."),
         mimeType: z.string().describe("Target MIME type (e.g. application/pdf)."),
+        saveToPath: z
+          .string()
+          .optional()
+          .describe(
+            "Local path to write the exported bytes to (returns { savedTo } instead of data).",
+          ),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ fileId, mimeType, account }) =>
-      withClient(account, (client) => exportDriveFile(client, { fileId, mimeType })),
+    async ({ fileId, mimeType, saveToPath, account }) =>
+      withClient(account, (client) => exportDriveFile(client, { fileId, mimeType, saveToPath })),
   );
 
   server.registerTool(
