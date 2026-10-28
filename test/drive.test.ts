@@ -12,6 +12,7 @@ const mockFiles = {
 const mockPermissions = { create: vi.fn(), list: vi.fn(), delete: vi.fn() };
 const mockFs = vi.hoisted(() => ({
   writeFile: vi.fn(),
+  mkdir: vi.fn(),
 }));
 const mockNodeFs = vi.hoisted(() => ({
   createReadStream: vi.fn(),
@@ -333,6 +334,13 @@ describe("downloadDriveFile", () => {
     const result = await downloadDriveFile(client, { fileId: "f1", saveToPath: "/tmp/out.txt" });
     expect(mockFs.writeFile).toHaveBeenCalledWith("/tmp/out.txt", "plain file content");
     expect(result).toEqual({ savedTo: "/tmp/out.txt" });
+  });
+
+  it("creates missing parent directories before writing saveToPath", async () => {
+    mockFiles.get.mockResolvedValue({ data: "plain file content" });
+    await downloadDriveFile(client, { fileId: "f1", saveToPath: "/tmp/nested/deep/out.txt" });
+    expect(mockFs.mkdir).toHaveBeenCalledWith("/tmp/nested/deep", { recursive: true });
+    expect(mockFs.writeFile).toHaveBeenCalledWith("/tmp/nested/deep/out.txt", "plain file content");
   });
 });
 

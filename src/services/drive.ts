@@ -1,5 +1,6 @@
 import { createReadStream } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import type { Auth, drive_v3 } from "googleapis";
 import { google } from "googleapis";
 
@@ -121,7 +122,10 @@ async function saveOrMap(
   saveToPath: string | undefined,
 ): Promise<DownloadDriveResult | { savedTo: string }> {
   if (saveToPath !== undefined) {
-    await writeFile(saveToPath, await responseToBytes(res.data));
+    // Convert first: if the body cannot be read, do not leave directories behind.
+    const bytes = await responseToBytes(res.data);
+    await mkdir(dirname(saveToPath), { recursive: true });
+    await writeFile(saveToPath, bytes);
     return { savedTo: saveToPath };
   }
   return mapDownload(res);

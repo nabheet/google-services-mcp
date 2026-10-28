@@ -15,7 +15,8 @@ Tools that touch the local filesystem share one pair of arg names.
 
 With `saveToPath` the raw bytes are written to that path and the inline payload
 (`data`, `dataBase64`, `text`) is omitted; the result carries `savedTo` alongside
-the tool's metadata.
+the tool's metadata. Missing parent directories are created recursively, so a
+path under a directory that does not exist yet still works.
 
 | tool | reads `path` | writes `saveToPath` |
 | --- | --- | --- |
@@ -27,8 +28,8 @@ the tool's metadata.
 | `google_drive_update` | yes | — |
 | `google_youtube_upload` | yes | — |
 | `google_drive_download` | — | yes |
-| `google_gmail_get_attachment` | — | pending #119 |
-| `google_drive_export` | — | pending #120 |
+| `google_drive_export` | — | yes |
+| `google_gmail_get_attachment` | — | yes |
 
 ## Account management
 
