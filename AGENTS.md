@@ -140,8 +140,10 @@ All publishing happens from GitHub Actions via npm **trusted publishing**
     next patch to `latest` + creates `vX.Y.Z` tag + GitHub release (version
     derived from last published `latest`; intentional minor/major bumps in
     package.json are honored). The first step of that job diffs `before..sha`;
-    pushes that only touch `.github/*`, `package-lock.json`, the version field
-    or an inert devDependency publish nothing
+    pushes that only touch `.github/*`, `package-lock.json`, `test/*`, `docs/*`,
+    `AGENTS.md`, the version field or an inert devDependency publish nothing —
+    those paths are not in the published package (`files`: `dist/`,
+    `README.md`, `LICENSE`), so releasing on them would only burn a version.
   - tag `v*-beta*` → `publish` job publishes `beta` + prerelease GitHub release
   - every PR push → `prerelease` job publishes `<version>-beta.<run_number>`
     to the `beta` dist-tag (`npm i google-services-mcp@beta`), so every PR is

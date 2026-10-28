@@ -121,7 +121,10 @@ jobs:
           printf '%s\n' "$changed_paths"
 
           # package.json ships when any field other than version and an INERT
-          # devDependency differs. Everything else defaults to shipping.
+          # devDependency differs. Everything that is not in package.json's
+          # `files` list (dist/, README.md, LICENSE) is non-shipping: a test or
+          # docs commit cannot change the tarball, so releasing on one only
+          # burns a version number.
           INERT_DEVDEPS='["@biomejs/biome","@types/node","markdownlint-cli2","nock","tsx","vitest"]'
           pkg_shipping_changed() {
             local before after
@@ -139,8 +142,8 @@ jobs:
           while IFS= read -r path; do
             [ -z "$path" ] && continue
             case "$path" in
-              package-lock.json|.github/*)
-                echo "  skip:    $path (non-shipping)"
+              package-lock.json|.github/*|test/*|docs/*|AGENTS.md)
+                echo "  skip:    $path (not in the published package)"
                 ;;
               package.json)
                 if pkg_shipping_changed; then
