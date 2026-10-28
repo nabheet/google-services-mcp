@@ -242,7 +242,8 @@ export function registerTools(server: McpServer): void {
     async ({ name }) => {
       try {
         await authManager.setDefaultAccount(name);
-        return ok({ status: "set", defaultAccount: name });
+        const config = await authManager.getConfig();
+        return ok({ status: "set", defaultAccount: config.defaultAccount });
       } catch (error) {
         return err(error);
       }

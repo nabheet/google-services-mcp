@@ -125,6 +125,17 @@ describe("resolveAccount", () => {
     const resolved = await authManager.resolveAccount("Work Account");
     expect(resolved.name).toBe("work_account");
   });
+
+  it("resolves a legacy raw default written before names were normalized", async () => {
+    await saveAccount(account("work_account"));
+    await saveAccount(account("personal"));
+    // Simulate a config.json from an older version.
+    const configPath = path.join(tmp, "config.json");
+    const raw = JSON.parse(await fs.readFile(configPath, "utf8")) as Record<string, unknown>;
+    raw.defaultAccount = "Work Account";
+    await fs.writeFile(configPath, JSON.stringify(raw, null, 2));
+    expect((await authManager.resolveAccount()).name).toBe("work_account");
+  });
 });
 
 describe("getClient", () => {
@@ -213,6 +224,11 @@ describe("setDefaultAccount / removeAccount / getStatus", () => {
     await authManager.setDefaultAccount("gone");
     await authManager.removeAccount("gone");
     expect((await authManager.getConfig()).defaultAccount).toBeUndefined();
+  });
+
+  it("removeAccount returns false for a name that cannot be an account", async () => {
+    await expect(authManager.removeAccount("!!!")).resolves.toBe(false);
+    await expect(authManager.removeAccount("")).resolves.toBe(false);
   });
 
   it("removeAccount deletes the account", async () => {

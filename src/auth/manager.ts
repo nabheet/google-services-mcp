@@ -27,6 +27,24 @@ import {
   saveAccount,
 } from "./store.js";
 
+/** Sanitized key for a legacy or user-supplied name, falling back to the raw string. */
+function normalizeKey(name: string): string {
+  try {
+    return sanitizeName(name);
+  } catch {
+    return name;
+  }
+}
+
+function canSanitize(name: string): boolean {
+  try {
+    sanitizeName(name);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export interface AddAccountOptions {
   /** Set to false to skip opening the browser (headless). */
   openBrowser?: boolean;
@@ -85,8 +103,12 @@ class AuthManager {
       );
     }
     const config = await this.getConfig();
-    if (config.defaultAccount) {
-      const found = accounts.find((a) => a.name === config.defaultAccount);
+    const storedDefault = config.defaultAccount;
+    if (storedDefault) {
+      // Configs written before names were normalized can hold a raw value
+      // ("Work Account"); normalize on read so they keep resolving.
+      const key = normalizeKey(storedDefault);
+      const found = accounts.find((a) => a.name === key);
       if (found) return found;
     }
     if (accounts.length === 1) return accounts[0];
@@ -175,13 +197,17 @@ class AuthManager {
   }
 
   async removeAccount(name: string): Promise<boolean> {
+    // Keep the old contract: a name that cannot be an account is simply absent,
+    // not an error (callers and the CLI treat false as "nothing to remove").
+    if (!canSanitize(name)) return false;
     const key = sanitizeName(name);
     const removed = await deleteAccount(key);
     // A default pointing at a deleted account makes every subsequent call fail
     // with "multiple accounts but no default" while `status` still shows one.
     if (removed) {
       const config = await this.getConfig();
-      if (config.defaultAccount === key) {
+      const current = config.defaultAccount;
+      if (current && normalizeKey(current) === key) {
         config.defaultAccount = undefined;
         await saveConfig(config);
       }
