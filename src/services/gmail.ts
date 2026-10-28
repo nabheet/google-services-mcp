@@ -638,6 +638,21 @@ function overCapError(filename: string, size: number, maxBytes: number): Error {
       "Pass saveToPath to write it to disk instead.",
   );
 }
+
+/**
+ * Bytes the value costs once embedded in the JSON-RPC frame: JSON escaping
+ * (a NUL byte becomes `\u0000`, six characters) plus the surrounding quotes.
+ */
+function frameBytes(value: string): number {
+  return Buffer.byteLength(JSON.stringify(value));
+}
+
+function overFrameCapError(filename: string, size: number, maxBytes: number): Error {
+  return new Error(
+    `Attachment "${filename}" serializes to ${size} bytes, over the ${maxBytes}-byte inline limit. ` +
+      "Pass saveToPath to write it to disk instead.",
+  );
+}
 /** Walk a Gmail payload tree collecting attachment parts. */
 function collectAttachments(
   payload: gmail_v1.Schema$MessagePart | null | undefined,
@@ -735,18 +750,25 @@ export async function getGmailAttachment(
     await writeFile(savePath, bytes);
     return { ...info, kind: "saved", savedTo: savePath };
   }
+  // Decode before deciding: an escaped payload can be far larger than the raw
+  // bytes (NUL runs, quote-heavy JSON, CRLF-heavy CSV), and the frame is what
+  // the client actually receives.
+  let decoded: string | undefined;
   if (isTextMime(mimeType)) {
     try {
-      return {
-        ...info,
-        kind: "text",
-        text: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-      };
+      decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     } catch {
       // Not valid UTF-8 (e.g. Latin-1 or UTF-16): return the bytes instead of
       // silently mangling them into U+FFFD replacement characters.
     }
   }
+  if (decoded !== undefined) {
+    const size = frameBytes(decoded);
+    if (size > maxBytes) throw overFrameCapError(filename, size, maxBytes);
+    return { ...info, kind: "text", text: decoded };
+  }
+  const size = frameBytes(dataBase64);
+  if (size > maxBytes) throw overFrameCapError(filename, size, maxBytes);
   return { ...info, kind: "base64", dataBase64 };
 }
 
