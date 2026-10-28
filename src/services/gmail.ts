@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
-import { basename } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, dirname } from "node:path";
 import type { Auth, gmail_v1 } from "googleapis";
 import { google } from "googleapis";
 import { downloadDriveFile, getDriveFile } from "./drive.js";
@@ -616,9 +616,14 @@ export interface GmailAttachmentData extends GmailAttachmentInfo {
   dataBase64?: string;
   /** Decoded text when the MIME type is text-like (absent when saved to disk). */
   text?: string;
-  /** Local path the raw bytes were written to, when `saveToPath` was given. */
+  /** Local path the raw bytes were written to. */
   savedTo?: string;
+  /** Alias of `savedTo`, for callers using the `savePath` spelling. */
+  savedPath?: string;
 }
+
+/** Inline attachment payload cap. Larger attachments must be saved to disk. */
+export const DEFAULT_GMAIL_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024;
 
 /** Walk a Gmail payload tree collecting attachment parts. */
 function collectAttachments(
@@ -664,8 +669,19 @@ export async function listGmailAttachments(
 /** Download a single attachment by messageId + attachmentId (or stable partId). */
 export async function getGmailAttachment(
   client: Auth.OAuth2Client,
-  opts: GetGmailOptions & { attachmentId: string; partId?: string; saveToPath?: string },
+  opts: GetGmailOptions & {
+    attachmentId: string;
+    partId?: string;
+    /** Write raw bytes here instead of returning them inline. */
+    saveToPath?: string;
+    /** Alias of `saveToPath`. */
+    savePath?: string;
+    /** Inline payload cap in raw bytes (default 8 MB). Ignored when saving to disk. */
+    maxBytes?: number;
+  },
 ): Promise<GmailAttachmentData> {
+  const savePath = opts.saveToPath ?? opts.savePath;
+  const maxBytes = opts.maxBytes ?? DEFAULT_GMAIL_ATTACHMENT_MAX_BYTES;
   const gmail = google.gmail({ version: "v1", auth: client });
   const msg = (await gmail.users.messages.get({ userId: "me", id: opts.id, format: "full" })).data;
   const atts = collectAttachments(msg.payload);
@@ -675,6 +691,13 @@ export async function getGmailAttachment(
   const part =
     (opts.partId ? atts.find((a) => a.partId === opts.partId) : undefined) ??
     atts.find((a) => a.id === opts.attachmentId);
+  const filename = part?.filename ?? "attachment";
+  if (savePath === undefined && part?.size !== undefined && part.size > maxBytes) {
+    throw new Error(
+      `Attachment "${filename}" is ${part.size} bytes, over the ${maxBytes}-byte inline limit. ` +
+        "Pass saveToPath (or savePath) to write it to disk instead.",
+    );
+  }
   // Always download with the FRESH attachmentId from this fetch (stale IDs
   // also work for the bytes call, but the fresh one is guaranteed valid).
   const attachmentId = part?.id ?? opts.attachmentId;
@@ -688,13 +711,14 @@ export async function getGmailAttachment(
   const info: GmailAttachmentInfo = {
     id: attachmentId,
     partId: part?.partId,
-    filename: part?.filename ?? "attachment",
+    filename,
     mimeType,
     size: part?.size ?? res.data.size ?? 0,
   };
-  if (opts.saveToPath !== undefined) {
-    await writeFile(opts.saveToPath, Buffer.from(dataBase64, "base64url"));
-    return { ...info, savedTo: opts.saveToPath };
+  if (savePath !== undefined) {
+    await mkdir(dirname(savePath), { recursive: true });
+    await writeFile(savePath, Buffer.from(dataBase64, "base64url"));
+    return { ...info, savedTo: savePath, savedPath: savePath };
   }
   const out: GmailAttachmentData = { ...info, dataBase64 };
   if (isTextMime(mimeType)) {

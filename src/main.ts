@@ -3,6 +3,13 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { dispatchCommand } from "./cli.js";
 import { createServer } from "./server.js";
 
+// A client closing the pipe (EPIPE, common after a large tool result) must not
+// crash the process with an unhandled 'error' event.
+process.stdout.on("error", (error: NodeJS.ErrnoException) => {
+  process.stderr.write(`stdout error (${error.code ?? "unknown"}); exiting\n`);
+  process.exit(0);
+});
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
