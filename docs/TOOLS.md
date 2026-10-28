@@ -81,7 +81,12 @@ Show credential configuration, data directory, connected accounts and token heal
 
 ### `google_gmail_send`
 
-Send an email from the connected account.
+Send an email from the connected account. Two size limits apply and are
+checked before the request: a single attachment may not exceed 18 MiB, and the
+base64-encoded message may not exceed Gmail's 25 MiB, which an attachment
+costs about a third more than its file size to fit. Both errors name the limit
+that was hit. Attachment filenames that are not ASCII are RFC 2231-encoded, and
+a long non-ASCII subject is folded into several RFC 2047 encoded-words.
 
 | arg | type | notes |
 | --- | --- | --- |
@@ -144,7 +149,9 @@ Add or remove labels on a message (mark read/unread, star, archive…).
 
 ### `google_gmail_reply`
 
-Reply to an existing message inside its thread, preserving threading headers.
+Reply to an existing message inside its thread, preserving threading headers. The
+reply goes to the message's `Reply-To` address when it sets one (mailing lists,
+support desks), otherwise to `From`.
 
 | arg | type | notes |
 | --- | --- | --- |
@@ -177,7 +184,9 @@ carries a `kind` discriminating which payload it holds:
 | `saved` | `savedTo` | `saveToPath` was passed; bytes are on disk |
 
 Text that is not valid UTF-8 (Latin-1, UTF-16) comes back as `base64` rather
-than being mangled into replacement characters. Attachments over 6 MB are
+than being mangled into replacement characters. An `attachmentId` or `partId`
+that is not on the message is an error: the result never falls back to a stale
+ID or labels unknown bytes as `application/octet-stream`. Attachments over 6 MB are
 rejected inline — pass `saveToPath` to write the raw bytes to a local file
 instead. The path must be inside the save root (`GOOGLE_MCP_SAVE_ROOT`, default
 `~/Downloads`).

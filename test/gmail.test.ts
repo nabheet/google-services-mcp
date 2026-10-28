@@ -1871,3 +1871,222 @@ describe("filters", () => {
     expect(result).toEqual({ deleted: true, id: "f1" });
   });
 });
+
+describe("getGmailMessage nesting", () => {
+  const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64url");
+
+  it("reports hasAttachments for an attachment nested below the top level", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        id: "m1",
+        payload: {
+          mimeType: "multipart/mixed",
+          parts: [
+            {
+              mimeType: "multipart/related",
+              parts: [
+                {
+                  mimeType: "multipart/alternative",
+                  parts: [
+                    { mimeType: "text/plain", body: { data: b64("hello") } },
+                    { mimeType: "text/html", body: { data: b64("<p>hello</p>") } },
+                  ],
+                },
+                {
+                  partId: "1.1",
+                  filename: "image.png",
+                  mimeType: "image/png",
+                  body: { attachmentId: "ATT1", size: 10 },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+
+    const msg = await getGmailMessage(client, { id: "m1" });
+
+    expect(msg.hasAttachments).toBe(true);
+    expect(msg.attachments).toHaveLength(1);
+    expect(msg.body).toBe("hello");
+  });
+
+  it("finds the body when the first part is an attachment", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        id: "m1",
+        payload: {
+          mimeType: "multipart/mixed",
+          parts: [
+            {
+              partId: "0",
+              filename: "report.pdf",
+              mimeType: "application/pdf",
+              body: { attachmentId: "ATT2", size: 5 },
+            },
+            {
+              mimeType: "multipart/alternative",
+              parts: [
+                { mimeType: "text/html", body: { data: b64("<p>body</p>") } },
+                { mimeType: "text/plain", body: { data: b64("body") } },
+              ],
+            },
+          ],
+        },
+      },
+    });
+
+    const msg = await getGmailMessage(client, { id: "m1" });
+
+    expect(msg.body).toBe("body");
+  });
+
+  it("ignores a text attachment when choosing the body", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        id: "m1",
+        payload: {
+          mimeType: "multipart/mixed",
+          parts: [
+            {
+              partId: "0",
+              filename: "notes.txt",
+              mimeType: "text/plain",
+              body: { attachmentId: "ATT3", size: 5 },
+            },
+            { mimeType: "text/plain", body: { data: b64("real body") } },
+          ],
+        },
+      },
+    });
+
+    const msg = await getGmailMessage(client, { id: "m1" });
+
+    expect(msg.body).toBe("real body");
+  });
+});
+
+describe("sendGmail size limits", () => {
+  it("rejects a message over the Gmail total limit before sending", async () => {
+    const first = join(tmpDir, "one.bin");
+    const second = join(tmpDir, "two.bin");
+    writeFileSync(first, Buffer.alloc(13 * 1024 * 1024, 1));
+    writeFileSync(second, Buffer.alloc(13 * 1024 * 1024, 1));
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await expect(
+      sendGmail(client, {
+        to: "bob@example.com",
+        subject: "Big",
+        body: "B",
+        attachments: [{ path: first }, { path: second }],
+      }),
+    ).rejects.toThrow(/over Gmail's 26214400-byte limit/);
+
+    expect(mockMessages.send).not.toHaveBeenCalled();
+  }, 30_000);
+
+  it("names the per-attachment limit, not the total, for a single oversized file", async () => {
+    const path = join(tmpDir, "big.bin");
+    writeFileSync(path, Buffer.alloc(19 * 1024 * 1024, 1));
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await expect(
+      sendGmail(client, {
+        to: "bob@example.com",
+        subject: "Big",
+        body: "B",
+        attachments: [{ path }],
+      }),
+    ).rejects.toThrow(/per-attachment limit/);
+  }, 30_000);
+});
+
+describe("sendGmail MIME encoding", () => {
+  it("RFC 2231-encodes a non-ASCII attachment filename", async () => {
+    const path = join(tmpDir, "x.bin");
+    writeFileSync(path, Buffer.from("x"));
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await sendGmail(client, {
+      to: "bob@example.com",
+      subject: "S",
+      body: "B",
+      attachments: [{ path, filename: "€ invoice.pdf" }],
+    });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain("filename*=utf-8''%E2%82%AC%20invoice.pdf");
+    expect(raw).toContain('filename="_ invoice.pdf"');
+    expect(raw).not.toMatch(/filename="[^"]*€/);
+  });
+
+  it("folds a long non-ASCII subject into encoded-words under 75 characters", async () => {
+    const subject = `Résumé — ${"très long sujet ".repeat(8).trim()}`;
+    mockMessages.send.mockResolvedValue({ data: { id: "m" } });
+
+    await sendGmail(client, { to: "bob@example.com", subject, body: "B" });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    for (const line of raw.split("\r\n")) {
+      expect(line.length).toBeLessThanOrEqual(78);
+    }
+    const words = [...raw.matchAll(/=\?UTF-8\?B\?([^?]*)\?=/g)].map((m) => m[1] as string);
+    expect(words.length).toBeGreaterThan(1);
+    for (const word of words) {
+      expect(`=?UTF-8?B?${word}?=`.length).toBeLessThanOrEqual(75);
+    }
+    // Each encoded-word is base64-padded on its own, so decode them separately.
+    const decoded = words.map((word) => Buffer.from(word, "base64").toString("utf8")).join("");
+    expect(decoded).toBe(subject);
+  });
+});
+
+describe("replyGmail target", () => {
+  it("answers the Reply-To address when the message sets one", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          headers: [
+            { name: "From", value: "List <list@example.com>" },
+            { name: "Reply-To", value: "Author <author@example.com>" },
+            { name: "Subject", value: "Hi" },
+            { name: "Message-ID", value: "<x@y>" },
+          ],
+        },
+      },
+    });
+    mockMessages.send.mockResolvedValue({ data: { id: "r" } });
+
+    await replyGmail(client, { threadId: "t1", messageId: "m1", body: "ok" });
+
+    const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
+    expect(raw).toContain("To: Author <author@example.com>");
+    expect(raw).not.toContain("To: List <list@example.com>");
+  });
+});
+
+describe("getGmailAttachment lookups", () => {
+  it("rejects an attachment that is not on the message instead of guessing", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "0.1",
+              filename: "a.pdf",
+              mimeType: "application/pdf",
+              body: { attachmentId: "FRESH", size: 1 },
+            },
+          ],
+        },
+      },
+    });
+
+    await expect(getGmailAttachment(client, { id: "m1", attachmentId: "STALE" })).rejects.toThrow(
+      /not found on message m1.*0\.1/s,
+    );
+    expect(mockMessages.attachments.get).not.toHaveBeenCalled();
+  });
+});
