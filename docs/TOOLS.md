@@ -160,13 +160,18 @@ are returned decoded as text; binary files as base64. Attachments over 6 MB are
 rejected inline — pass `saveToPath` to write the raw bytes to a local file
 instead (returns `{ savedTo }`).
 
+The cap covers the serialized payload, not just the raw bytes: JSON escaping
+inflates base64 by ~1.33x and NUL-heavy text by up to ~6x, so an attachment
+that fits in raw bytes can still be rejected. The client never receives a frame
+that grew past the limit. The cap does not apply when saving to disk.
+
 | arg | type | notes |
 | --- | --- | --- |
 | `id` | string | required. Message ID. |
 | `attachmentId` | string | required. From `list_attachments`. |
 | `partId` | string | optional. Stable part ID from `list_attachments` (preferred). |
 | `saveToPath` | string | optional. Local path to write the raw bytes to. |
-| `maxBytes` | number | optional, default 6291456. Inline cap in raw bytes; ignored when saving. |
+| `maxBytes` | number | optional, default 6291456. Cap applies to raw and serialized size. |
 
 ### `google_gmail_drafts_create`
 

@@ -528,7 +528,7 @@ export function registerTools(server: McpServer): void {
     {
       title: "Get email attachment",
       description:
-        "Download a single attachment by message ID and attachment ID. Text-like files are returned decoded as text; binary files as base64. Attachments over 6 MB are rejected unless saved to disk — pass saveToPath to write the raw bytes to a local file instead.",
+        "Download a single attachment by message ID and attachment ID. Text-like files are returned decoded as text; binary files as base64. Attachments over 6 MB are rejected unless saved to disk — pass saveToPath to write the raw bytes to a local file instead. The cap applies to the serialized payload as well as the raw bytes, so the client never receives an oversized frame.",
       inputSchema: {
         id: z.string().describe("Message ID."),
         attachmentId: z.string().describe("Attachment ID (from list_attachments)."),
@@ -547,7 +547,9 @@ export function registerTools(server: McpServer): void {
           .int()
           .positive()
           .optional()
-          .describe("Inline payload cap in raw bytes (default 6 MB). Ignored when saving to disk."),
+          .describe(
+            "Inline payload cap in bytes (default 6 MB). Applies to the raw bytes and to the JSON-serialized payload, since escaping can inflate it (base64 ~1.33x, NUL-heavy text up to ~6x). Ignored when saving to disk.",
+          ),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
