@@ -152,13 +152,13 @@ describe("docs service", () => {
     const result = await replaceAllText(client, {
       documentId: "d1",
       find: "{{name}}",
-      replace: "Nabheet",
+      replace: "Ada",
     });
     expect(result.occurrencesChanged).toBe(2);
     const body = mockDocs.documents.batchUpdate.mock.calls[0][0].requestBody;
     expect(body.requests[0].replaceAllText).toEqual({
       containsText: { text: "{{name}}", matchCase: true },
-      replaceText: "Nabheet",
+      replaceText: "Ada",
     });
   });
 
