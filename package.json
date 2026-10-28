@@ -70,5 +70,8 @@
   "author": "Nabheet S. Sandhu",
   "publishConfig": {
     "access": "public"
+  },
+  "overrides": {
+    "katex": "^0.19.1"
   }
 }
