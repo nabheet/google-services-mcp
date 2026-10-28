@@ -965,6 +965,135 @@ describe("getGmailAttachment", () => {
     ).rejects.toThrow();
   });
 
+  it("rejects a text attachment whose serialized frame exceeds the cap", async () => {
+    // 40 NUL bytes: 40 raw bytes, but JSON escapes each as \u0000, so the
+    // inline payload is ~240 bytes. Raw-byte accounting alone would let it in.
+    const bytes = Buffer.alloc(40, 0x00);
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "1",
+              filename: "nul.txt",
+              mimeType: "text/plain",
+              body: { attachmentId: "NULS", size: bytes.length },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: bytes.toString("base64url"), size: bytes.length },
+    });
+    await expect(
+      getGmailAttachment(client, { id: "m1", attachmentId: "NULS", maxBytes: 100 }),
+    ).rejects.toThrow(/nul\.txt.*100-byte inline limit/s);
+  });
+
+  it("rejects a binary attachment whose base64 frame exceeds the cap", async () => {
+    // 80 raw bytes decode under a 100-byte cap, but base64 inflates them to 108.
+    const bytes = Buffer.alloc(80, 0xff);
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "1",
+              filename: "blob.bin",
+              mimeType: "application/octet-stream",
+              body: { attachmentId: "B64", size: bytes.length },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: bytes.toString("base64url"), size: bytes.length },
+    });
+    await expect(
+      getGmailAttachment(client, { id: "m1", attachmentId: "B64", maxBytes: 100 }),
+    ).rejects.toThrow(/blob\.bin.*100-byte inline limit/s);
+  });
+
+  it("measures the double-escaped envelope, not one escaping pass", async () => {
+    const bytes = Buffer.alloc(40, 0x00);
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "1",
+              filename: "nul.txt",
+              mimeType: "text/plain",
+              body: { attachmentId: "NULS3", size: bytes.length },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: bytes.toString("base64url"), size: bytes.length },
+    });
+    // Reproduce what the client actually receives: the tool stringifies the
+    // result into content[0].text, and the transport stringifies the envelope.
+    const toolResult = {
+      id: "NULS3",
+      partId: "1",
+      filename: "nul.txt",
+      mimeType: "text/plain",
+      size: 40,
+      kind: "text",
+      text: bytes.toString("utf8"),
+    };
+    const frame = Buffer.byteLength(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 0,
+        result: { content: [{ type: "text", text: JSON.stringify(toolResult, null, 2) }] },
+      }),
+    );
+    await expect(
+      getGmailAttachment(client, { id: "m1", attachmentId: "NULS3", maxBytes: frame - 1 }),
+    ).rejects.toThrow(/nul\.txt.*JSON-RPC frame/s);
+    const accepted = await getGmailAttachment(client, {
+      id: "m1",
+      attachmentId: "NULS3",
+      maxBytes: frame,
+    });
+    expect(accepted.text).toBe(bytes.toString("utf8"));
+  });
+
+  it("writes an attachment whose frame exceeds the cap when saveToPath is set", async () => {
+    const bytes = Buffer.alloc(40, 0x00);
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "1",
+              filename: "nul.txt",
+              mimeType: "text/plain",
+              body: { attachmentId: "NULS2", size: bytes.length },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: bytes.toString("base64url"), size: bytes.length },
+    });
+    const saveToPath = join(tmpDir, "nul.txt");
+    const result = await getGmailAttachment(client, {
+      id: "m1",
+      attachmentId: "NULS2",
+      maxBytes: 100,
+      saveToPath,
+    });
+    expect(readFileSync(saveToPath)).toEqual(bytes);
+    expect(result.savedTo).toBe(saveToPath);
+  });
+
   it("rejects an over-cap attachment before downloading it", async () => {
     mockMessages.get.mockResolvedValue({
       data: {

@@ -177,13 +177,20 @@ rejected inline — pass `saveToPath` to write the raw bytes to a local file
 instead. The path must be inside the save root (`GOOGLE_MCP_SAVE_ROOT`, default
 `~/Downloads`).
 
+The cap is measured on the JSON-RPC frame the client receives, not the raw bytes.
+The payload is escaped twice on the way out (into `content[0].text`, then into
+the envelope), so NUL-heavy text costs about 7x its raw size, and base64 costs
+about 1.33x plus envelope overhead. An attachment whose raw size equals the cap
+is rejected for that overhead. The error message reports both sizes. The cap
+does not apply when saving to disk.
+
 | arg | type | notes |
 | --- | --- | --- |
 | `id` | string | required. Message ID. |
 | `attachmentId` | string | required. From `list_attachments`. |
 | `partId` | string | optional. Stable part ID from `list_attachments` (preferred). |
 | `saveToPath` | string | optional. Local path inside the save root to write the raw bytes to. |
-| `maxBytes` | number | optional, default 6291456. Inline cap in raw bytes; ignored when saving. |
+| `maxBytes` | number | optional, default 6291456. Caps raw and framed size; ignored when saving. |
 
 ### `google_gmail_drafts_create`
 

@@ -638,6 +638,36 @@ function overCapError(filename: string, size: number, maxBytes: number): Error {
       "Pass saveToPath to write it to disk instead.",
   );
 }
+
+/**
+ * Bytes the client receives for a result, measured the way it is actually sent:
+ * the tool puts `JSON.stringify(result, null, 2)` into `content[0].text`
+ * (util/result.ts), then the transport stringifies that envelope again — so the
+ * payload is escaped twice. A NUL byte costs 7 bytes here, not 1 or 6.
+ */
+function inlineFrameBytes(result: GmailAttachmentData): number {
+  const toolText = JSON.stringify(result, null, 2);
+  return Buffer.byteLength(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: 0,
+      result: { content: [{ type: "text", text: toolText }] },
+    }),
+  );
+}
+
+function overFrameCapError(
+  filename: string,
+  frameBytes: number,
+  rawBytes: number,
+  maxBytes: number,
+): Error {
+  return new Error(
+    `Attachment "${filename}" is ${rawBytes} bytes raw, ${frameBytes} bytes as a JSON-RPC frame, ` +
+      `over the ${maxBytes}-byte inline limit (JSON escaping inflates NUL runs and base64). ` +
+      "Pass saveToPath to write it to disk instead.",
+  );
+}
 /** Walk a Gmail payload tree collecting attachment parts. */
 function collectAttachments(
   payload: gmail_v1.Schema$MessagePart | null | undefined,
@@ -735,19 +765,28 @@ export async function getGmailAttachment(
     await writeFile(savePath, bytes);
     return { ...info, kind: "saved", savedTo: savePath };
   }
+  // Decode before deciding: an escaped payload can be far larger than the raw
+  // bytes (NUL runs, quote-heavy JSON, CRLF-heavy CSV), and the frame is what
+  // the client actually receives.
+  let decoded: string | undefined;
   if (isTextMime(mimeType)) {
     try {
-      return {
-        ...info,
-        kind: "text",
-        text: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-      };
+      decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     } catch {
       // Not valid UTF-8 (e.g. Latin-1 or UTF-16): return the bytes instead of
       // silently mangling them into U+FFFD replacement characters.
     }
   }
-  return { ...info, kind: "base64", dataBase64 };
+  if (decoded !== undefined) {
+    const candidate: GmailAttachmentData = { ...info, kind: "text", text: decoded };
+    const frame = inlineFrameBytes(candidate);
+    if (frame > maxBytes) throw overFrameCapError(filename, frame, bytes.length, maxBytes);
+    return candidate;
+  }
+  const candidate: GmailAttachmentData = { ...info, kind: "base64", dataBase64 };
+  const frame = inlineFrameBytes(candidate);
+  if (frame > maxBytes) throw overFrameCapError(filename, frame, bytes.length, maxBytes);
+  return candidate;
 }
 
 // ---- Drafts ---------------------------------------------------------------
