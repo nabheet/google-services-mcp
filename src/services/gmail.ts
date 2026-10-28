@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import type { Auth, gmail_v1 } from "googleapis";
 import { google } from "googleapis";
@@ -618,6 +618,11 @@ export interface GmailAttachmentData extends GmailAttachmentInfo {
   text?: string;
 }
 
+export interface GmailAttachmentSaved extends GmailAttachmentInfo {
+  /** Local path the raw bytes were written to. */
+  savedTo: string;
+}
+
 /** Walk a Gmail payload tree collecting attachment parts. */
 function collectAttachments(
   payload: gmail_v1.Schema$MessagePart | null | undefined,
@@ -662,8 +667,8 @@ export async function listGmailAttachments(
 /** Download a single attachment by messageId + attachmentId (or stable partId). */
 export async function getGmailAttachment(
   client: Auth.OAuth2Client,
-  opts: GetGmailOptions & { attachmentId: string; partId?: string },
-): Promise<GmailAttachmentData> {
+  opts: GetGmailOptions & { attachmentId: string; partId?: string; saveToPath?: string },
+): Promise<GmailAttachmentData | GmailAttachmentSaved> {
   const gmail = google.gmail({ version: "v1", auth: client });
   const msg = (await gmail.users.messages.get({ userId: "me", id: opts.id, format: "full" })).data;
   const atts = collectAttachments(msg.payload);
@@ -683,14 +688,18 @@ export async function getGmailAttachment(
   });
   const dataBase64 = (res.data.data ?? "") as string;
   const mimeType = part?.mimeType ?? "application/octet-stream";
-  const out: GmailAttachmentData = {
+  const info: GmailAttachmentInfo = {
     id: attachmentId,
     partId: part?.partId,
     filename: part?.filename ?? "attachment",
     mimeType,
     size: part?.size ?? res.data.size ?? 0,
-    dataBase64,
   };
+  if (opts.saveToPath !== undefined) {
+    await writeFile(opts.saveToPath, Buffer.from(dataBase64, "base64url"));
+    return { ...info, savedTo: opts.saveToPath };
+  }
+  const out: GmailAttachmentData = { ...info, dataBase64 };
   if (isTextMime(mimeType)) {
     out.text = Buffer.from(dataBase64, "base64url").toString("utf8");
   }
