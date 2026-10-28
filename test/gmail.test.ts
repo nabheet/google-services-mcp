@@ -371,7 +371,7 @@ describe("listGmailMessages", () => {
       q: "from:bob",
       maxResults: 5,
     });
-    expect(result).toEqual([
+    expect(result.items).toEqual([
       { id: "m1", threadId: "t1", snippet: "hello" },
       { id: "m2", threadId: "t2", snippet: "world" },
     ]);
@@ -380,7 +380,7 @@ describe("listGmailMessages", () => {
   it("returns an empty list when no messages exist", async () => {
     mockMessages.list.mockResolvedValue({ data: {} });
     const result = await listGmailMessages(client, {});
-    expect(result).toEqual([]);
+    expect(result).toEqual({ items: [] });
   });
 });
 
@@ -563,7 +563,7 @@ describe("listGmailThreads", () => {
       q: "from:bob",
       maxResults: 5,
     });
-    expect(result).toEqual([
+    expect(result.items).toEqual([
       { id: "t1", snippet: "hello", historyId: "1" },
       { id: "t2", snippet: "world", historyId: "2" },
     ]);
@@ -572,7 +572,7 @@ describe("listGmailThreads", () => {
   it("returns an empty list when no threads exist", async () => {
     mockThreads.list.mockResolvedValue({ data: {} });
     const result = await listGmailThreads(client, {});
-    expect(result).toEqual([]);
+    expect(result).toEqual({ items: [] });
   });
 });
 
@@ -2088,5 +2088,27 @@ describe("getGmailAttachment lookups", () => {
       /not found on message m1.*0\.1/s,
     );
     expect(mockMessages.attachments.get).not.toHaveBeenCalled();
+  });
+});
+
+describe("gmail pagination", () => {
+  it("passes pageToken and returns nextPageToken for messages", async () => {
+    mockMessages.list.mockResolvedValue({
+      data: { messages: [{ id: "m9" }], nextPageToken: "p2" },
+    });
+    const result = await listGmailMessages(client, { pageToken: "p1" });
+    expect(mockMessages.list).toHaveBeenCalledWith(
+      expect.objectContaining({ pageToken: "p1", maxResults: 25 }),
+    );
+    expect(result.nextPageToken).toBe("p2");
+  });
+
+  it("passes pageToken and returns nextPageToken for threads", async () => {
+    mockThreads.list.mockResolvedValue({ data: { threads: [{ id: "t9" }], nextPageToken: "p2" } });
+    const result = await listGmailThreads(client, { pageToken: "p1" });
+    expect(mockThreads.list).toHaveBeenCalledWith(
+      expect.objectContaining({ pageToken: "p1", maxResults: 25 }),
+    );
+    expect(result.nextPageToken).toBe("p2");
   });
 });

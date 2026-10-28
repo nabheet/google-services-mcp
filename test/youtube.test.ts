@@ -478,3 +478,19 @@ describe("getMyVideos uploads playlist", () => {
     });
   });
 });
+
+describe("comment pagination", () => {
+  it("passes pageToken and returns the next one", async () => {
+    mockYouTube.commentThreads.list.mockResolvedValue({
+      data: { items: [], nextPageToken: "p2" },
+    });
+    const result = await listComments(client, { videoId: "v1", pageToken: "p1" });
+    expect(mockYouTube.commentThreads.list).toHaveBeenCalledWith({
+      part: ["snippet"],
+      videoId: "v1",
+      maxResults: 20,
+      pageToken: "p1",
+    });
+    expect(result.nextPageToken).toBe("p2");
+  });
+});

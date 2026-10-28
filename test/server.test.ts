@@ -242,7 +242,7 @@ describe("end-to-end tool calls", () => {
       data: { messages: [{ id: "m1", threadId: "t1", snippet: "s" }] },
     });
     const result = await callTool("google_gmail_list", { query: "from:bob", maxResults: 5 });
-    expect(result).toEqual([{ id: "m1", threadId: "t1", snippet: "s" }]);
+    expect(result).toEqual({ items: [{ id: "m1", threadId: "t1", snippet: "s" }] });
   });
 
   it("google_calendar_create_meet creates a meeting with conference data", async () => {
@@ -264,7 +264,7 @@ describe("end-to-end tool calls", () => {
     await setup();
     mockFiles.list.mockResolvedValue({ data: { files: [{ id: "f1", name: "x.md" }] } });
     const result = await callTool("google_drive_list", {});
-    expect(result).toEqual([{ id: "f1", name: "x.md" }]);
+    expect(result).toEqual({ items: [{ id: "f1", name: "x.md" }] });
   });
 
   it("google_tasks_create creates a task", async () => {

@@ -1,5 +1,6 @@
 import type { Auth, calendar_v3 } from "googleapis";
 import { google } from "googleapis";
+import type { ListPage } from "../util/pagination.js";
 
 export interface ListEventsOptions {
   calendarId?: string;
@@ -7,6 +8,13 @@ export interface ListEventsOptions {
   timeMax?: string;
   maxResults?: number;
   q?: string;
+  /** Token from a previous page's `nextPageToken`. */
+  pageToken?: string;
+}
+
+export interface ListCalendarsOptions {
+  /** Token from a previous page's `nextPageToken`. */
+  pageToken?: string;
 }
 
 export type SendUpdates = "all" | "externalOnly" | "none";
@@ -273,15 +281,23 @@ function buildReminders(opts: {
 }
 
 /** List the user's calendars. */
-export async function listCalendars(client: Auth.OAuth2Client): Promise<CalendarSummary[]> {
+export async function listCalendars(
+  client: Auth.OAuth2Client,
+  opts: ListCalendarsOptions = {},
+): Promise<ListPage<CalendarSummary>> {
   const calendar = google.calendar({ version: "v3", auth: client });
-  const res = await calendar.calendarList.list();
-  return (res.data.items ?? []).map((c) => ({
-    id: c.id as string,
-    summary: c.summary as string | undefined,
-    isPrimary: !!c.primary,
-    accessRole: c.accessRole as string | undefined,
-  }));
+  const res = await calendar.calendarList.list({
+    ...(opts.pageToken !== undefined ? { pageToken: opts.pageToken } : {}),
+  });
+  return {
+    items: (res.data.items ?? []).map((c) => ({
+      id: c.id as string,
+      summary: c.summary as string | undefined,
+      isPrimary: !!c.primary,
+      accessRole: c.accessRole as string | undefined,
+    })),
+    ...(res.data.nextPageToken ? { nextPageToken: res.data.nextPageToken } : {}),
+  };
 }
 
 /** Create a secondary calendar. Returns the created calendar metadata. */
@@ -350,7 +366,7 @@ export async function deleteCalendar(
 export async function listEvents(
   client: Auth.OAuth2Client,
   opts: ListEventsOptions,
-): Promise<EventSummary[]> {
+): Promise<ListPage<EventSummary>> {
   const calendar = google.calendar({ version: "v3", auth: client });
   const res = await calendar.events.list({
     calendarId: opts.calendarId ?? "primary",
@@ -360,17 +376,21 @@ export async function listEvents(
     q: opts.q,
     singleEvents: true,
     orderBy: "startTime",
+    ...(opts.pageToken !== undefined ? { pageToken: opts.pageToken } : {}),
   });
-  return (res.data.items ?? []).map((e) => ({
-    id: e.id as string,
-    summary: e.summary as string | undefined,
-    description: e.description as string | undefined,
-    location: e.location as string | undefined,
-    start: e.start as EventSummary["start"],
-    end: e.end as EventSummary["end"],
-    hangoutLink: e.hangoutLink as string | undefined,
-    htmlLink: e.htmlLink as string | undefined,
-  }));
+  return {
+    items: (res.data.items ?? []).map((e) => ({
+      id: e.id as string,
+      summary: e.summary as string | undefined,
+      description: e.description as string | undefined,
+      location: e.location as string | undefined,
+      start: e.start as EventSummary["start"],
+      end: e.end as EventSummary["end"],
+      hangoutLink: e.hangoutLink as string | undefined,
+      htmlLink: e.htmlLink as string | undefined,
+    })),
+    ...(res.data.nextPageToken ? { nextPageToken: res.data.nextPageToken } : {}),
+  };
 }
 
 /** Create an event. Returns the created event. */

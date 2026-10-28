@@ -49,7 +49,7 @@ describe("gmail E2E (nock)", () => {
 
     const res = await listGmailMessages(client, { query: "from:e2e", maxResults: 10 });
 
-    expect(res).toEqual([
+    expect(res.items).toEqual([
       { id: "m1", threadId: "t1", snippet: "first" },
       { id: "m2", threadId: "t2", snippet: "second" },
     ]);
