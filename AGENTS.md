@@ -108,6 +108,11 @@ npx biome check --write <file>   # apply fixes to one file
 
 Compact-output alternative (works — verified): `rtk npm run lint` / `rtk npx biome check .`
 
+Biome's markdown formatter is disabled in `biome.json`. Version 2.6 aligns
+table columns, which produces lines over markdownlint's 100-character MD013
+limit, so the two tools cannot both be satisfied. Markdownlint stays the
+markdown authority; Biome covers code.
+
 ```bash
 npm test             # full suite (vitest run)
 npm run test:watch
