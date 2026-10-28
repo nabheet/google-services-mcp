@@ -255,3 +255,15 @@ describe("setDefaultAccount / removeAccount / getStatus", () => {
     expect(status.accounts[0]).toHaveProperty("tokenHealthy", true);
   });
 });
+
+describe("addAccount existing name", () => {
+  it("refuses to overwrite an existing account", async () => {
+    await saveAccount(account("work", { email: "work@example.com" }));
+
+    await expect(authManager.addAccount("Work", { openBrowser: false })).rejects.toThrow(
+      /already exists/i,
+    );
+    expect(oauth.waitForOAuthCallback).not.toHaveBeenCalled();
+    expect((await authManager.resolveAccount("work")).email).toBe("work@example.com");
+  });
+});

@@ -2242,7 +2242,7 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         spreadsheetId: z.string().describe("Spreadsheet ID."),
         sheetId: z.number().int().describe("Numeric sheet ID (from google_sheets_get metadata)."),
-        startIndex: z.number().int().describe("0-based row index where rows are inserted."),
+        startIndex: z.number().int().min(0).describe("0-based row index where rows are inserted."),
         numRows: z.number().int().min(1).optional().describe("Number of rows (default 1)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
@@ -2261,7 +2261,11 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         spreadsheetId: z.string().describe("Spreadsheet ID."),
         sheetId: z.number().int().describe("Numeric sheet ID (from google_sheets_get metadata)."),
-        startIndex: z.number().int().describe("0-based row index of the first row to delete."),
+        startIndex: z
+          .number()
+          .int()
+          .min(0)
+          .describe("0-based row index of the first row to delete."),
         numRows: z.number().int().min(1).optional().describe("Number of rows (default 1)."),
         account: z.string().optional().describe("Account nickname to use."),
       },

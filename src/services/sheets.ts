@@ -185,11 +185,22 @@ export interface RowRangeArgs {
   numRows?: number;
 }
 
+/** A row range must describe at least one real row at a real index. */
+function assertRowRange({ startIndex, numRows = 1 }: RowRangeArgs): void {
+  if (!Number.isInteger(startIndex) || startIndex < 0) {
+    throw new Error(`startIndex must be a non-negative integer, got ${startIndex}.`);
+  }
+  if (!Number.isInteger(numRows) || numRows < 1) {
+    throw new Error(`numRows must be at least 1, got ${numRows}.`);
+  }
+}
+
 /** Insert blank rows starting at startIndex (0-based). */
 export async function insertRows(
   client: Auth.OAuth2Client,
   { spreadsheetId, sheetId, startIndex, numRows = 1 }: RowRangeArgs,
 ): Promise<sheets_v4.Schema$BatchUpdateSpreadsheetResponse> {
+  assertRowRange({ spreadsheetId, sheetId, startIndex, numRows });
   return batchUpdateSheet(client, {
     spreadsheetId,
     requests: [
@@ -212,6 +223,7 @@ export async function deleteRows(
   client: Auth.OAuth2Client,
   { spreadsheetId, sheetId, startIndex, numRows = 1 }: RowRangeArgs,
 ): Promise<sheets_v4.Schema$BatchUpdateSpreadsheetResponse> {
+  assertRowRange({ spreadsheetId, sheetId, startIndex, numRows });
   return batchUpdateSheet(client, {
     spreadsheetId,
     requests: [

@@ -72,9 +72,10 @@ export async function dispatchCommand(args: string[]): Promise<CliResult> {
       try {
         const timeoutMs = parseTimeout(rest);
         const account = await authManager.addAccount(name, ...(timeoutMs ? [{ timeoutMs }] : []));
+        const email = account.email ? ` for ${account.email}` : "";
         return {
           exitCode: 0,
-          output: `Added account "${account.name}" for ${account.email}\n`,
+          output: `Added account "${account.name}"${email}\n`,
         };
       } catch (error) {
         return {

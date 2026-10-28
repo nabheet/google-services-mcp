@@ -183,3 +183,44 @@ describe("ensureDirs", () => {
     expect(stat.mode & 0o777).toBe(0o600);
   });
 });
+
+describe("credential persistence and port validation", () => {
+  it("keeps an environment-supplied secret out of config.json", async () => {
+    await fs.rm(getConfigPath(), { force: true });
+    vi.stubEnv("GOOGLE_MCP_CLIENT_ID", "env-id");
+    vi.stubEnv("GOOGLE_MCP_CLIENT_SECRET", "env-secret");
+
+    const config = await loadConfig();
+    await saveConfig({ ...config, defaultAccount: "work" });
+
+    const raw = JSON.parse(await fs.readFile(getConfigPath(), "utf8"));
+    expect(raw.clientId).toBe("env-id");
+    expect(raw.clientSecret).toBeUndefined();
+    expect(raw.defaultAccount).toBe("work");
+
+    stubBaselineEnv();
+  });
+
+  it("leaves a secret already in the file untouched when environment vars are set", async () => {
+    await saveConfig({ clientId: "file-id", clientSecret: "file-secret", redirectPort: 8787 });
+    vi.stubEnv("GOOGLE_MCP_CLIENT_SECRET", "env-secret");
+
+    const config = await loadConfig();
+    await saveConfig({ ...config, defaultAccount: "keep" });
+
+    const raw = JSON.parse(await fs.readFile(getConfigPath(), "utf8"));
+    expect(raw.clientSecret).toBe("file-secret");
+
+    stubBaselineEnv();
+  });
+
+  it("rejects a redirect port that is not a usable port number", async () => {
+    vi.stubEnv("GOOGLE_MCP_REDIRECT_PORT", "eighty");
+    await expect(loadConfig()).rejects.toThrow(/GOOGLE_MCP_REDIRECT_PORT/);
+
+    vi.stubEnv("GOOGLE_MCP_REDIRECT_PORT", "70000");
+    await expect(loadConfig()).rejects.toThrow(/GOOGLE_MCP_REDIRECT_PORT/);
+
+    stubBaselineEnv();
+  });
+});

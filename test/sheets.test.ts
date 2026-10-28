@@ -310,3 +310,22 @@ describe("sheets service", () => {
     });
   });
 });
+
+describe("row range validation", () => {
+  it("rejects a zero or negative row count", async () => {
+    await expect(
+      insertRows(client, { spreadsheetId: "s1", sheetId: 0, startIndex: 1, numRows: 0 }),
+    ).rejects.toThrow(/numRows/);
+    await expect(
+      deleteRows(client, { spreadsheetId: "s1", sheetId: 0, startIndex: 1, numRows: -2 }),
+    ).rejects.toThrow(/numRows/);
+    expect(mockSpreadsheets.batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a negative start index", async () => {
+    await expect(
+      insertRows(client, { spreadsheetId: "s1", sheetId: 0, startIndex: -1 }),
+    ).rejects.toThrow(/startIndex/);
+    expect(mockSpreadsheets.batchUpdate).not.toHaveBeenCalled();
+  });
+});

@@ -178,25 +178,22 @@ export async function getMyVideos(
   client: Auth.OAuth2Client,
   { maxResults = 25 }: { maxResults?: number },
 ): Promise<{ uploadsPlaylistId: string | null; videos: youtube_v3.Schema$PlaylistItem[] }> {
-  // Find the uploads playlist for the signed-in channel, then list its items.
+  // `channels.list` reports the uploads playlist directly. Searching the
+  // playlist list by title only worked for English accounts with at most 50
+  // playlists; the channel's own contentDetails has no such limit.
   const yt = google.youtube({ version: "v3", auth: client });
-  const playlists = await yt.playlists.list({
-    part: ["snippet"],
-    mine: true,
-    maxResults: 50,
-  });
-  const uploadsPlaylist = (playlists.data.items ?? []).find(
-    (p) => p.id && p.snippet?.title === "Uploads",
-  );
-  if (!uploadsPlaylist?.id) {
+  const channels = await yt.channels.list({ part: ["contentDetails"], mine: true });
+  const uploadsPlaylistId =
+    channels.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads ?? null;
+  if (!uploadsPlaylistId) {
     return { videos: [], uploadsPlaylistId: null };
   }
   const items = await yt.playlistItems.list({
     part: ["snippet", "contentDetails"],
-    playlistId: uploadsPlaylist.id,
+    playlistId: uploadsPlaylistId,
     maxResults,
   });
-  return { uploadsPlaylistId: uploadsPlaylist.id, videos: items.data.items ?? [] };
+  return { uploadsPlaylistId, videos: items.data.items ?? [] };
 }
 
 export async function listPlaylists(

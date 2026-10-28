@@ -9,6 +9,7 @@ const mockYouTube = {
   playlists: { list: vi.fn(), insert: vi.fn(), delete: vi.fn() },
   playlistItems: { list: vi.fn(), insert: vi.fn(), delete: vi.fn() },
   subscriptions: { list: vi.fn() },
+  channels: { list: vi.fn() },
   commentThreads: { list: vi.fn() },
   comments: { insert: vi.fn(), setModerationStatus: vi.fn(), markAsSpam: vi.fn() },
 };
@@ -87,17 +88,18 @@ describe("youtube service", () => {
   });
 
   it("getMyVideos lists the user's uploads with manageable max", async () => {
-    mockYouTube.playlists.list.mockResolvedValue({
-      data: { items: [{ id: "uploads1", snippet: { title: "Uploads" } }] },
+    mockYouTube.channels.list.mockResolvedValue({
+      data: { items: [{ contentDetails: { relatedPlaylists: { uploads: "uploads1" } } }] },
     });
     mockYouTube.playlistItems.list.mockResolvedValue({
       data: { items: [{ snippet: { title: "My upload" } }] },
     });
     const result = await getMyVideos(client, {});
     expect(result.videos).toEqual([{ snippet: { title: "My upload" } }]);
-    // uploads playlist requested
-    const playlistCall = mockYouTube.playlists.list.mock.calls[0][0];
-    expect(playlistCall.mine).toBe(true);
+    expect(mockYouTube.channels.list).toHaveBeenCalledWith({
+      part: ["contentDetails"],
+      mine: true,
+    });
     expect(mockYouTube.playlistItems.list).toHaveBeenCalledWith(
       expect.objectContaining({ playlistId: "uploads1", maxResults: 25 }),
     );
@@ -447,6 +449,32 @@ describe("youtube service", () => {
       await expect(
         uploadVideo(client, { path: "/tmp/definitely-missing-file.mp4", title: "Missing" }),
       ).rejects.toThrow(/no such file|not found|ENOENT/i);
+    });
+  });
+});
+
+describe("getMyVideos uploads playlist", () => {
+  it("takes the uploads playlist from the channel, not the English title", async () => {
+    mockYouTube.channels.list.mockResolvedValue({
+      data: { items: [{ contentDetails: { relatedPlaylists: { uploads: "UU-channel" } } }] },
+    });
+    mockYouTube.playlistItems.list.mockResolvedValue({ data: { items: [] } });
+
+    const result = await getMyVideos(client, {});
+
+    expect(mockYouTube.channels.list).toHaveBeenCalledWith({
+      part: ["contentDetails"],
+      mine: true,
+    });
+    expect(mockYouTube.playlists.list).not.toHaveBeenCalled();
+    expect(result.uploadsPlaylistId).toBe("UU-channel");
+  });
+
+  it("returns nothing when the channel exposes no uploads playlist", async () => {
+    mockYouTube.channels.list.mockResolvedValue({ data: {} });
+    await expect(getMyVideos(client, {})).resolves.toEqual({
+      uploadsPlaylistId: null,
+      videos: [],
     });
   });
 });

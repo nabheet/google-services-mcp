@@ -150,3 +150,12 @@ describe("cli dispatch", () => {
     expect(result.output).toContain("token expired");
   });
 });
+
+describe("cli add output", () => {
+  it("omits the email when the userinfo lookup did not return one", async () => {
+    addAccount.mockResolvedValue({ name: "solo" });
+    const result = await dispatchCommand(["add", "solo"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toBe('Added account "solo"\n');
+  });
+});
