@@ -176,17 +176,54 @@ function quotedPrintableEncode(input: string): string {
   return out.map((l) => (l.endsWith(" ") ? `${l.slice(0, -1)}=20` : l)).join(CRLF);
 }
 
-/** RFC 2047 encoded-word for non-ASCII subjects; ASCII passes through. */
+/** RFC 2047 encoded-word for non-ASCII subjects; ASCII passes through.
+ *  Encoded-words are limited to 75 characters, so a long subject is split into
+ *  several, joined by a folded line break. */
 function encodeSubject(subject: string): string {
   const cleaned = subject.replace(/[\r\n]+/g, " ");
   // Byte length equals char length iff the string is pure ASCII.
-  return cleaned.length === Buffer.byteLength(cleaned, "utf8")
-    ? cleaned
-    : `=?UTF-8?B?${Buffer.from(cleaned, "utf8").toString("base64")}?=`;
+  if (cleaned.length === Buffer.byteLength(cleaned, "utf8")) return cleaned;
+  // 56 base64 characters keeps the first line ("Subject: " + word) inside the
+  // 78-character soft limit; continuation lines start with one space.
+  const MAX_BASE64 = 56;
+  const words: string[] = [];
+  let chunk = "";
+  const flush = () => {
+    if (chunk.length === 0) return;
+    words.push(`=?UTF-8?B?${Buffer.from(chunk, "utf8").toString("base64")}?=`);
+    chunk = "";
+  };
+  // Split on code points so a surrogate pair or multi-byte character is never
+  // cut in half.
+  for (const ch of cleaned) {
+    if (Buffer.byteLength(Buffer.from(chunk + ch, "utf8").toString("base64")) > MAX_BASE64) {
+      flush();
+    }
+    chunk += ch;
+  }
+  flush();
+  return words.join(`${CRLF} `);
 }
 
 function sanitizeFilename(name: string): string {
   return name.replace(/["\r\n]/g, "").trim() || "attachment";
+}
+
+/** Percent-encode an RFC 2231 parameter value (attr-char is narrower than
+ *  encodeURIComponent's output, so a few characters are escaped by hand). */
+function rfc2231Value(value: string): string {
+  return encodeURIComponent(value).replace(
+    /['()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+/** `name="..."`, or an RFC 2231 extended value when the filename is not ASCII.
+ *  An ASCII fallback is emitted as well for clients that ignore `name*`. */
+function filenameParam(param: string, filename: string): string {
+  if (/^[\x20-\x7e]*$/.test(filename)) return `${param}="${filename}"`;
+  const fallback = filename.replace(/[^\x20-\x7e]/g, "_");
+  return `${param}="${fallback}"; ${param}*=utf-8''${rfc2231Value(filename)}`;
 }
 
 /** Derive a Content-ID from a filename (non-alphanumerics become dashes). */
@@ -250,6 +287,20 @@ function foldBase64(b64: string): string {
     chunks.push(b64.slice(i, i + 76));
   }
   return chunks.join(CRLF);
+}
+
+/** Gmail rejects the whole message when the encoded raw form is too large;
+ *  catch it here so the error names the real limit instead of a bare 400. */
+function assertMessageSize(raw: string): string {
+  const bytes = Buffer.byteLength(raw, "utf8");
+  if (bytes > GMAIL_MESSAGE_LIMIT_BYTES) {
+    throw new Error(
+      `Message is ${bytes} bytes once encoded, over Gmail's ${GMAIL_MESSAGE_LIMIT_BYTES}-byte ` +
+        "limit (25 MB). Attachments are base64-encoded, so they cost about a third more than " +
+        "their file size. Remove or resize an attachment, or share a link instead.",
+    );
+  }
+  return raw;
 }
 
 async function readAttachment(path: string): Promise<Buffer> {
@@ -364,7 +415,7 @@ async function buildRawEmail(
     lines.push("Content-Transfer-Encoding: quoted-printable");
     lines.push("");
     lines.push(quotedPrintableEncode(opts.body));
-    return lines.join(CRLF);
+    return assertMessageSize(lines.join(CRLF));
   }
 
   const boundary = generateBoundary();
@@ -385,15 +436,17 @@ async function buildRawEmail(
     const buf = att.buffer;
     if (buf.length > MAX_ATTACHMENT_BYTES) {
       throw new Error(
-        `Attachment too large: ${att.filename} (${buf.length} bytes); Gmail limit is ${GMAIL_MESSAGE_LIMIT_BYTES} bytes total`,
+        `Attachment too large: ${att.filename} (${buf.length} bytes); the per-attachment limit is ` +
+          `${MAX_ATTACHMENT_BYTES} bytes. Gmail's total limit is ${GMAIL_MESSAGE_LIMIT_BYTES} bytes ` +
+          "and base64 encoding a file inflates it by a third.",
       );
     }
     const filename = att.filename;
     const mimeType = att.mimeType;
     const disposition = att.disposition === "inline" ? "inline" : "attachment";
     lines.push(`--${boundary}`);
-    lines.push(`Content-Type: ${mimeType}; name="${filename}"`);
-    lines.push(`Content-Disposition: ${disposition}; filename="${filename}"`);
+    lines.push(`Content-Type: ${mimeType}; ${filenameParam("name", filename)}`);
+    lines.push(`Content-Disposition: ${disposition}; ${filenameParam("filename", filename)}`);
     if (disposition === "inline") {
       const cid = (att.cid ?? cidFromFilename(filename)).replace(/^<|>$/g, "");
       lines.push(`Content-ID: <${cid}>`);
@@ -403,25 +456,54 @@ async function buildRawEmail(
     lines.push(foldBase64(buf.toString("base64")));
   }
   lines.push(`--${boundary}--`);
-  return lines.join(CRLF);
+  return assertMessageSize(lines.join(CRLF));
 }
 
 function toBase64Url(raw: string): string {
   return Buffer.from(raw, "utf8").toString("base64url");
 }
 
-/** Extract the best body (prefer text/plain) from a Gmail payload tree. */
+/** A part that carries attachment bytes rather than message content. */
+function isAttachmentPart(part: gmail_v1.Schema$MessagePart): boolean {
+  return part.filename !== undefined && part.filename !== null && part.filename.length > 0;
+}
+
+/** First part with this MIME type that holds inline body data. */
+function findBodyPart(
+  parts: gmail_v1.Schema$MessagePart[],
+  mimeType: string,
+): gmail_v1.Schema$MessagePart | undefined {
+  for (const part of parts) {
+    if (isAttachmentPart(part)) continue;
+    if (part.mimeType === mimeType && part.body?.data) return part;
+  }
+  for (const part of parts) {
+    if (isAttachmentPart(part) || !Array.isArray(part.parts)) continue;
+    const found = findBodyPart(part.parts, mimeType);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/**
+ * Extract the best body (prefer text/plain, then text/html) from a Gmail
+ * payload tree. Attachments are skipped: a `.txt` attachment is not the body,
+ * and a leading attachment part must not shadow the alternative text part.
+ */
 function extractBody(payload: gmail_v1.Schema$MessagePart | null | undefined): string {
   if (!payload) return "";
   if (payload.body?.data) {
     return Buffer.from(payload.body.data, "base64url").toString("utf8");
   }
-  if (Array.isArray(payload.parts)) {
-    const plain = payload.parts.find(
-      (p: gmail_v1.Schema$MessagePart) => p.mimeType === "text/plain",
-    );
-    const chosen = plain ?? payload.parts[0];
-    return extractBody(chosen);
+  if (!Array.isArray(payload.parts)) return "";
+  const candidates = payload.parts.filter((p: gmail_v1.Schema$MessagePart) => !isAttachmentPart(p));
+  const preferred = findBodyPart(candidates, "text/plain") ?? findBodyPart(candidates, "text/html");
+  if (preferred?.body?.data) {
+    return Buffer.from(preferred.body.data, "base64url").toString("utf8");
+  }
+  for (const part of candidates) {
+    const body = extractBody(part);
+    if (body) return body;
   }
   return "";
 }
@@ -429,6 +511,7 @@ function extractBody(payload: gmail_v1.Schema$MessagePart | null | undefined): s
 function parseHeaders(headers: Array<{ name?: string | null; value?: string | null }> | undefined) {
   return {
     from: headerValue(headers, "From"),
+    replyTo: headerValue(headers, "Reply-To"),
     to: headerValue(headers, "To"),
     subject: headerValue(headers, "Subject"),
     date: headerValue(headers, "Date"),
@@ -477,14 +560,19 @@ export async function getGmailMessage(
   return mapGmailMessage(res.data);
 }
 
+/** Whether any part of the tree is an attachment, however deeply nested. */
+function hasAttachmentParts(payload: gmail_v1.Schema$MessagePart | null | undefined): boolean {
+  if (!payload) return false;
+  if (isAttachmentPart(payload)) return true;
+  return Array.isArray(payload.parts) && payload.parts.some(hasAttachmentParts);
+}
+
 /** Map a raw Gmail message into a parsed detail (headers, body, attachments). */
 function mapGmailMessage(msg: gmail_v1.Schema$Message): GmailMessageDetail {
   const payload = msg.payload ?? ({} as gmail_v1.Schema$MessagePart);
   const headers = payload.headers ?? [];
   const parsed = parseHeaders(headers);
-  const hasAttachments =
-    Array.isArray(payload.parts) &&
-    payload.parts.some((p: gmail_v1.Schema$MessagePart) => p.filename && p.filename.length > 0);
+  const attachments = collectAttachments(payload);
   return {
     id: msg.id ?? "",
     threadId: msg.threadId ?? undefined,
@@ -495,8 +583,8 @@ function mapGmailMessage(msg: gmail_v1.Schema$Message): GmailMessageDetail {
     subject: parsed.subject,
     date: parsed.date,
     body: extractBody(payload),
-    hasAttachments,
-    attachments: collectAttachments(payload),
+    hasAttachments: hasAttachmentParts(payload),
+    attachments,
   };
 }
 
@@ -576,7 +664,7 @@ export async function replyGmail(client: Auth.OAuth2Client, opts: ReplyGmailOpti
   const raw = toBase64Url(
     await buildRawEmail(
       {
-        to: parsed.from,
+        to: parsed.replyTo || parsed.from,
         subject,
         body: opts.body,
         bodyType: opts.bodyType,
@@ -733,13 +821,24 @@ export async function getGmailAttachment(
   const part =
     (opts.partId ? atts.find((a) => a.partId === opts.partId) : undefined) ??
     atts.find((a) => a.id === opts.attachmentId);
-  const filename = part?.filename ?? "attachment";
-  if (savePath === undefined && part?.size !== undefined && part.size > maxBytes) {
+  if (part === undefined) {
+    const known = atts
+      .map((a) => a.partId)
+      .filter((id): id is string => id !== undefined)
+      .join(", ");
+    throw new Error(
+      `Attachment not found on message ${opts.id} (attachmentId ${opts.attachmentId}` +
+        `${opts.partId !== undefined ? `, partId ${opts.partId}` : ""}). ` +
+        (known.length > 0 ? `Known partIds: ${known}.` : "The message reports no attachments."),
+    );
+  }
+  const filename = part.filename;
+  if (savePath === undefined && part.size !== undefined && part.size > maxBytes) {
     throw overCapError(filename, part.size, maxBytes);
   }
-  // Always download with the FRESH attachmentId from this fetch (stale IDs
-  // also work for the bytes call, but the fresh one is guaranteed valid).
-  const attachmentId = part?.id ?? opts.attachmentId;
+  // Always download with the FRESH attachmentId from this fetch: Gmail rotates
+  // it, so the caller's copy is only an identifier for the earlier response.
+  const attachmentId = part.id;
   const res = await gmail.users.messages.attachments.get({
     userId: "me",
     messageId: opts.id,
@@ -752,13 +851,13 @@ export async function getGmailAttachment(
   if (savePath === undefined && bytes.length > maxBytes) {
     throw overCapError(filename, bytes.length, maxBytes);
   }
-  const mimeType = part?.mimeType ?? "application/octet-stream";
+  const mimeType = part.mimeType;
   const info: GmailAttachmentInfo = {
     id: attachmentId,
-    partId: part?.partId,
+    partId: part.partId,
     filename,
     mimeType,
-    size: part?.size ?? res.data.size ?? 0,
+    size: part.size ?? res.data.size ?? 0,
   };
   if (savePath !== undefined) {
     await mkdir(dirname(savePath), { recursive: true });
