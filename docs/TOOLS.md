@@ -155,10 +155,19 @@ List attachments on a message (metadata only, no bytes).
 
 ### `google_gmail_get_attachment`
 
-Download a single attachment by message ID and attachment ID. Text-like files
-are returned decoded as text; binary files as base64. Attachments over 6 MB are
+Download a single attachment by message ID and attachment ID. The result always
+carries a `kind` discriminating which payload it holds:
+
+| `kind` | payload | when |
+| --- | --- | --- |
+| `text` | `text` | text-like MIME type that decodes as UTF-8 |
+| `base64` | `dataBase64` | binary MIME type, or text that is not valid UTF-8 |
+| `saved` | `savedTo` | `saveToPath` was passed; bytes are on disk |
+
+Text that is not valid UTF-8 (Latin-1, UTF-16) comes back as `base64` rather
+than being mangled into replacement characters. Attachments over 6 MB are
 rejected inline — pass `saveToPath` to write the raw bytes to a local file
-instead (returns `{ savedTo }`).
+instead.
 
 | arg | type | notes |
 | --- | --- | --- |

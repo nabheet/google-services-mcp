@@ -692,6 +692,7 @@ describe("getGmailAttachment", () => {
       mimeType: "text/markdown",
       size: 5,
       text: "# Hi",
+      kind: "text",
     });
     // Text-like attachments must not also carry the base64 payload — emitting
     // both nearly doubles the frame for a single file (the size cap counts raw
@@ -764,6 +765,7 @@ describe("getGmailAttachment", () => {
     const result = await getGmailAttachment(client, { id: "m1", attachmentId: "ATT9" });
     expect(result.text).toBeUndefined();
     expect(result.dataBase64).toBe("aGVsbG8=");
+    expect(result.kind).toBe("base64");
   });
 
   it("matches by stable partId when attachmentId rotates between calls", async () => {
@@ -864,6 +866,7 @@ describe("getGmailAttachment", () => {
       mimeType: "application/pdf",
       size: 4,
       savedTo: saveToPath,
+      kind: "saved",
     });
   });
 
@@ -1051,6 +1054,7 @@ describe("getGmailAttachment", () => {
       mimeType: "application/pdf",
       size: 18_000_000,
       savedTo: saveToPath,
+      kind: "saved",
     });
     expect(result).not.toHaveProperty("dataBase64");
     expect(result).not.toHaveProperty("text");

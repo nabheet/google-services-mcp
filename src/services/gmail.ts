@@ -611,14 +611,22 @@ export interface GmailAttachmentInfo {
   size?: number;
 }
 
-export interface GmailAttachmentData extends GmailAttachmentInfo {
-  /** Base64url-encoded raw bytes (binary MIME types only; absent for text or when saved). */
-  dataBase64?: string;
-  /** Decoded text when the MIME type is text-like (absent for binary or when saved). */
-  text?: string;
-  /** Local path the raw bytes were written to. */
-  savedTo?: string;
-}
+export type GmailAttachmentData =
+  | (GmailAttachmentInfo & {
+      /** Decoded text, for text-like MIME types that decode cleanly as UTF-8. */
+      kind: "text";
+      text: string;
+    })
+  | (GmailAttachmentInfo & {
+      /** Base64url-encoded raw bytes: binary MIME types, or text that is not UTF-8. */
+      kind: "base64";
+      dataBase64: string;
+    })
+  | (GmailAttachmentInfo & {
+      /** Local path the raw bytes were written to. */
+      kind: "saved";
+      savedTo: string;
+    });
 
 /** Inline attachment payload cap. Larger attachments must be saved to disk. */
 export const DEFAULT_GMAIL_ATTACHMENT_MAX_BYTES = 6 * 1024 * 1024;
@@ -723,21 +731,21 @@ export async function getGmailAttachment(
   if (savePath !== undefined) {
     await mkdir(dirname(savePath), { recursive: true });
     await writeFile(savePath, bytes);
-    return { ...info, savedTo: savePath };
+    return { ...info, kind: "saved", savedTo: savePath };
   }
-  const out: GmailAttachmentData = { ...info };
   if (isTextMime(mimeType)) {
     try {
-      out.text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      return {
+        ...info,
+        kind: "text",
+        text: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+      };
     } catch {
       // Not valid UTF-8 (e.g. Latin-1 or UTF-16): return the bytes instead of
       // silently mangling them into U+FFFD replacement characters.
-      out.dataBase64 = dataBase64;
     }
-  } else {
-    out.dataBase64 = dataBase64;
   }
-  return out;
+  return { ...info, kind: "base64", dataBase64 };
 }
 
 // ---- Drafts ---------------------------------------------------------------
