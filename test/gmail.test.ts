@@ -693,6 +693,10 @@ describe("getGmailAttachment", () => {
       size: 5,
       text: "# Hi",
     });
+    // Text-like attachments must not also carry the base64 payload — emitting
+    // both nearly doubles the frame for a single file (the size cap counts raw
+    // bytes only).
+    expect(result).not.toHaveProperty("dataBase64");
   });
 
   it("returns base64 only for binary mime types", async () => {
@@ -814,7 +818,6 @@ describe("getGmailAttachment", () => {
       mimeType: "application/pdf",
       size: 4,
       savedTo: saveToPath,
-      savedPath: saveToPath,
     });
   });
 
@@ -969,7 +972,7 @@ describe("getGmailAttachment", () => {
     expect(result.savedTo).toBeUndefined();
   });
 
-  it("writes to savePath, creating missing parent directories", async () => {
+  it("writes to saveToPath, creating missing parent directories", async () => {
     const bytes = Buffer.from("%PDF-1.4");
     mockMessages.get.mockResolvedValue({
       data: {
@@ -988,21 +991,20 @@ describe("getGmailAttachment", () => {
     mockMessages.attachments.get.mockResolvedValue({
       data: { data: bytes.toString("base64url"), size: bytes.length },
     });
-    const savePath = join(tmpDir, "nested", "deeper", "big.pdf");
+    const saveToPath = join(tmpDir, "nested", "deeper", "big.pdf");
     const result = await getGmailAttachment(client, {
       id: "m1",
       attachmentId: "BIG2",
-      savePath,
+      saveToPath,
     });
-    expect(readFileSync(savePath)).toEqual(bytes);
+    expect(readFileSync(saveToPath)).toEqual(bytes);
     expect(result).toEqual({
       id: "BIG2",
       partId: "1",
       filename: "big.pdf",
       mimeType: "application/pdf",
       size: 18_000_000,
-      savedTo: savePath,
-      savedPath: savePath,
+      savedTo: saveToPath,
     });
     expect(result).not.toHaveProperty("dataBase64");
     expect(result).not.toHaveProperty("text");

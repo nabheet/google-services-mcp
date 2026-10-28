@@ -528,7 +528,7 @@ export function registerTools(server: McpServer): void {
     {
       title: "Get email attachment",
       description:
-        "Download a single attachment by message ID and attachment ID. Text-like files are returned decoded as text; binary files as base64. Attachments over 6 MB are rejected unless saved to disk — pass saveToPath (or savePath) to write the raw bytes to a local file instead.",
+        "Download a single attachment by message ID and attachment ID. Text-like files are returned decoded as text; binary files as base64. Attachments over 6 MB are rejected unless saved to disk — pass saveToPath to write the raw bytes to a local file instead.",
       inputSchema: {
         id: z.string().describe("Message ID."),
         attachmentId: z.string().describe("Attachment ID (from list_attachments)."),
@@ -542,19 +542,18 @@ export function registerTools(server: McpServer): void {
           .string()
           .optional()
           .describe("Local path to write the raw bytes to (returns { savedTo } instead of data)."),
-        savePath: z.string().optional().describe("Alias of saveToPath."),
         maxBytes: z
           .number()
           .int()
           .positive()
           .optional()
-          .describe("Inline payload cap in raw bytes (default 8 MB). Ignored when saving to disk."),
+          .describe("Inline payload cap in raw bytes (default 6 MB). Ignored when saving to disk."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ id, attachmentId, partId, saveToPath, savePath, maxBytes, account }) =>
+    async ({ id, attachmentId, partId, saveToPath, maxBytes, account }) =>
       withClient(account, (client) =>
-        getGmailAttachment(client, { id, attachmentId, partId, saveToPath, savePath, maxBytes }),
+        getGmailAttachment(client, { id, attachmentId, partId, saveToPath, maxBytes }),
       ),
   );
 

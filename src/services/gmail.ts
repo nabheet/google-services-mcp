@@ -612,14 +612,12 @@ export interface GmailAttachmentInfo {
 }
 
 export interface GmailAttachmentData extends GmailAttachmentInfo {
-  /** Base64url-encoded raw bytes (absent when saved to `savedTo`). */
+  /** Base64url-encoded raw bytes (binary MIME types only; absent for text or when saved). */
   dataBase64?: string;
-  /** Decoded text when the MIME type is text-like (absent when saved to disk). */
+  /** Decoded text when the MIME type is text-like (absent for binary or when saved). */
   text?: string;
   /** Local path the raw bytes were written to. */
   savedTo?: string;
-  /** Alias of `savedTo`, for callers using the `savePath` spelling. */
-  savedPath?: string;
 }
 
 /** Inline attachment payload cap. Larger attachments must be saved to disk. */
@@ -628,7 +626,7 @@ export const DEFAULT_GMAIL_ATTACHMENT_MAX_BYTES = 6 * 1024 * 1024;
 function overCapError(filename: string, size: number, maxBytes: number): Error {
   return new Error(
     `Attachment "${filename}" is ${size} bytes, over the ${maxBytes}-byte inline limit. ` +
-      "Pass saveToPath (or savePath) to write it to disk instead.",
+      "Pass saveToPath to write it to disk instead.",
   );
 }
 /** Walk a Gmail payload tree collecting attachment parts. */
@@ -680,13 +678,11 @@ export async function getGmailAttachment(
     partId?: string;
     /** Write raw bytes here instead of returning them inline. */
     saveToPath?: string;
-    /** Alias of `saveToPath`. */
-    savePath?: string;
     /** Inline payload cap in raw bytes (default 6 MB). Ignored when saving to disk. */
     maxBytes?: number;
   },
 ): Promise<GmailAttachmentData> {
-  const savePath = opts.saveToPath || opts.savePath;
+  const savePath = opts.saveToPath;
   const maxBytes = opts.maxBytes ?? DEFAULT_GMAIL_ATTACHMENT_MAX_BYTES;
   const gmail = google.gmail({ version: "v1", auth: client });
   const msg = (await gmail.users.messages.get({ userId: "me", id: opts.id, format: "full" })).data;
@@ -727,11 +723,13 @@ export async function getGmailAttachment(
   if (savePath !== undefined) {
     await mkdir(dirname(savePath), { recursive: true });
     await writeFile(savePath, bytes);
-    return { ...info, savedTo: savePath, savedPath: savePath };
+    return { ...info, savedTo: savePath };
   }
-  const out: GmailAttachmentData = { ...info, dataBase64 };
+  const out: GmailAttachmentData = { ...info };
   if (isTextMime(mimeType)) {
     out.text = Buffer.from(dataBase64, "base64url").toString("utf8");
+  } else {
+    out.dataBase64 = dataBase64;
   }
   return out;
 }
