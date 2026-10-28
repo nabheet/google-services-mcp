@@ -96,6 +96,17 @@ describe("getDriveFile", () => {
     expect(mockFiles.get).toHaveBeenCalledWith(expect.objectContaining({ fileId: "f1" }));
     expect(result).toMatchObject({ id: "f1", name: "notes.md" });
   });
+
+  it("asks for parents and trashed state, and returns them", async () => {
+    mockFiles.get.mockResolvedValue({
+      data: { id: "f1", parents: ["fld1"], trashed: true },
+    });
+    const result = await getDriveFile(client, { fileId: "f1" });
+    expect(mockFiles.get.mock.calls[0][0].fields).toContain("parents");
+    expect(mockFiles.get.mock.calls[0][0].fields).toContain("trashed");
+    expect(result.parents).toEqual(["fld1"]);
+    expect(result.trashed).toBe(true);
+  });
 });
 
 describe("uploadDriveFile", () => {
@@ -138,6 +149,26 @@ describe("uploadDriveFile", () => {
     expect(call.media).toEqual({ mimeType: "image/png", body: stream });
     expect(result.id).toBe("f-bin");
   });
+
+  it("asks for metadata so the result has a link and timestamps", async () => {
+    mockFiles.create.mockResolvedValue({
+      data: {
+        id: "f-new",
+        name: "hello.txt",
+        size: "11",
+        webViewLink: "https://drive.example/f-new",
+      },
+    });
+    const result = await uploadDriveFile(client, {
+      name: "hello.txt",
+      mimeType: "text/plain",
+      content: "hello world",
+    });
+    const fields = mockFiles.create.mock.calls[0][0].fields;
+    expect(fields).toEqual(expect.stringContaining("webViewLink"));
+    expect(fields).toEqual(expect.stringContaining("parents"));
+    expect(result.webViewLink).toBe("https://drive.example/f-new");
+  });
 });
 
 describe("updateDriveFile", () => {
@@ -147,6 +178,7 @@ describe("updateDriveFile", () => {
     expect(mockFiles.update).toHaveBeenCalledWith(
       expect.objectContaining({ fileId: "f1", requestBody: { name: "renamed.md" } }),
     );
+    expect(mockFiles.update.mock.calls[0][0].fields).toContain("webViewLink");
     expect(result.name).toBe("renamed.md");
   });
 
@@ -187,7 +219,7 @@ describe("trashDriveFile", () => {
     expect(mockFiles.update).toHaveBeenCalledWith({
       fileId: "f1",
       requestBody: { trashed: true },
-      fields: "id,name,mimeType,size,createdTime,modifiedTime,webViewLink,trashed",
+      fields: expect.stringContaining("trashed"),
     });
     expect(result.trashed).toBe(true);
   });
@@ -202,7 +234,7 @@ describe("restoreDriveFile", () => {
     expect(mockFiles.update).toHaveBeenCalledWith({
       fileId: "f1",
       requestBody: { trashed: false },
-      fields: "id,name,mimeType,size,createdTime,modifiedTime,webViewLink,trashed",
+      fields: expect.stringContaining("trashed"),
     });
     expect(result.trashed).toBe(false);
   });
@@ -220,18 +252,30 @@ describe("shareDriveFile", () => {
       fileId: "f1",
       requestBody: { type: "user", role: "reader", emailAddress: "__VG_EMAIL_b3e8b64ce83f__" },
       sendNotificationEmail: true,
+      fields: "id",
     });
     expect(result.id).toBe("perm-1");
   });
 
   it("sends an email notification by default", async () => {
-    mockPermissions.create.mockResolvedValue({ data: {} });
+    mockPermissions.create.mockResolvedValue({ data: { id: "perm-2" } });
     await shareDriveFile(client, {
       fileId: "f1",
       email: "__VG_EMAIL_b3e8b64ce83f__",
       role: "writer",
     });
     expect(mockPermissions.create.mock.calls[0][0].sendNotificationEmail).toBe(true);
+  });
+
+  it("throws when the API returns no permission id", async () => {
+    mockPermissions.create.mockResolvedValue({ data: {} });
+    await expect(
+      shareDriveFile(client, {
+        fileId: "f1",
+        email: "__VG_EMAIL_b3e8b64ce83f__",
+        role: "reader",
+      }),
+    ).rejects.toThrow(/no permission id/i);
   });
 });
 
@@ -251,7 +295,7 @@ describe("moveDriveFile", () => {
       removeParents: "fld1",
       fields: expect.stringContaining("parents"),
     });
-    expect(result).toMatchObject({ id: "f1", name: "notes.md" });
+    expect(result).toMatchObject({ id: "f1", name: "notes.md", parents: ["fld2"] });
   });
 
   it("adds to a folder without removing existing parents when no removeParentFolderId given", async () => {
@@ -402,6 +446,7 @@ describe("createDriveFolder", () => {
     const result = await createDriveFolder(client, { name: "Reports" });
     expect(mockFiles.create).toHaveBeenCalledWith({
       requestBody: { name: "Reports", mimeType: "application/vnd.google-apps.folder" },
+      fields: expect.stringContaining("webViewLink"),
     });
     expect(result).toMatchObject({ id: "fld1", name: "Reports" });
   });
@@ -420,6 +465,7 @@ describe("copyDriveFile", () => {
     expect(mockFiles.copy).toHaveBeenCalledWith({
       fileId: "f1",
       requestBody: { name: "notes copy.md" },
+      fields: expect.stringContaining("webViewLink"),
     });
     expect(result.id).toBe("f-copy");
   });
@@ -427,7 +473,11 @@ describe("copyDriveFile", () => {
   it("copies without renaming when no name is given", async () => {
     mockFiles.copy.mockResolvedValue({ data: { id: "f-copy2" } });
     await copyDriveFile(client, { fileId: "f1" });
-    expect(mockFiles.copy).toHaveBeenCalledWith({ fileId: "f1", requestBody: {} });
+    expect(mockFiles.copy).toHaveBeenCalledWith({
+      fileId: "f1",
+      requestBody: {},
+      fields: expect.stringContaining("webViewLink"),
+    });
   });
 });
 
@@ -470,6 +520,7 @@ describe("shareDriveFile extended", () => {
       fileId: "f1",
       requestBody: { type: "anyone", role: "reader" },
       sendNotificationEmail: false,
+      fields: "id",
     });
     expect(result.id).toBe("perm-link");
   });
@@ -486,6 +537,7 @@ describe("shareDriveFile extended", () => {
       fileId: "f1",
       requestBody: { type: "domain", role: "writer", domain: "example.com" },
       sendNotificationEmail: true,
+      fields: "id",
     });
   });
 
@@ -502,6 +554,7 @@ describe("shareDriveFile extended", () => {
       requestBody: { type: "user", role: "owner", emailAddress: "__VG_EMAIL_b3e8b64ce83f__" },
       sendNotificationEmail: true,
       transferOwnership: true,
+      fields: "id",
     });
   });
 });
