@@ -635,7 +635,14 @@ Create a contact. `name` required; `email`, `phone`, `address`, `organization`,
 ### `google_contacts_update`
 
 Update an existing contact (name, email, phone, address, organization, photo) by
-resourceName. Partial update; etag fetched automatically unless supplied.
+resourceName. Partial update; the current person is read first so the etag and
+the values being merged are both current. A supplied `etag` is used instead of
+the read one, but the read still happens.
+
+Multi-valued fields keep their other entries: `email`, `phone`, `address` and
+`organization` replace the primary value and leave the rest untouched. `name`
+changes the display name and preserves a stored family name; a contact with no
+family name gets `givenName` set too.
 
 | arg | type | notes |
 | --- | --- | --- |
@@ -1034,4 +1041,8 @@ Permanently delete a form. Arg: `formId` (required).
 ### `google_forms_export_responses`
 
 Append form responses to a spreadsheet. Args: `formId`, `spreadsheetId`
-(required), `sheetName` (default `Sheet1`).
+(required), `sheetName` (default `Sheet1`). The header row is written once, and
+a re-run appends only responses that are not already in the tab, so running the
+export twice does not duplicate anything. Returns `appendedRows`, `responses`
+and `skippedExisting`. A tab that does not exist yet counts as empty; a tab
+that cannot be read fails the call rather than risking duplicates.

@@ -192,7 +192,20 @@ export async function deleteContact(
   return { deleted: true, resourceName: opts.resourceName };
 }
 
-/** Update an existing contact (name, email, phone, address, organization, photo). */
+/** Replace the primary value of a multi-valued field, keeping the others. */
+function mergePrimary<T>(existing: T[] | null | undefined, update: T): T[] {
+  const values = [...(existing ?? [])];
+  if (values.length === 0) return [update];
+  values[0] = { ...values[0], ...update };
+  return values;
+}
+
+const CONTACT_FIELDS = "names,emailAddresses,phoneNumbers,addresses,organizations";
+
+/** Update an existing contact (name, email, phone, address, organization, photo).
+ *  Multi-valued fields keep their other entries: the People API replaces the
+ *  whole field named in `updatePersonFields`, so only the primary value is
+ *  changed and the rest are sent back untouched. */
 export async function updateContact(
   client: Auth.OAuth2Client,
   opts: UpdateContactOptions,
@@ -200,47 +213,73 @@ export async function updateContact(
   const people = google.people({ version: "v1", auth: client });
   const requestBody: people_v1.Schema$Person = {};
   const updatePersonFields: string[] = [];
-  if (opts.name !== undefined) {
-    requestBody.names = [{ displayName: opts.name, givenName: opts.name }];
-    updatePersonFields.push("names");
-  }
-  if (opts.email !== undefined) {
-    requestBody.emailAddresses = [{ value: opts.email }];
-    updatePersonFields.push("emailAddresses");
-  }
-  if (opts.phone !== undefined) {
-    requestBody.phoneNumbers = [{ value: opts.phone }];
-    updatePersonFields.push("phoneNumbers");
-  }
-  if (opts.address !== undefined) {
-    requestBody.addresses = [{ formattedValue: opts.address }];
-    updatePersonFields.push("addresses");
-  }
-  if (opts.organization !== undefined) {
-    requestBody.organizations = [{ name: opts.organization }];
-    updatePersonFields.push("organizations");
-  }
-  if (updatePersonFields.length === 0 && !opts.photoBytes) {
+  const hasFields =
+    opts.name !== undefined ||
+    opts.email !== undefined ||
+    opts.phone !== undefined ||
+    opts.address !== undefined ||
+    opts.organization !== undefined;
+
+  if (!hasFields && !opts.photoBytes) {
     throw new Error(
       "Nothing to update: provide at least one of name, email, phone, address, or organization.",
     );
   }
-  // The People API requires the person etag on update (optimistic concurrency).
-  if (!opts.etag) {
+
+  if (hasFields) {
+    // Merging needs the current values, and the People API requires the person
+    // etag on update (optimistic concurrency): one read serves both.
     const current = await people.people.get({
       resourceName: opts.resourceName,
-      personFields: "names",
+      personFields: CONTACT_FIELDS,
     });
-    requestBody.etag = current.data.etag ?? undefined;
-  } else {
-    requestBody.etag = opts.etag;
+    requestBody.etag = opts.etag ?? current.data.etag ?? undefined;
+
+    if (opts.name !== undefined) {
+      const existingName = current.data.names?.[0];
+      const name: people_v1.Schema$Name = existingName
+        ? { ...existingName, displayName: opts.name }
+        : { displayName: opts.name, givenName: opts.name };
+      // A contact with no family name is a mononym; keep givenName usable.
+      if (existingName !== undefined && existingName.familyName == null) {
+        name.givenName = opts.name;
+      }
+      requestBody.names = mergePrimary(current.data.names, name);
+      updatePersonFields.push("names");
+    }
+    if (opts.email !== undefined) {
+      requestBody.emailAddresses = mergePrimary(current.data.emailAddresses, {
+        value: opts.email,
+      });
+      updatePersonFields.push("emailAddresses");
+    }
+    if (opts.phone !== undefined) {
+      requestBody.phoneNumbers = mergePrimary(current.data.phoneNumbers, { value: opts.phone });
+      updatePersonFields.push("phoneNumbers");
+    }
+    if (opts.address !== undefined) {
+      requestBody.addresses = mergePrimary(current.data.addresses, {
+        formattedValue: opts.address,
+      });
+      updatePersonFields.push("addresses");
+    }
+    if (opts.organization !== undefined) {
+      requestBody.organizations = mergePrimary(current.data.organizations, {
+        name: opts.organization,
+      });
+      updatePersonFields.push("organizations");
+    }
   }
-  const res = await people.people.updateContact({
-    resourceName: opts.resourceName,
-    updatePersonFields: updatePersonFields.join(","),
-    requestBody,
-  });
-  const resourceName = res.data.resourceName ?? "";
+
+  let resourceName = opts.resourceName;
+  if (updatePersonFields.length > 0) {
+    const res = await people.people.updateContact({
+      resourceName: opts.resourceName,
+      updatePersonFields: updatePersonFields.join(","),
+      requestBody,
+    });
+    resourceName = res.data.resourceName ?? opts.resourceName;
+  }
   if (opts.photoBytes && resourceName) {
     await people.people.updateContactPhoto({
       resourceName,

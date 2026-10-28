@@ -12,7 +12,7 @@ const mockForms = {
 };
 
 const mockDriveFiles = { delete: vi.fn() };
-const mockSheetsValues = { append: vi.fn() };
+const mockSheetsValues = { append: vi.fn(), get: vi.fn() };
 
 vi.mock("googleapis", () => ({
   google: {
@@ -39,6 +39,7 @@ import {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockSheetsValues.get.mockResolvedValue({ data: {} });
 });
 
 describe("forms service", () => {
@@ -328,7 +329,7 @@ describe("exportFormResponsesToSheet", () => {
     expect(result).toMatchObject({ appendedRows: 2 });
     expect(mockSheetsValues.append).toHaveBeenCalledWith({
       spreadsheetId: "s1",
-      range: "Sheet1!A1",
+      range: "'Sheet1'!A1",
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [
@@ -350,10 +351,133 @@ describe("exportFormResponsesToSheet", () => {
     });
     expect(mockSheetsValues.append).toHaveBeenCalledWith({
       spreadsheetId: "s1",
-      range: "Data!A1",
+      range: "'Data'!A1",
       valueInputOption: "USER_ENTERED",
       requestBody: { values: [["Name", "Rating"]] },
     });
     expect(result).toMatchObject({ appendedRows: 1, responses: 0 });
+  });
+});
+
+describe("exportFormResponsesToSheet idempotency", () => {
+  const form = {
+    data: {
+      formId: "f1",
+      items: [
+        { itemId: "i1", title: "Name", questionItem: { question: { questionId: "q1" } } },
+        { itemId: "i2", title: "Rating", questionItem: { question: { questionId: "q2" } } },
+      ],
+    },
+  };
+
+  function mockResponses(values: Array<[string, string]>) {
+    mockForms.forms.responses.list.mockResolvedValue({
+      data: {
+        responses: values.map(([name, rating], i) => ({
+          responseId: `r${i}`,
+          answers: {
+            q1: { textAnswers: { answers: [{ value: name }] } },
+            q2: { textAnswers: { answers: [{ value: rating }] } },
+          },
+        })),
+      },
+    });
+  }
+
+  it("appends only new rows on a second run", async () => {
+    mockForms.forms.get.mockResolvedValue(form);
+    mockResponses([
+      ["Alice", "5"],
+      ["Bob", "4"],
+    ]);
+    mockSheetsValues.get.mockResolvedValue({
+      data: {
+        values: [
+          ["Name", "Rating"],
+          ["Alice", "5"],
+        ],
+      },
+    });
+    mockSheetsValues.append.mockResolvedValue({ data: { updates: { updatedRows: 1 } } });
+
+    const result = await exportFormResponsesToSheet(client, {
+      formId: "f1",
+      spreadsheetId: "s1",
+    });
+
+    expect(mockSheetsValues.append).toHaveBeenCalledWith({
+      spreadsheetId: "s1",
+      range: "'Sheet1'!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [["Bob", "4"]] },
+    });
+    expect(result).toMatchObject({ appendedRows: 1, responses: 2, skippedExisting: 1 });
+  });
+
+  it("writes nothing when every response is already in the sheet", async () => {
+    mockForms.forms.get.mockResolvedValue(form);
+    mockResponses([["Alice", "5"]]);
+    mockSheetsValues.get.mockResolvedValue({
+      data: {
+        values: [
+          ["Name", "Rating"],
+          ["Alice", "5"],
+        ],
+      },
+    });
+
+    const result = await exportFormResponsesToSheet(client, {
+      formId: "f1",
+      spreadsheetId: "s1",
+    });
+
+    expect(mockSheetsValues.append).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ appendedRows: 0, responses: 1, skippedExisting: 1 });
+  });
+
+  it("treats a missing tab as empty instead of failing", async () => {
+    mockForms.forms.get.mockResolvedValue(form);
+    mockResponses([["Alice", "5"]]);
+    mockSheetsValues.get.mockRejectedValue(new Error("Unable to parse range: 'Sheet1'!A:ZZ"));
+    mockSheetsValues.append.mockResolvedValue({ data: {} });
+
+    await exportFormResponsesToSheet(client, { formId: "f1", spreadsheetId: "s1" });
+
+    expect(mockSheetsValues.append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: {
+          values: [
+            ["Name", "Rating"],
+            ["Alice", "5"],
+          ],
+        },
+      }),
+    );
+  });
+
+  it("quotes a sheet name containing spaces or apostrophes", async () => {
+    mockForms.forms.get.mockResolvedValue(form);
+    mockResponses([]);
+
+    await exportFormResponsesToSheet(client, {
+      formId: "f1",
+      spreadsheetId: "s1",
+      sheetName: "Ada's data",
+    });
+
+    const append = mockSheetsValues.append.mock.calls[0][0];
+    expect(append.range).toBe("'Ada''s data'!A1");
+    expect(mockSheetsValues.get.mock.calls[0][0].range).toBe("'Ada''s data'!A:ZZ");
+  });
+
+  it("surfaces a real read failure instead of overwriting", async () => {
+    mockForms.forms.get.mockResolvedValue(form);
+    mockResponses([["Alice", "5"]]);
+    mockSheetsValues.get.mockRejectedValue(new Error("The caller does not have permission"));
+
+    await expect(
+      exportFormResponsesToSheet(client, { formId: "f1", spreadsheetId: "s1" }),
+    ).rejects.toThrow(/permission/);
+    expect(mockSheetsValues.append).not.toHaveBeenCalled();
   });
 });

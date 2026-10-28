@@ -1829,7 +1829,7 @@ export function registerTools(server: McpServer): void {
     {
       title: "Update contact",
       description:
-        "Update an existing contact's name, email, phone, address, organization, or photo (partial update by resourceName).",
+        "Update a contact's name, email, phone, address, organization or photo. Multi-valued fields keep their other entries.",
       inputSchema: {
         resourceName: z
           .string()
@@ -3067,7 +3067,8 @@ export function registerTools(server: McpServer): void {
     "google_forms_export_responses",
     {
       title: "Export form responses to Sheets",
-      description: "Append form responses (headers + rows) to a spreadsheet tab.",
+      description:
+        "Append form responses to a spreadsheet tab. The header is written once and rows already in the tab are skipped, so a re-run adds only new responses.",
       inputSchema: {
         formId: z.string().describe("Form ID."),
         spreadsheetId: z.string().describe("Destination spreadsheet ID."),
