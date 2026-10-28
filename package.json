@@ -44,7 +44,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nabheet/google-services-mcp.git"
+    "url": "git+ssh://git@github.com/nabheet/google-services-mcp.git"
   },
   "homepage": "https://github.com/nabheet/google-services-mcp#readme",
   "bugs": {
@@ -60,11 +60,15 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
-    "@types/node": "^26.6.3",
+    "@types/node": "^24.19.2",
     "markdownlint-cli2": "^0.23.3",
     "nock": "^14.0.17",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.2"
+  },
+  "author": "Nabheet Sandhu",
+  "publishConfig": {
+    "access": "public"
   }
 }
