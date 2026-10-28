@@ -82,8 +82,16 @@ export interface DriveFile {
   createdTime?: string;
   modifiedTime?: string;
   webViewLink?: string;
+  parents?: string[];
   trashed?: boolean;
 }
+
+/**
+ * Fields every single-file call asks for. Drive returns only
+ * `kind,id,name,mimeType` unless asked, which would leave size, timestamps and
+ * the web link out of every result.
+ */
+const FILE_FIELDS = "id,name,mimeType,size,createdTime,modifiedTime,webViewLink,parents,trashed";
 
 export interface DownloadDriveResult {
   /** Base64-encoded raw bytes (binary) or the raw string (text). */
@@ -163,10 +171,7 @@ export async function getDriveFile(
   opts: GetDriveOptions,
 ): Promise<DriveFile> {
   const drive = google.drive({ version: "v3", auth: client });
-  const res = await drive.files.get({
-    fileId: opts.fileId,
-    fields: "id,name,mimeType,size,createdTime,modifiedTime,webViewLink",
-  });
+  const res = await drive.files.get({ fileId: opts.fileId, fields: FILE_FIELDS });
   return mapFile(res.data);
 }
 
@@ -178,7 +183,7 @@ export async function uploadDriveFile(
   const drive = google.drive({ version: "v3", auth: client });
   const requestBody: drive_v3.Schema$File = { name: opts.name, mimeType: opts.mimeType };
   if (opts.parentFolderId) requestBody.parents = [opts.parentFolderId];
-  const params: drive_v3.Params$Resource$Files$Create = { requestBody };
+  const params: drive_v3.Params$Resource$Files$Create = { requestBody, fields: FILE_FIELDS };
   if (opts.path !== undefined) {
     params.media = { mimeType: opts.mimeType, body: createReadStream(opts.path) };
   } else if (opts.content !== undefined) {
@@ -197,7 +202,11 @@ export async function updateDriveFile(
   const requestBody: drive_v3.Schema$File = {};
   if (opts.name !== undefined) requestBody.name = opts.name;
   if (opts.mimeType !== undefined) requestBody.mimeType = opts.mimeType;
-  const params: drive_v3.Params$Resource$Files$Update = { fileId: opts.fileId, requestBody };
+  const params: drive_v3.Params$Resource$Files$Update = {
+    fileId: opts.fileId,
+    requestBody,
+    fields: FILE_FIELDS,
+  };
   if (opts.path !== undefined) {
     params.media = {
       mimeType: opts.mimeType ?? "application/octet-stream",
@@ -228,7 +237,7 @@ export async function trashDriveFile(
   const res = await drive.files.update({
     fileId: opts.fileId,
     requestBody: { trashed: true },
-    fields: "id,name,mimeType,size,createdTime,modifiedTime,webViewLink,trashed",
+    fields: FILE_FIELDS,
   });
   return mapFile(res.data);
 }
@@ -242,7 +251,7 @@ export async function restoreDriveFile(
   const res = await drive.files.update({
     fileId: opts.fileId,
     requestBody: { trashed: false },
-    fields: "id,name,mimeType,size,createdTime,modifiedTime,webViewLink,trashed",
+    fields: FILE_FIELDS,
   });
   return mapFile(res.data);
 }
@@ -256,7 +265,7 @@ export async function moveDriveFile(
   const params: drive_v3.Params$Resource$Files$Update = {
     fileId: opts.fileId,
     addParents: opts.parentFolderId,
-    fields: "id,name,mimeType,size,createdTime,modifiedTime,webViewLink,parents",
+    fields: FILE_FIELDS,
   };
   if (opts.removeParentFolderId) params.removeParents = opts.removeParentFolderId;
   const res = await drive.files.update(params);
@@ -278,11 +287,16 @@ export async function shareDriveFile(
   const params: drive_v3.Params$Resource$Permissions$Create = {
     fileId: opts.fileId,
     requestBody,
+    fields: "id",
     sendNotificationEmail: opts.sendNotificationEmail !== false,
   };
   if (opts.transferOwnership) params.transferOwnership = true;
   const res = await drive.permissions.create(params);
-  return { id: (res.data.id ?? "") as string };
+  const id = res.data.id;
+  // A created permission always has an id; an empty one means the sharing did
+  // not take effect, and reporting success would hide that.
+  if (!id) throw new Error(`Drive returned no permission id for file ${opts.fileId}`);
+  return { id };
 }
 
 /** List the permissions on a file. */
@@ -320,6 +334,7 @@ function mapFile(f: drive_v3.Schema$File): DriveFile {
     createdTime: f.createdTime as string | undefined,
     modifiedTime: f.modifiedTime as string | undefined,
     webViewLink: f.webViewLink as string | undefined,
+    ...(f.parents ? { parents: f.parents } : {}),
     trashed: f.trashed as boolean | undefined,
   };
 }
@@ -355,7 +370,7 @@ export async function createDriveFolder(
     mimeType: "application/vnd.google-apps.folder",
   };
   if (opts.parentFolderId) requestBody.parents = [opts.parentFolderId];
-  const res = await drive.files.create({ requestBody });
+  const res = await drive.files.create({ requestBody, fields: FILE_FIELDS });
   return mapFile(res.data);
 }
 
@@ -367,6 +382,6 @@ export async function copyDriveFile(
   const drive = google.drive({ version: "v3", auth: client });
   const requestBody: drive_v3.Schema$File = {};
   if (opts.name) requestBody.name = opts.name;
-  const res = await drive.files.copy({ fileId: opts.fileId, requestBody });
+  const res = await drive.files.copy({ fileId: opts.fileId, requestBody, fields: FILE_FIELDS });
   return mapFile(res.data);
 }

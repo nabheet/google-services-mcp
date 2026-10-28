@@ -76,7 +76,14 @@ describe("drive E2E (nock)", () => {
         const b = String(body);
         return b.includes('"name":"notes.txt"') && b.includes("hello");
       })
-      .query({ uploadType: "multipart" })
+      .query((q) => {
+        const query = q as Record<string, string>;
+        return (
+          query.uploadType === "multipart" &&
+          typeof query.fields === "string" &&
+          query.fields.includes("webViewLink")
+        );
+      })
       .reply(200, {
         id: "f-new",
         name: "notes.txt",

@@ -536,6 +536,11 @@ Files in shared drives are included, not only files in My Drive.
 
 Get metadata for a single file. Args: `fileId` (required).
 
+Single-file results (`get`, `upload`, `update`, `copy`, `create_folder`, `move`)
+carry `id`, `name`, `mimeType`, `size`, `createdTime`, `modifiedTime`,
+`webViewLink`, `parents` and `trashed` where Drive reports them, so a caller
+does not need a second read to get the link or confirm the new parent.
+
 ### `google_drive_upload`
 
 Create a file, optionally with text content or from a local file path.
@@ -640,7 +645,7 @@ Copy a file, optionally with a new name.
 
 Move a file into a folder. Provide `removeParentFolderId` (the file's current
 folder) to remove it from there — a true move; omit it to add the file to an
-additional folder.
+additional folder. The result lists the file's `parents` after the move.
 
 | arg | type | notes |
 | --- | --- | --- |
