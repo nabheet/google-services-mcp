@@ -1,8 +1,9 @@
 name: CI
 
 # Single workflow file — this filename is the ONE trusted publisher
-# configured on npm (ci.yml). CI on PRs, publish on push to main (stable),
-# v*-beta* tag push (beta prerelease), or manual dispatch (staging beta).
+# configured on npm (ci.yml). CI on PRs; publish on push to main (stable) when
+# the push changed shipping files, on v*-beta* tag push (beta prerelease), or
+# on manual dispatch (staging beta).
 #
 # Stable version comes from the npm registry (last published `latest` +
 # patch), not from a possibly-stale package.json, so repeated merges never
@@ -27,7 +28,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     concurrency:
-      group: ci-${{ github.ref }}
+      # head_ref only on pull_request: main pushes never cancel each other.
+      group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
@@ -55,16 +57,106 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Guard diffs before..sha; the `before` commit must be local.
+          fetch-depth: 0
+      - name: Determine whether the push changed shipping files
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          emit() { # $1 = true|false, $2 = log line
+            echo "changed=$1" >> "$GITHUB_OUTPUT"
+            echo "$2"
+          }
+
+          # A tag push (v*-beta*) is an explicit release request.
+          if [ "$REF_TYPE" = "tag" ]; then
+            emit true "tag push: publishing"
+            exit 0
+          fi
+
+          # Manual dispatch = staging beta: a human asked for it.
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            emit true "workflow_dispatch: publishing"
+            exit 0
+          fi
+
+          # Empty or all-zero `before` (new branch): nothing to diff.
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            emit true "no usable before commit: publishing"
+            exit 0
+          fi
+
+          # Shallow-checkout trap: fail loudly rather than skip a release.
+          if ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            echo "::error::before commit ${BEFORE} not in checkout; actions/checkout needs fetch-depth: 0"
+            exit 1
+          fi
+
+          # Squash merges make before..sha exactly the merged PR's diff.
+          # --no-renames so a rename cannot hide a shipping source path.
+          changed_paths="$(git diff --no-renames --name-only "$BEFORE" "$SHA")"
+          echo "Paths changed by ${BEFORE}..${SHA}:"
+          printf '%s\n' "$changed_paths"
+
+          # package.json ships when any field other than version and an INERT
+          # devDependency differs. Everything else defaults to shipping.
+          INERT_DEVDEPS='["@biomejs/biome","@types/node","markdownlint-cli2","nock","tsx","vitest"]'
+          pkg_shipping_changed() {
+            local before after
+            local normalise='del(.version)
+              | if has("devDependencies")
+                then .devDependencies |= with_entries(select(.key as $k | ($inert | index($k)) | not))
+                else . end
+              | if (.devDependencies // {}) == {} then del(.devDependencies) else . end'
+            before="$(git show "${BEFORE}:package.json" 2>/dev/null | jq -S --argjson inert "$INERT_DEVDEPS" "$normalise")" || return 0
+            after="$(git show "${SHA}:package.json" 2>/dev/null | jq -S --argjson inert "$INERT_DEVDEPS" "$normalise")" || return 0
+            [ "$before" != "$after" ]
+          }
+
+          publish=false
+          while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            case "$path" in
+              package-lock.json|.github/*)
+                echo "  skip:    $path (non-shipping)"
+                ;;
+              package.json)
+                if pkg_shipping_changed; then
+                  echo "  PUBLISH: $path (a shipping field changed)"
+                  publish=true
+                else
+                  echo "  skip:    $path (only version/inert devDependencies changed)"
+                fi
+                ;;
+              *)
+                echo "  PUBLISH: $path"
+                publish=true
+                ;;
+            esac
+          done <<< "$changed_paths"
+
+          emit "$publish" "RESULT: changed=$publish"
       - uses: actions/setup-node@v7
+        if: steps.changes.outputs.changed == 'true'
         with:
           node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org/
       - run: npm ci
+        if: steps.changes.outputs.changed == 'true'
         timeout-minutes: 2
       - run: npm run build
+        if: steps.changes.outputs.changed == 'true'
         timeout-minutes: 2
       - name: Determine channel (latest / beta)
+        if: steps.changes.outputs.changed == 'true'
         id: channel
         run: |
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
@@ -105,8 +197,10 @@ jobs:
             echo "tag=latest" >> "$GITHUB_OUTPUT"
           fi
       - name: Show publishing target
+        if: steps.changes.outputs.changed == 'true'
         run: 'echo "Publishing $(npm pkg get version) to tag ${{ steps.channel.outputs.tag }}"'
       - name: Publish (retry transient only)
+        if: steps.changes.outputs.changed == 'true'
         timeout-minutes: 5
         run: |
           for i in $(seq 1 3); do
@@ -123,19 +217,19 @@ jobs:
           exit 1
       - name: Push tag (stable only)
         id: tag
-        if: steps.channel.outputs.tag == 'latest'
+        if: steps.changes.outputs.changed == 'true' && steps.channel.outputs.tag == 'latest'
         run: |
           V=$(npm pkg get version | tr -d '"')
           echo "published=$V" >> "$GITHUB_OUTPUT"
           git tag "v$V"
           git push origin "v$V"
       - uses: softprops/action-gh-release@v3
-        if: steps.channel.outputs.tag == 'latest'
+        if: steps.changes.outputs.changed == 'true' && steps.channel.outputs.tag == 'latest'
         with:
           tag_name: v${{ steps.tag.outputs.published }}
           generate_release_notes: true
       - uses: softprops/action-gh-release@v3
-        if: github.ref_type == 'tag'
+        if: steps.changes.outputs.changed == 'true' && github.ref_type == 'tag'
         with:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
