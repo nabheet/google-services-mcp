@@ -541,7 +541,9 @@ export function registerTools(server: McpServer): void {
         saveToPath: z
           .string()
           .optional()
-          .describe("Local path to write the raw bytes to (returns { savedTo } instead of data)."),
+          .describe(
+            "Local path to write the raw bytes to (returns { savedTo }). Must be inside the save root: GOOGLE_MCP_SAVE_ROOT, default ~/Downloads.",
+          ),
         maxBytes: z
           .number()
           .int()
@@ -1673,7 +1675,9 @@ export function registerTools(server: McpServer): void {
         saveToPath: z
           .string()
           .optional()
-          .describe("Local path to write the raw bytes to (returns { savedTo } instead of data)."),
+          .describe(
+            "Local path to write the raw bytes to (returns { savedTo }). Must be inside the save root: GOOGLE_MCP_SAVE_ROOT, default ~/Downloads.",
+          ),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
@@ -1694,7 +1698,7 @@ export function registerTools(server: McpServer): void {
           .string()
           .optional()
           .describe(
-            "Local path to write the exported bytes to (returns { savedTo } instead of data).",
+            "Local path to write the exported bytes to (returns { savedTo }). Must be inside the save root: GOOGLE_MCP_SAVE_ROOT, default ~/Downloads.",
           ),
         account: z.string().optional().describe("Account nickname to use."),
       },
