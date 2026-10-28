@@ -306,7 +306,7 @@ describe("end-to-end tool calls", () => {
     const result = await callTool("google_docs_replace_text", {
       documentId: "d1",
       find: "{{name}}",
-      replace: "Nabheet",
+      replace: "Ada",
     });
     expect(result).toEqual({ occurrencesChanged: 1 });
   });

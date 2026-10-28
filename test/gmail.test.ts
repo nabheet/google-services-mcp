@@ -1544,15 +1544,15 @@ describe("gmail attachments", () => {
     await sendGmail(client, {
       to: "bob@example.com",
       subject: "S",
-      body: "Thanks,\nNabheet",
+      body: "Thanks,\nAda",
       attachments: [{ path: filePath }],
     });
 
     const raw = decodeRaw(mockMessages.send.mock.calls[0][0].requestBody.raw);
     // Body part must be terminated by an empty line: \r\n\r\n before the boundary.
-    expect(raw).toMatch(/Nabheet\r\n\r\n--/);
+    expect(raw).toMatch(/Ada\r\n\r\n--/);
     // And the boundary must not sit flush against the body with a single CRLF.
-    expect(raw).not.toMatch(/Nabheet\r\n--/);
+    expect(raw).not.toMatch(/Ada\r\n--/);
   });
 
   it("reply keeps threading headers and attaches files", async () => {
