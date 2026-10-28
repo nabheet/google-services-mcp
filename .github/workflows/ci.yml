@@ -166,7 +166,7 @@ jobs:
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             # manual staging: next -beta.X after the last published beta
             CUR=$(npm pkg get version | tr -d '"')
-            LAST_BETA=$(npm view google-services-mcp@beta version 2>/dev/null || true)
+            LAST_BETA=$(npm view google-services-mcp@beta version --prefer-online 2>/dev/null || true)
             if [ -n "$LAST_BETA" ]; then
               LAST_BASE="${LAST_BETA%-beta.*}"
               NEXT_BASE=$(printf '%s\n' "$CUR" "$LAST_BASE" | sort -V | tail -1)
@@ -182,7 +182,9 @@ jobs:
             echo "tag=beta" >> "$GITHUB_OUTPUT"
           else
             # merge to main -> next patch after the last published `latest`
-            LAST=$(npm view google-services-mcp@latest version 2>/dev/null || true)
+            # --prefer-online: the registry metadata cache can hold a `latest`
+            # that moved seconds ago, and this value decides the version.
+            LAST=$(npm view google-services-mcp@latest version --prefer-online 2>/dev/null || true)
             CUR=$(npm pkg get version | tr -d '"')
             if [ -n "$LAST" ] && [ "$(printf '%s\n%s' "$CUR" "$LAST" | sort -V | tail -1)" = "$LAST" ]; then
               # tree at/below registry -> align to registry (unless equal),
@@ -203,7 +205,7 @@ jobs:
         run: 'echo "Publishing $(npm pkg get version) to tag ${{ steps.channel.outputs.tag }}"'
       - name: Publish (retry version conflicts and transient failures)
         if: steps.changes.outputs.changed == 'true'
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           set -uo pipefail
 
@@ -231,6 +233,14 @@ jobs:
             npm version patch --no-git-tag-version --no-commit-hooks >/dev/null
           }
 
+          version_exists() {
+            npm view "google-services-mcp@$1" version --prefer-online >/dev/null 2>&1
+          }
+
+          version_githead() {
+            npm view "google-services-mcp@$1" gitHead --prefer-online 2>/dev/null || true
+          }
+
           tag="${{ steps.channel.outputs.tag }}"
 
           # Re-running a publish for a commit that is already `latest` should be
@@ -252,8 +262,35 @@ jobs:
 
             if echo "$OUT" | grep -qE "cannot publish over|previously published|E409"; then
               echo "$OUT" >&2
+              attempted="$(npm pkg get version | tr -d '"')"
+              # A conflict on the version this job just tried can be its own
+              # staged publish still landing, not another tree's. Let the
+              # registry settle before deciding to bump.
+              landed=false
+              for _ in $(seq 1 6); do
+                if version_exists "$attempted"; then landed=true; break; fi
+                sleep 5
+              done
+              if [ "$landed" = true ] && [ "$(version_githead "$attempted")" = "$GITHUB_SHA" ]; then
+                # The version exists, but a staged attempt may never have
+                # finalized the dist-tag. Point the tag at it before reporting
+                # success, otherwise the tag/release steps below publish a
+                # GitHub release for a version npm `latest` does not resolve to.
+                current="$(npm view "google-services-mcp@$tag" version --prefer-online 2>/dev/null || true)"
+                if [ "$current" != "$attempted" ]; then
+                  # Trusted publishing (OIDC) may not be allowed to move a tag;
+                  # if it cannot, fail loudly instead of claiming a release that
+                  # npm `latest` does not resolve to.
+                  if ! npm dist-tag add "google-services-mcp@$attempted" "$tag"; then
+                    echo "::error::published $attempted but could not point $tag at it; run: npm dist-tag add google-services-mcp@$attempted $tag" >&2
+                    exit 1
+                  fi
+                fi
+                echo "Publish landed as $attempted; $tag now points at it."
+                exit 0
+              fi
               bump_past_latest
-              echo "Version taken; retrying as $(npm pkg get version)"
+              echo "Version $attempted belongs to another tree; retrying as $(npm pkg get version)"
               sleep $((i * 2))
               continue
             fi
