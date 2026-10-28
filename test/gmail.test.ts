@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -779,6 +779,120 @@ describe("getGmailAttachment", () => {
       id: "ATT1",
     });
     expect(result).toMatchObject({ filename: "old.md", mimeType: "text/markdown", text: "old" });
+  });
+
+  it("writes raw bytes to saveToPath instead of returning base64", async () => {
+    const bytes = Buffer.from([0x25, 0x50, 0x44, 0x46]);
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "0.1",
+              filename: "invoice.pdf",
+              mimeType: "application/pdf",
+              body: { attachmentId: "ATT7", size: 4 },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: bytes.toString("base64url"), size: 4 },
+    });
+    const saveToPath = join(tmpDir, "invoice.pdf");
+    const result = await getGmailAttachment(client, {
+      id: "m1",
+      attachmentId: "ATT7",
+      saveToPath,
+    });
+    expect(readFileSync(saveToPath)).toEqual(bytes);
+    expect(result).toEqual({
+      id: "ATT7",
+      partId: "0.1",
+      filename: "invoice.pdf",
+      mimeType: "application/pdf",
+      size: 4,
+      savedTo: saveToPath,
+    });
+  });
+
+  it("omits text when saving a text-like attachment to disk", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "0.1",
+              filename: "notes.md",
+              mimeType: "text/markdown",
+              body: { attachmentId: "ATT8", size: 4 },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: Buffer.from("# Hi").toString("base64url"), size: 4 },
+    });
+    const saveToPath = join(tmpDir, "notes.md");
+    const result = await getGmailAttachment(client, {
+      id: "m1",
+      attachmentId: "ATT8",
+      saveToPath,
+    });
+    expect(readFileSync(saveToPath, "utf8")).toBe("# Hi");
+    expect(result).not.toHaveProperty("text");
+    expect(result).not.toHaveProperty("dataBase64");
+  });
+
+  it("decodes base64url payloads that use the URL-safe alphabet", async () => {
+    const bytes = Buffer.from([0xfb, 0xff, 0xbf]);
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "0.1",
+              filename: "blob.bin",
+              mimeType: "application/octet-stream",
+              body: { attachmentId: "ATT9", size: 3 },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: bytes.toString("base64url"), size: 3 },
+    });
+    const saveToPath = join(tmpDir, "blob.bin");
+    await getGmailAttachment(client, { id: "m1", attachmentId: "ATT9", saveToPath });
+    expect(readFileSync(saveToPath)).toEqual(bytes);
+  });
+
+  it("rejects when the save path cannot be written", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "0.1",
+              filename: "x.pdf",
+              mimeType: "application/pdf",
+              body: { attachmentId: "ATT10", size: 1 },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({ data: { data: "AA==", size: 1 } });
+    await expect(
+      getGmailAttachment(client, {
+        id: "m1",
+        attachmentId: "ATT10",
+        saveToPath: join(tmpDir, "missing-dir", "x.pdf"),
+      }),
+    ).rejects.toThrow();
   });
 });
 

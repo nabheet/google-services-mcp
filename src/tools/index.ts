@@ -528,7 +528,7 @@ export function registerTools(server: McpServer): void {
     {
       title: "Get email attachment",
       description:
-        "Download a single attachment by message ID and attachment ID. Text-like files are returned decoded as text; binary files as base64.",
+        "Download a single attachment by message ID and attachment ID. Text-like files are returned decoded as text; binary files as base64. Pass saveToPath to write the raw bytes to a local file instead.",
       inputSchema: {
         id: z.string().describe("Message ID."),
         attachmentId: z.string().describe("Attachment ID (from list_attachments)."),
@@ -538,11 +538,17 @@ export function registerTools(server: McpServer): void {
           .describe(
             "Stable part ID (from list_attachments); preferred over attachmentId for lookup.",
           ),
+        saveToPath: z
+          .string()
+          .optional()
+          .describe("Local path to write the raw bytes to (returns { savedTo } instead of data)."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ id, attachmentId, partId, account }) =>
-      withClient(account, (client) => getGmailAttachment(client, { id, attachmentId, partId })),
+    async ({ id, attachmentId, partId, saveToPath, account }) =>
+      withClient(account, (client) =>
+        getGmailAttachment(client, { id, attachmentId, partId, saveToPath }),
+      ),
   );
 
   server.registerTool(
