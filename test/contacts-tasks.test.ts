@@ -114,7 +114,7 @@ describe("createContact", () => {
 });
 
 describe("updateContact", () => {
-  it("fetches etag then updates name and email, setting updatePersonFields", async () => {
+  it("fetches the current person then updates name and email, setting updatePersonFields", async () => {
     mockConnections.get?.mockResolvedValue({ data: { resourceName: "people/3", etag: "abc" } });
     mockConnections.update.mockResolvedValue({ data: { resourceName: "people/3" } });
     await updateContact(client, {
@@ -124,7 +124,7 @@ describe("updateContact", () => {
     });
     expect(mockConnections.get).toHaveBeenCalledWith({
       resourceName: "people/3",
-      personFields: "names",
+      personFields: "names,emailAddresses,phoneNumbers,addresses,organizations",
     });
     expect(mockConnections.update).toHaveBeenCalledWith({
       resourceName: "people/3",
@@ -137,14 +137,16 @@ describe("updateContact", () => {
     });
   });
 
-  it("uses a provided etag without fetching", async () => {
+  it("prefers a provided etag over the fetched one", async () => {
+    mockConnections.get?.mockResolvedValue({
+      data: { resourceName: "people/3", etag: "from-get" },
+    });
     mockConnections.update.mockResolvedValue({ data: { resourceName: "people/3" } });
     await updateContact(client, {
       resourceName: "people/3",
       phone: "+1-555-0100",
       etag: "etag-1",
     });
-    expect(mockConnections.get).not.toHaveBeenCalled();
     expect(mockConnections.update).toHaveBeenCalledWith({
       resourceName: "people/3",
       updatePersonFields: "phoneNumbers",
@@ -388,5 +390,93 @@ describe("deleteTask", () => {
     mockTaskItems.delete.mockResolvedValue({ data: {} });
     await deleteTask(client, { tasklistId: "tl1", taskId: "t1" });
     expect(mockTaskItems.delete).toHaveBeenCalledWith({ tasklist: "tl1", task: "t1" });
+  });
+});
+
+describe("updateContact merging", () => {
+  const fullMask = "names,emailAddresses,phoneNumbers,addresses,organizations";
+
+  it("keeps the other email addresses when one is updated", async () => {
+    mockConnections.get.mockResolvedValue({
+      data: {
+        resourceName: "people/3",
+        etag: "abc",
+        emailAddresses: [
+          { value: "first@example.com", type: "work" },
+          { value: "second@example.com", type: "home" },
+        ],
+      },
+    });
+    mockConnections.update.mockResolvedValue({ data: { resourceName: "people/3" } });
+
+    await updateContact(client, { resourceName: "people/3", email: "first@example.com" });
+
+    expect(mockConnections.get).toHaveBeenCalledWith({
+      resourceName: "people/3",
+      personFields: fullMask,
+    });
+    expect(mockConnections.update.mock.calls[0][0].requestBody.emailAddresses).toEqual([
+      { value: "first@example.com", type: "work" },
+      { value: "second@example.com", type: "home" },
+    ]);
+  });
+
+  it("preserves the family name when only the display name changes", async () => {
+    mockConnections.get.mockResolvedValue({
+      data: {
+        resourceName: "people/3",
+        etag: "abc",
+        names: [{ displayName: "Ada Lovelace", givenName: "Ada", familyName: "Lovelace" }],
+      },
+    });
+    mockConnections.update.mockResolvedValue({ data: { resourceName: "people/3" } });
+
+    await updateContact(client, { resourceName: "people/3", name: "Ada King" });
+
+    expect(mockConnections.update.mock.calls[0][0].requestBody.names).toEqual([
+      { displayName: "Ada King", givenName: "Ada", familyName: "Lovelace" },
+    ]);
+  });
+
+  it("sets givenName for a contact that has no family name", async () => {
+    mockConnections.get.mockResolvedValue({
+      data: { resourceName: "people/3", etag: "abc", names: [{ displayName: "Ada" }] },
+    });
+    mockConnections.update.mockResolvedValue({ data: { resourceName: "people/3" } });
+
+    await updateContact(client, { resourceName: "people/3", name: "Ada Lovelace" });
+
+    expect(mockConnections.update.mock.calls[0][0].requestBody.names).toEqual([
+      { displayName: "Ada Lovelace", givenName: "Ada Lovelace" },
+    ]);
+  });
+
+  it("appends a phone number instead of replacing the list", async () => {
+    mockConnections.get.mockResolvedValue({
+      data: {
+        resourceName: "people/3",
+        etag: "abc",
+        phoneNumbers: [{ value: "+1-555-0100", type: "mobile" }],
+      },
+    });
+    mockConnections.update.mockResolvedValue({ data: { resourceName: "people/3" } });
+
+    await updateContact(client, { resourceName: "people/3", phone: "+1-555-0199" });
+
+    expect(mockConnections.update.mock.calls[0][0].requestBody.phoneNumbers).toEqual([
+      { value: "+1-555-0199", type: "mobile" },
+    ]);
+  });
+
+  it("does not send an empty updatePersonFields for a photo-only update", async () => {
+    mockPeople.updateContactPhoto.mockResolvedValue({ data: { resourceName: "people/3" } });
+
+    await updateContact(client, { resourceName: "people/3", photoBytes: "aGVsbG8=" });
+
+    expect(mockConnections.update).not.toHaveBeenCalled();
+    expect(mockPeople.updateContactPhoto).toHaveBeenCalledWith({
+      resourceName: "people/3",
+      requestBody: { photoBytes: "aGVsbG8=" },
+    });
   });
 });

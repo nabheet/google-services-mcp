@@ -1,4 +1,4 @@
-import type { Auth, forms_v1 } from "googleapis";
+import type { Auth, forms_v1, sheets_v4 } from "googleapis";
 import { google } from "googleapis";
 
 export interface GetFormArgs {
@@ -251,11 +251,43 @@ export interface ExportResponsesArgs {
   sheetName?: string;
 }
 
-/** Append form responses (headers + rows) to a spreadsheet tab. */
+/** Quote a sheet name for A1 notation; apostrophes are doubled. */
+function quoteSheetName(sheetName: string): string {
+  return `'${sheetName.replace(/'/g, "''")}'`;
+}
+
+/** Normalized row identity, so a re-run can tell what is already exported. */
+function rowKey(row: unknown[]): string {
+  return JSON.stringify(row.map((cell) => String(cell ?? "").trim()));
+}
+
+/** Existing values in the tab; empty when the tab does not exist yet. */
+async function readSheetRows(
+  sheets: sheets_v4.Sheets,
+  spreadsheetId: string,
+  sheetName: string,
+): Promise<unknown[][]> {
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${quoteSheetName(sheetName)}!A:ZZ`,
+    });
+    return (res.data.values ?? []) as unknown[][];
+  } catch (error) {
+    // A tab that does not exist is a valid empty destination. Anything else
+    // (permissions, bad id) must not be mistaken for an empty sheet: appending
+    // on top of an unreadable tab would duplicate everything already there.
+    const message = error instanceof Error ? error.message : String(error);
+    if (/unable to parse range/i.test(message)) return [];
+    throw error;
+  }
+}
+
+/** Append form responses (headers + rows) to a spreadsheet tab, once. */
 export async function exportFormResponsesToSheet(
   client: Auth.OAuth2Client,
   { formId, spreadsheetId, sheetName = "Sheet1" }: ExportResponsesArgs,
-): Promise<{ appendedRows: number; responses: number }> {
+): Promise<{ appendedRows: number; responses: number; skippedExisting: number }> {
   const [form, responses] = await Promise.all([
     getForm(client, { formId }),
     getFormResponses(client, { formId }),
@@ -271,14 +303,24 @@ export async function exportFormResponsesToSheet(
     }),
   );
   const sheets = google.sheets({ version: "v4", auth: client });
-  const res = await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: `${sheetName}!A1`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: { values: [headers, ...rows] },
-  });
-  return {
-    appendedRows: res.data.updates?.updatedRows ?? rows.length + 1,
-    responses: rows.length,
-  };
+  const existing = await readSheetRows(sheets, spreadsheetId, sheetName);
+  const existingKeys = new Set(existing.map(rowKey));
+  const values: string[][] = existing.length === 0 ? [headers] : [];
+  let skippedExisting = 0;
+  for (const row of rows) {
+    if (existingKeys.has(rowKey(row))) {
+      skippedExisting += 1;
+      continue;
+    }
+    values.push(row);
+  }
+  if (values.length > 0) {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: `${quoteSheetName(sheetName)}!A1`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values },
+    });
+  }
+  return { appendedRows: values.length, responses: rows.length, skippedExisting };
 }
