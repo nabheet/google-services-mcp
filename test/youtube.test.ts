@@ -55,10 +55,12 @@ describe("youtube service", () => {
       },
     });
     const result = await searchVideos(client, { query: "cats", maxResults: 10 });
-    expect(result).toEqual([
-      { id: "v1", type: "video", title: "T1", channelTitle: "C1" },
-      { id: "c2", type: "channel", title: "T2" },
-    ]);
+    expect(result).toEqual({
+      items: [
+        { id: "v1", type: "video", title: "T1", channelTitle: "C1" },
+        { id: "c2", type: "channel", title: "T2" },
+      ],
+    });
     expect(mockYouTube.search.list).toHaveBeenCalledWith({
       part: ["snippet"],
       q: "cats",
@@ -95,7 +97,7 @@ describe("youtube service", () => {
       data: { items: [{ snippet: { title: "My upload" } }] },
     });
     const result = await getMyVideos(client, {});
-    expect(result.videos).toEqual([{ snippet: { title: "My upload" } }]);
+    expect(result.items).toEqual([{ snippet: { title: "My upload" } }]);
     expect(mockYouTube.channels.list).toHaveBeenCalledWith({
       part: ["contentDetails"],
       mine: true,
@@ -110,7 +112,7 @@ describe("youtube service", () => {
       data: { items: [{ id: "pl1", snippet: { title: "P" } }] },
     });
     const result = await listPlaylists(client, {});
-    expect(result).toEqual([{ id: "pl1", snippet: { title: "P" } }]);
+    expect(result).toEqual({ items: [{ id: "pl1", snippet: { title: "P" } }] });
     expect(mockYouTube.playlists.list).toHaveBeenCalledWith({
       part: ["snippet", "contentDetails"],
       mine: true,
@@ -157,7 +159,7 @@ describe("youtube service", () => {
       data: { items: [{ snippet: { title: "S", resourceId: { channelId: "c1" } } }] },
     });
     const result = await listSubscriptions(client, { maxResults: 50 });
-    expect(result).toEqual([{ title: "S", channelId: "c1" }]);
+    expect(result).toEqual({ items: [{ title: "S", channelId: "c1" }] });
     expect(mockYouTube.subscriptions.list).toHaveBeenCalledWith({
       part: ["snippet"],
       mine: true,
@@ -474,8 +476,51 @@ describe("getMyVideos uploads playlist", () => {
     mockYouTube.channels.list.mockResolvedValue({ data: {} });
     await expect(getMyVideos(client, {})).resolves.toEqual({
       uploadsPlaylistId: null,
-      videos: [],
+      items: [],
     });
+  });
+});
+
+describe("youtube list pagination", () => {
+  it("search passes pageToken and returns the next one", async () => {
+    mockYouTube.search.list.mockResolvedValue({ data: { items: [], nextPageToken: "p2" } });
+    const result = await searchVideos(client, { query: "x", pageToken: "p1" });
+    expect(mockYouTube.search.list).toHaveBeenCalledWith(
+      expect.objectContaining({ pageToken: "p1" }),
+    );
+    expect(result.nextPageToken).toBe("p2");
+  });
+
+  it("playlists pass pageToken and return the next one", async () => {
+    mockYouTube.playlists.list.mockResolvedValue({ data: { items: [], nextPageToken: "p2" } });
+    const result = await listPlaylists(client, { pageToken: "p1" });
+    expect(mockYouTube.playlists.list).toHaveBeenCalledWith(
+      expect.objectContaining({ pageToken: "p1" }),
+    );
+    expect(result.nextPageToken).toBe("p2");
+  });
+
+  it("subscriptions pass pageToken and return the next one", async () => {
+    mockYouTube.subscriptions.list.mockResolvedValue({ data: { items: [], nextPageToken: "p2" } });
+    const result = await listSubscriptions(client, { pageToken: "p1" });
+    expect(mockYouTube.subscriptions.list).toHaveBeenCalledWith(
+      expect.objectContaining({ pageToken: "p1" }),
+    );
+    expect(result.nextPageToken).toBe("p2");
+  });
+
+  it("uploads pass pageToken and return the next one", async () => {
+    mockYouTube.channels.list.mockResolvedValue({
+      data: { items: [{ contentDetails: { relatedPlaylists: { uploads: "UU-channel" } } }] },
+    });
+    mockYouTube.playlistItems.list.mockResolvedValue({
+      data: { items: [], nextPageToken: "p2" },
+    });
+    const result = await getMyVideos(client, { pageToken: "p1" });
+    expect(mockYouTube.playlistItems.list).toHaveBeenCalledWith(
+      expect.objectContaining({ pageToken: "p1" }),
+    );
+    expect(result).toEqual({ uploadsPlaylistId: "UU-channel", items: [], nextPageToken: "p2" });
   });
 });
 

@@ -54,8 +54,9 @@ describe("gmail drafts & labels E2E (nock)", () => {
 
     const res = await listGmailDrafts(client, {});
 
-    expect(res).toHaveLength(2);
-    expect(res[0].id).toBe("d1");
+    expect(res.items).toHaveLength(2);
+    expect(res.items[0].id).toBe("d1");
+    expect(res.nextPageToken).toBeUndefined();
     expect(nock.isDone()).toBe(true);
   });
 

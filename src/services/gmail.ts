@@ -955,16 +955,23 @@ export async function updateGmailDraft(
 /** List drafts, newest first. */
 export async function listGmailDrafts(
   client: Auth.OAuth2Client,
-  opts: { maxResults?: number },
-): Promise<DraftSummary[]> {
+  opts: { maxResults?: number; pageToken?: string },
+): Promise<ListPage<DraftSummary>> {
   const gmail = google.gmail({ version: "v1", auth: client });
-  const res = await gmail.users.drafts.list({ userId: "me", maxResults: opts.maxResults ?? 25 });
-  return (res.data.drafts ?? []).map((d: gmail_v1.Schema$Draft) => ({
-    id: d.id as string,
-    messageId: d.message?.id as string | undefined,
-    threadId: d.message?.threadId as string | undefined,
-    snippet: d.message?.snippet as string | undefined,
-  }));
+  const res = await gmail.users.drafts.list({
+    userId: "me",
+    maxResults: opts.maxResults ?? 25,
+    ...(opts.pageToken !== undefined ? { pageToken: opts.pageToken } : {}),
+  });
+  return {
+    items: (res.data.drafts ?? []).map((d: gmail_v1.Schema$Draft) => ({
+      id: d.id as string,
+      messageId: d.message?.id as string | undefined,
+      threadId: d.message?.threadId as string | undefined,
+      snippet: d.message?.snippet as string | undefined,
+    })),
+    ...(res.data.nextPageToken ? { nextPageToken: res.data.nextPageToken } : {}),
+  };
 }
 
 /** Get a single draft with parsed headers and body. */

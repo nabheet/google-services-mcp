@@ -1237,10 +1237,12 @@ describe("listGmailDrafts", () => {
     });
     const result = await listGmailDrafts(client, { maxResults: 10 });
     expect(mockDrafts.list).toHaveBeenCalledWith({ userId: "me", maxResults: 10 });
-    expect(result).toEqual([
-      { id: "d1", messageId: "m1", threadId: "t1", snippet: "hi" },
-      { id: "d2", messageId: "m2", threadId: undefined, snippet: undefined },
-    ]);
+    expect(result).toEqual({
+      items: [
+        { id: "d1", messageId: "m1", threadId: "t1", snippet: "hi" },
+        { id: "d2", messageId: "m2", threadId: undefined, snippet: undefined },
+      ],
+    });
   });
 });
 
@@ -2107,6 +2109,15 @@ describe("gmail pagination", () => {
     mockThreads.list.mockResolvedValue({ data: { threads: [{ id: "t9" }], nextPageToken: "p2" } });
     const result = await listGmailThreads(client, { pageToken: "p1" });
     expect(mockThreads.list).toHaveBeenCalledWith(
+      expect.objectContaining({ pageToken: "p1", maxResults: 25 }),
+    );
+    expect(result.nextPageToken).toBe("p2");
+  });
+
+  it("passes pageToken and returns nextPageToken for drafts", async () => {
+    mockDrafts.list.mockResolvedValue({ data: { drafts: [{ id: "d9" }], nextPageToken: "p2" } });
+    const result = await listGmailDrafts(client, { pageToken: "p1" });
+    expect(mockDrafts.list).toHaveBeenCalledWith(
       expect.objectContaining({ pageToken: "p1", maxResults: 25 }),
     );
     expect(result.nextPageToken).toBe("p2");
