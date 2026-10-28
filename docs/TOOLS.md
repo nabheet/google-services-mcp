@@ -34,8 +34,8 @@ shell rc files and SSH keys.
 | `google_drive_update` | yes | — |
 | `google_youtube_upload` | yes | — |
 | `google_drive_download` | — | yes |
-| `google_gmail_get_attachment` | — | pending #119 |
-| `google_drive_export` | — | pending #120 |
+| `google_gmail_get_attachment` | — | yes |
+| `google_drive_export` | — | yes |
 
 ## Account management
 
