@@ -727,7 +727,13 @@ export async function getGmailAttachment(
   }
   const out: GmailAttachmentData = { ...info };
   if (isTextMime(mimeType)) {
-    out.text = Buffer.from(dataBase64, "base64url").toString("utf8");
+    try {
+      out.text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      // Not valid UTF-8 (e.g. Latin-1 or UTF-16): return the bytes instead of
+      // silently mangling them into U+FFFD replacement characters.
+      out.dataBase64 = dataBase64;
+    }
   } else {
     out.dataBase64 = dataBase64;
   }

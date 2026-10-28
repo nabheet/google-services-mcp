@@ -699,6 +699,52 @@ describe("getGmailAttachment", () => {
     expect(result).not.toHaveProperty("dataBase64");
   });
 
+  it("falls back to base64 when a text attachment is not valid UTF-8", async () => {
+    const bytes = Buffer.from([0x63, 0x61, 0x66, 0xe9]); // "café" in Latin-1, not UTF-8
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "0.1",
+              filename: "menu.txt",
+              mimeType: "text/plain",
+              body: { attachmentId: "ATTL1", size: 4 },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: bytes.toString("base64url"), size: 4 },
+    });
+    const result = await getGmailAttachment(client, { id: "m1", attachmentId: "ATTL1" });
+    // Decoding would mangle 0xe9 into U+FFFD; return the exact bytes instead.
+    expect(result.text).toBeUndefined();
+    expect(result.dataBase64).toBe(bytes.toString("base64url"));
+  });
+
+  it("rejects a text attachment over the cap before downloading it", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "1",
+              filename: "big.txt",
+              mimeType: "text/plain",
+              body: { attachmentId: "BIGTXT", size: 18_000_000 },
+            },
+          ],
+        },
+      },
+    });
+    await expect(getGmailAttachment(client, { id: "m1", attachmentId: "BIGTXT" })).rejects.toThrow(
+      /big\.txt.*18000000 bytes.*6291456.*saveToPath/s,
+    );
+    expect(mockMessages.attachments.get).not.toHaveBeenCalled();
+  });
+
   it("returns base64 only for binary mime types", async () => {
     mockMessages.get.mockResolvedValue({
       data: {
