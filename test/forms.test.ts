@@ -182,6 +182,26 @@ describe("updateFormQuestion", () => {
     expect(req.updateMask).toBe("question_item.question.choice_question.options");
   });
 
+  it("keeps a required change when options are updated in the same call", async () => {
+    mockForms.forms.get.mockResolvedValue(form);
+    mockForms.forms.batchUpdate.mockResolvedValue({ data: { replies: [{}] } });
+    await updateFormQuestion(client, {
+      formId: "f1",
+      questionId: "q1",
+      options: ["X", "Y"],
+      required: true,
+    });
+    const req = mockForms.forms.batchUpdate.mock.calls[0][0].requestBody.requests[0].updateItem;
+    expect(req.item.questionItem.question.required).toBe(true);
+    expect(req.item.questionItem.question.choiceQuestion.options).toEqual([
+      { value: "X" },
+      { value: "Y" },
+    ]);
+    expect(req.updateMask).toBe(
+      "question_item.question.required,question_item.question.choice_question.options",
+    );
+  });
+
   it("throws when questionId is not found", async () => {
     mockForms.forms.get.mockResolvedValue(form);
     await expect(
