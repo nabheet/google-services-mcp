@@ -15,7 +15,14 @@ Tools that touch the local filesystem share one pair of arg names.
 
 With `saveToPath` the raw bytes are written to that path and the inline payload
 (`data`, `dataBase64`, `text`) is omitted; the result carries `savedTo` alongside
-the tool's metadata.
+the tool's metadata. Missing parent directories are created recursively, so a
+path under a directory that does not exist yet still works.
+
+Writes are confined to a save root: `GOOGLE_MCP_SAVE_ROOT` when set, otherwise
+`~/Downloads`. A path outside it is refused before any Google API call, and so
+is a symlink inside the root that points out of it. This keeps
+attacker-controlled bytes (an email attachment, a shared Drive file) away from
+shell rc files and SSH keys.
 
 | tool | reads `path` | writes `saveToPath` |
 | --- | --- | --- |
@@ -158,14 +165,15 @@ List attachments on a message (metadata only, no bytes).
 Download a single attachment by message ID and attachment ID. Text-like files
 are returned decoded as text; binary files as base64. Attachments over 6 MB are
 rejected inline — pass `saveToPath` to write the raw bytes to a local file
-instead (returns `{ savedTo }`).
+instead (returns `{ savedTo }`). The path must be inside the save root
+(`GOOGLE_MCP_SAVE_ROOT`, default `~/Downloads`).
 
 | arg | type | notes |
 | --- | --- | --- |
 | `id` | string | required. Message ID. |
 | `attachmentId` | string | required. From `list_attachments`. |
 | `partId` | string | optional. Stable part ID from `list_attachments` (preferred). |
-| `saveToPath` | string | optional. Local path to write the raw bytes to. |
+| `saveToPath` | string | optional. Local path inside the save root to write the raw bytes to. |
 | `maxBytes` | number | optional, default 6291456. Inline cap in raw bytes; ignored when saving. |
 
 ### `google_gmail_drafts_create`
@@ -530,24 +538,26 @@ Revoke a permission from a file by permission ID. Args: `fileId` (required),
 
 Download a file's raw bytes (non-Google-native files). Text content returns
 decoded text; binary returns base64. Pass `saveToPath` to write bytes to a
-local file instead (returns `{ savedTo }`).
+local file instead (returns `{ savedTo }`). The path must be inside the save
+root (`GOOGLE_MCP_SAVE_ROOT`, default `~/Downloads`).
 
 | arg | type | notes |
 | --- | --- | --- |
 | `fileId` | string | required. Drive file ID. |
-| `saveToPath` | string | optional. Local path to write the raw bytes to. |
+| `saveToPath` | string | optional. Local path inside the save root to write the raw bytes to. |
 
 ### `google_drive_export`
 
 Export a Google-native file (Docs/Sheets/Slides/Drawings) to another format.
 Pass `saveToPath` to write the exported bytes to a local file instead (returns
-`{ savedTo }`).
+`{ savedTo }`). The path must be inside the save root (`GOOGLE_MCP_SAVE_ROOT`,
+default `~/Downloads`).
 
 | arg | type | notes |
 | --- | --- | --- |
 | `fileId` | string | required. Drive file ID. |
 | `mimeType` | string | required. Target MIME type, e.g. `application/pdf`. |
-| `saveToPath` | string | optional. Local path to write the exported bytes to. |
+| `saveToPath` | string | optional. Local path inside the save root to write bytes to. |
 
 ### `google_drive_create_folder`
 

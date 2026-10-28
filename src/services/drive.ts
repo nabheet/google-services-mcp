@@ -1,7 +1,9 @@
 import { createReadStream } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import type { Auth, drive_v3 } from "googleapis";
 import { google } from "googleapis";
+import { resolveSavePath } from "../util/save-path.js";
 
 export interface ListDriveOptions {
   query?: string;
@@ -121,8 +123,11 @@ async function saveOrMap(
   saveToPath: string | undefined,
 ): Promise<DownloadDriveResult | { savedTo: string }> {
   if (saveToPath !== undefined) {
-    await writeFile(saveToPath, await responseToBytes(res.data));
-    return { savedTo: saveToPath };
+    const target = await resolveSavePath(saveToPath);
+    const bytes = await responseToBytes(res.data);
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, bytes);
+    return { savedTo: target };
   }
   return mapDownload(res);
 }

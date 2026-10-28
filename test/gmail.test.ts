@@ -97,9 +97,12 @@ function decodeRaw(base64url: string): string {
 beforeEach(() => {
   vi.clearAllMocks();
   tmpDir = mkdtempSync(join(tmpdir(), "gmail-att-"));
+  // saveToPath is confined to the save root; point it at the test directory.
+  vi.stubEnv("GOOGLE_MCP_SAVE_ROOT", tmpDir);
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
@@ -829,6 +832,17 @@ describe("getGmailAttachment", () => {
       id: "ATT1",
     });
     expect(result).toMatchObject({ filename: "old.md", mimeType: "text/markdown", text: "old" });
+  });
+
+  it("refuses a saveToPath outside the save root before calling Gmail", async () => {
+    await expect(
+      getGmailAttachment(client, {
+        id: "m1",
+        attachmentId: "A",
+        saveToPath: "/etc/cron.d/payload",
+      }),
+    ).rejects.toThrow(/inside/);
+    expect(mockMessages.get).not.toHaveBeenCalled();
   });
 
   it("writes raw bytes to saveToPath instead of returning base64", async () => {
