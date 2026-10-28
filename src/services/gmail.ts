@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import type { Auth, gmail_v1 } from "googleapis";
 import { google } from "googleapis";
@@ -612,10 +612,12 @@ export interface GmailAttachmentInfo {
 }
 
 export interface GmailAttachmentData extends GmailAttachmentInfo {
-  /** Base64url-encoded raw bytes. */
-  dataBase64: string;
-  /** Decoded text when the MIME type is text-like. */
+  /** Base64url-encoded raw bytes (absent when saved to `savedTo`). */
+  dataBase64?: string;
+  /** Decoded text when the MIME type is text-like (absent when saved to disk). */
   text?: string;
+  /** Local path the raw bytes were written to, when `saveToPath` was given. */
+  savedTo?: string;
 }
 
 /** Walk a Gmail payload tree collecting attachment parts. */
@@ -662,7 +664,7 @@ export async function listGmailAttachments(
 /** Download a single attachment by messageId + attachmentId (or stable partId). */
 export async function getGmailAttachment(
   client: Auth.OAuth2Client,
-  opts: GetGmailOptions & { attachmentId: string; partId?: string },
+  opts: GetGmailOptions & { attachmentId: string; partId?: string; saveToPath?: string },
 ): Promise<GmailAttachmentData> {
   const gmail = google.gmail({ version: "v1", auth: client });
   const msg = (await gmail.users.messages.get({ userId: "me", id: opts.id, format: "full" })).data;
@@ -683,14 +685,18 @@ export async function getGmailAttachment(
   });
   const dataBase64 = (res.data.data ?? "") as string;
   const mimeType = part?.mimeType ?? "application/octet-stream";
-  const out: GmailAttachmentData = {
+  const info: GmailAttachmentInfo = {
     id: attachmentId,
     partId: part?.partId,
     filename: part?.filename ?? "attachment",
     mimeType,
     size: part?.size ?? res.data.size ?? 0,
-    dataBase64,
   };
+  if (opts.saveToPath !== undefined) {
+    await writeFile(opts.saveToPath, Buffer.from(dataBase64, "base64url"));
+    return { ...info, savedTo: opts.saveToPath };
+  }
+  const out: GmailAttachmentData = { ...info, dataBase64 };
   if (isTextMime(mimeType)) {
     out.text = Buffer.from(dataBase64, "base64url").toString("utf8");
   }
