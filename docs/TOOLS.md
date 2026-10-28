@@ -160,10 +160,12 @@ are returned decoded as text; binary files as base64. Attachments over 6 MB are
 rejected inline — pass `saveToPath` to write the raw bytes to a local file
 instead (returns `{ savedTo }`).
 
-The cap covers the serialized payload, not just the raw bytes: JSON escaping
-inflates base64 by ~1.33x and NUL-heavy text by up to ~6x, so an attachment
-that fits in raw bytes can still be rejected. The client never receives a frame
-that grew past the limit. The cap does not apply when saving to disk.
+The cap is measured on the JSON-RPC frame the client receives, not the raw bytes.
+The payload is escaped twice on the way out (into `content[0].text`, then into
+the envelope), so NUL-heavy text costs about 7x its raw size, and base64 costs
+about 1.33x plus envelope overhead. An attachment whose raw size equals the cap
+is rejected for that overhead. The error message reports both sizes. The cap
+does not apply when saving to disk.
 
 | arg | type | notes |
 | --- | --- | --- |

@@ -998,6 +998,53 @@ describe("getGmailAttachment", () => {
     ).rejects.toThrow(/blob\.bin.*100-byte inline limit/s);
   });
 
+  it("measures the double-escaped envelope, not one escaping pass", async () => {
+    const bytes = Buffer.alloc(40, 0x00);
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "1",
+              filename: "nul.txt",
+              mimeType: "text/plain",
+              body: { attachmentId: "NULS3", size: bytes.length },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: bytes.toString("base64url"), size: bytes.length },
+    });
+    // Reproduce what the client actually receives: the tool stringifies the
+    // result into content[0].text, and the transport stringifies the envelope.
+    const toolResult = {
+      id: "NULS3",
+      partId: "1",
+      filename: "nul.txt",
+      mimeType: "text/plain",
+      size: 40,
+      text: bytes.toString("utf8"),
+    };
+    const frame = Buffer.byteLength(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 0,
+        result: { content: [{ type: "text", text: JSON.stringify(toolResult, null, 2) }] },
+      }),
+    );
+    await expect(
+      getGmailAttachment(client, { id: "m1", attachmentId: "NULS3", maxBytes: frame - 1 }),
+    ).rejects.toThrow(/nul\.txt.*JSON-RPC frame/s);
+    const accepted = await getGmailAttachment(client, {
+      id: "m1",
+      attachmentId: "NULS3",
+      maxBytes: frame,
+    });
+    expect(accepted.text).toBe(bytes.toString("utf8"));
+  });
+
   it("writes an attachment whose frame exceeds the cap when saveToPath is set", async () => {
     const bytes = Buffer.alloc(40, 0x00);
     mockMessages.get.mockResolvedValue({
