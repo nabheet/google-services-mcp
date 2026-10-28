@@ -60,7 +60,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.3",
-    "@types/node": "^24.19.2",
+    "@types/node": "^26.6.5",
     "markdownlint-cli2": "^0.24.0",
     "nock": "^15.0.5",
     "tsx": "^4.23.15",
