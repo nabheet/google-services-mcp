@@ -1217,8 +1217,18 @@ export function registerTools(server: McpServer): void {
         summary: z.string().optional(),
         description: z.string().optional(),
         location: z.string().optional(),
-        start: z.string().optional().describe("New start RFC3339 datetime."),
-        end: z.string().optional().describe("New end RFC3339 datetime."),
+        start: z
+          .string()
+          .optional()
+          .describe(
+            "New start RFC3339 datetime (or YYYY-MM-DD for all-day). Given alone, the end keeps the current duration.",
+          ),
+        end: z
+          .string()
+          .optional()
+          .describe(
+            "New end RFC3339 datetime (or YYYY-MM-DD for all-day). Given alone, the start keeps the current duration.",
+          ),
         attendees: z.array(z.string().email()).optional().describe("Full attendee list."),
         timeZone: z
           .string()
@@ -1422,7 +1432,8 @@ export function registerTools(server: McpServer): void {
     "google_calendar_free_busy",
     {
       title: "Query calendar free/busy",
-      description: "Query busy intervals across calendars to find free meeting windows.",
+      description:
+        "Query busy intervals across calendars to find free meeting windows. A calendar that could not be read returns errors instead of looking free.",
       inputSchema: {
         timeMin: z.string().describe("Start of range (RFC3339 datetime)."),
         timeMax: z.string().describe("End of range (RFC3339 datetime)."),
