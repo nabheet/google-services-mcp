@@ -130,8 +130,9 @@ List attachments on a message (metadata only, no bytes).
 ### `google_gmail_get_attachment`
 
 Download a single attachment by message ID and attachment ID. Text-like files
-are returned decoded as text; binary files as base64. Pass `saveToPath` to
-write the raw bytes to a local file instead (returns `{ savedTo }`).
+are returned decoded as text; binary files as base64. Attachments over 6 MB are
+rejected inline — pass `saveToPath` to write the raw bytes to a local file
+instead (returns `{ savedTo }`).
 
 | arg | type | notes |
 | --- | --- | --- |
@@ -139,6 +140,7 @@ write the raw bytes to a local file instead (returns `{ savedTo }`).
 | `attachmentId` | string | required. From `list_attachments`. |
 | `partId` | string | optional. Stable part ID from `list_attachments` (preferred). |
 | `saveToPath` | string | optional. Local path to write the raw bytes to. |
+| `maxBytes` | number | optional, default 6291456. Inline cap in raw bytes; ignored when saving. |
 
 ### `google_gmail_drafts_create`
 
