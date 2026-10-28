@@ -20,8 +20,10 @@ on:
   push:
     branches: [main]
     tags: ["v*-beta*"]
+  # Any base branch, not just main: a stacked PR (one whose base is another
+  # feature branch) still needs the test job. publish and prerelease stay
+  # gated to non-PR / non-draft events, so this cannot publish from a PR.
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
