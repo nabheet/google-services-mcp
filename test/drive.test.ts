@@ -350,6 +350,32 @@ describe("exportDriveFile", () => {
     expect(result.binary).toBe(true);
     expect(Buffer.from(result.data, "base64").toString()).toBe("%PDF-1.4 fake");
   });
+
+  it("writes exported bytes to saveToPath instead of returning base64", async () => {
+    mockFiles.export.mockResolvedValue({ data: new Blob([Buffer.from("%PDF-1.4 fake")]) });
+    const result = await exportDriveFile(client, {
+      fileId: "f1",
+      mimeType: "application/pdf",
+      saveToPath: "/tmp/out.pdf",
+    });
+    expect(mockFiles.export).toHaveBeenCalledWith({
+      fileId: "f1",
+      mimeType: "application/pdf",
+    });
+    expect(mockFs.writeFile).toHaveBeenCalledWith("/tmp/out.pdf", Buffer.from("%PDF-1.4 fake"));
+    expect(result).toEqual({ savedTo: "/tmp/out.pdf" });
+  });
+
+  it("writes text exports to saveToPath", async () => {
+    mockFiles.export.mockResolvedValue({ data: "plain export" });
+    const result = await exportDriveFile(client, {
+      fileId: "f1",
+      mimeType: "text/plain",
+      saveToPath: "/tmp/out.txt",
+    });
+    expect(mockFs.writeFile).toHaveBeenCalledWith("/tmp/out.txt", "plain export");
+    expect(result).toEqual({ savedTo: "/tmp/out.txt" });
+  });
 });
 
 describe("createDriveFolder", () => {

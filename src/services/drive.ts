@@ -116,6 +116,17 @@ async function mapDownload(res: { data: unknown }): Promise<DownloadDriveResult>
   return { data: bytes, binary: false };
 }
 
+async function saveOrMap(
+  res: { data: unknown },
+  saveToPath: string | undefined,
+): Promise<DownloadDriveResult | { savedTo: string }> {
+  if (saveToPath !== undefined) {
+    await writeFile(saveToPath, await responseToBytes(res.data));
+    return { savedTo: saveToPath };
+  }
+  return mapDownload(res);
+}
+
 /** List files, optionally filtered by a Drive query (e.g. "'<folderId>' in parents"). */
 export async function listDriveFiles(
   client: Auth.OAuth2Client,
@@ -305,21 +316,17 @@ export async function downloadDriveFile(
 ): Promise<DownloadDriveResult | { savedTo: string }> {
   const drive = google.drive({ version: "v3", auth: client });
   const res = await drive.files.get({ fileId: opts.fileId, alt: "media" });
-  if (opts.saveToPath !== undefined) {
-    await writeFile(opts.saveToPath, await responseToBytes(res.data));
-    return { savedTo: opts.saveToPath };
-  }
-  return mapDownload(res);
+  return saveOrMap(res, opts.saveToPath);
 }
 
 /** Export a Google-native file (Docs/Sheets/Slides) to another format. */
 export async function exportDriveFile(
   client: Auth.OAuth2Client,
-  opts: GetDriveOptions & { mimeType: string },
-): Promise<DownloadDriveResult> {
+  opts: DownloadDriveOptions & { mimeType: string },
+): Promise<DownloadDriveResult | { savedTo: string }> {
   const drive = google.drive({ version: "v3", auth: client });
   const res = await drive.files.export({ fileId: opts.fileId, mimeType: opts.mimeType });
-  return mapDownload(res);
+  return saveOrMap(res, opts.saveToPath);
 }
 
 /** Create a folder. */
