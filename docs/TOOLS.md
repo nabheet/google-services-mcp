@@ -4,6 +4,11 @@ All tools are prefixed `google_` to avoid collisions with client-native tools.
 Every tool that talks to a Google service accepts an optional `account`
 argument (nickname) — when omitted, the default account is used.
 
+Account nicknames are stored normalized: lowercased, with every character
+other than letters, digits, `_` and `-` replaced by `_`. `Work Account` and
+`work_account` are the same account, and any spelling that normalizes to it
+works in tool calls.
+
 ## Local file I/O
 
 Tools that touch the local filesystem share one pair of arg names.
