@@ -612,15 +612,12 @@ export interface GmailAttachmentInfo {
 }
 
 export interface GmailAttachmentData extends GmailAttachmentInfo {
-  /** Base64url-encoded raw bytes. */
-  dataBase64: string;
-  /** Decoded text when the MIME type is text-like. */
+  /** Base64url-encoded raw bytes (absent when saved to `savedTo`). */
+  dataBase64?: string;
+  /** Decoded text when the MIME type is text-like (absent when saved to disk). */
   text?: string;
-}
-
-export interface GmailAttachmentSaved extends GmailAttachmentInfo {
-  /** Local path the raw bytes were written to. */
-  savedTo: string;
+  /** Local path the raw bytes were written to, when `saveToPath` was given. */
+  savedTo?: string;
 }
 
 /** Walk a Gmail payload tree collecting attachment parts. */
@@ -668,7 +665,7 @@ export async function listGmailAttachments(
 export async function getGmailAttachment(
   client: Auth.OAuth2Client,
   opts: GetGmailOptions & { attachmentId: string; partId?: string; saveToPath?: string },
-): Promise<GmailAttachmentData | GmailAttachmentSaved> {
+): Promise<GmailAttachmentData> {
   const gmail = google.gmail({ version: "v1", auth: client });
   const msg = (await gmail.users.messages.get({ userId: "me", id: opts.id, format: "full" })).data;
   const atts = collectAttachments(msg.payload);
