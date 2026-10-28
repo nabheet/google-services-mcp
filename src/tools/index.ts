@@ -541,7 +541,9 @@ export function registerTools(server: McpServer): void {
         saveToPath: z
           .string()
           .optional()
-          .describe("Local path to write the raw bytes to (returns { savedTo } instead of data)."),
+          .describe(
+            'Local path to write the raw bytes to (returns savedTo and kind "saved" instead of an inline payload).',
+          ),
         maxBytes: z
           .number()
           .int()

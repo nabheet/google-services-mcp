@@ -14,8 +14,8 @@ Tools that touch the local filesystem share one pair of arg names.
 | write bytes to a local file | `saveToPath` | `{ savedTo }` in place of the inline payload |
 
 With `saveToPath` the raw bytes are written to that path and the inline payload
-(`data`, `dataBase64`, `text`) is omitted; the result carries `savedTo` alongside
-the tool's metadata.
+(`dataBase64`, `text`) is omitted; the result carries `savedTo` and `kind:
+"saved"` alongside the tool's metadata.
 
 | tool | reads `path` | writes `saveToPath` |
 | --- | --- | --- |

@@ -721,6 +721,7 @@ describe("getGmailAttachment", () => {
     });
     const result = await getGmailAttachment(client, { id: "m1", attachmentId: "ATTL1" });
     // Decoding would mangle 0xe9 into U+FFFD; return the exact bytes instead.
+    expect(result.kind).toBe("base64");
     expect(result.text).toBeUndefined();
     expect(result.dataBase64).toBe(bytes.toString("base64url"));
   });
@@ -1017,6 +1018,7 @@ describe("getGmailAttachment", () => {
       attachmentId: "SM",
       maxBytes: 1024,
     });
+    expect(result.kind).toBe("base64");
     expect(result.dataBase64).toBe(Buffer.from("abcd").toString("base64url"));
     expect(result.savedTo).toBeUndefined();
   });
