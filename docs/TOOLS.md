@@ -14,9 +14,9 @@ Tools that touch the local filesystem share one pair of arg names.
 | write bytes to a local file | `saveToPath` | `{ savedTo }` in place of the inline payload |
 
 With `saveToPath` the raw bytes are written to that path and the inline payload
-(`data`, `dataBase64`, `text`) is omitted; the result carries `savedTo` alongside
-the tool's metadata. Missing parent directories are created recursively, so a
-path under a directory that does not exist yet still works.
+(`dataBase64`, `text`) is omitted; the result carries `savedTo` and `kind:
+"saved"` alongside the tool's metadata. Missing parent directories are created
+recursively, so a path under a directory that does not exist yet still works.
 
 Writes are confined to a save root: `GOOGLE_MCP_SAVE_ROOT` when set, otherwise
 `~/Downloads`. A path outside it is refused before any Google API call, and so
@@ -162,11 +162,20 @@ List attachments on a message (metadata only, no bytes).
 
 ### `google_gmail_get_attachment`
 
-Download a single attachment by message ID and attachment ID. Text-like files
-are returned decoded as text; binary files as base64. Attachments over 6 MB are
+Download a single attachment by message ID and attachment ID. The result always
+carries a `kind` discriminating which payload it holds:
+
+| `kind` | payload | when |
+| --- | --- | --- |
+| `text` | `text` | text-like MIME type that decodes as UTF-8 |
+| `base64` | `dataBase64` | binary MIME type, or text that is not valid UTF-8 |
+| `saved` | `savedTo` | `saveToPath` was passed; bytes are on disk |
+
+Text that is not valid UTF-8 (Latin-1, UTF-16) comes back as `base64` rather
+than being mangled into replacement characters. Attachments over 6 MB are
 rejected inline — pass `saveToPath` to write the raw bytes to a local file
-instead (returns `{ savedTo }`). The path must be inside the save root
-(`GOOGLE_MCP_SAVE_ROOT`, default `~/Downloads`).
+instead. The path must be inside the save root (`GOOGLE_MCP_SAVE_ROOT`, default
+`~/Downloads`).
 
 | arg | type | notes |
 | --- | --- | --- |
