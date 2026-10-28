@@ -623,8 +623,14 @@ export interface GmailAttachmentData extends GmailAttachmentInfo {
 }
 
 /** Inline attachment payload cap. Larger attachments must be saved to disk. */
-export const DEFAULT_GMAIL_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024;
+export const DEFAULT_GMAIL_ATTACHMENT_MAX_BYTES = 6 * 1024 * 1024;
 
+function overCapError(filename: string, size: number, maxBytes: number): Error {
+  return new Error(
+    `Attachment "${filename}" is ${size} bytes, over the ${maxBytes}-byte inline limit. ` +
+      "Pass saveToPath (or savePath) to write it to disk instead.",
+  );
+}
 /** Walk a Gmail payload tree collecting attachment parts. */
 function collectAttachments(
   payload: gmail_v1.Schema$MessagePart | null | undefined,
@@ -676,11 +682,11 @@ export async function getGmailAttachment(
     saveToPath?: string;
     /** Alias of `saveToPath`. */
     savePath?: string;
-    /** Inline payload cap in raw bytes (default 8 MB). Ignored when saving to disk. */
+    /** Inline payload cap in raw bytes (default 6 MB). Ignored when saving to disk. */
     maxBytes?: number;
   },
 ): Promise<GmailAttachmentData> {
-  const savePath = opts.saveToPath ?? opts.savePath;
+  const savePath = opts.saveToPath || opts.savePath;
   const maxBytes = opts.maxBytes ?? DEFAULT_GMAIL_ATTACHMENT_MAX_BYTES;
   const gmail = google.gmail({ version: "v1", auth: client });
   const msg = (await gmail.users.messages.get({ userId: "me", id: opts.id, format: "full" })).data;
@@ -693,10 +699,7 @@ export async function getGmailAttachment(
     atts.find((a) => a.id === opts.attachmentId);
   const filename = part?.filename ?? "attachment";
   if (savePath === undefined && part?.size !== undefined && part.size > maxBytes) {
-    throw new Error(
-      `Attachment "${filename}" is ${part.size} bytes, over the ${maxBytes}-byte inline limit. ` +
-        "Pass saveToPath (or savePath) to write it to disk instead.",
-    );
+    throw overCapError(filename, part.size, maxBytes);
   }
   // Always download with the FRESH attachmentId from this fetch (stale IDs
   // also work for the bytes call, but the fresh one is guaranteed valid).
@@ -707,6 +710,12 @@ export async function getGmailAttachment(
     id: attachmentId,
   });
   const dataBase64 = (res.data.data ?? "") as string;
+  const bytes = Buffer.from(dataBase64, "base64url");
+  // The pre-download gate needs part.size; fall back to the decoded length,
+  // which also covers a part that did not match metadata.
+  if (savePath === undefined && bytes.length > maxBytes) {
+    throw overCapError(filename, bytes.length, maxBytes);
+  }
   const mimeType = part?.mimeType ?? "application/octet-stream";
   const info: GmailAttachmentInfo = {
     id: attachmentId,
@@ -717,7 +726,7 @@ export async function getGmailAttachment(
   };
   if (savePath !== undefined) {
     await mkdir(dirname(savePath), { recursive: true });
-    await writeFile(savePath, Buffer.from(dataBase64, "base64url"));
+    await writeFile(savePath, bytes);
     return { ...info, savedTo: savePath, savedPath: savePath };
   }
   const out: GmailAttachmentData = { ...info, dataBase64 };

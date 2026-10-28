@@ -7,7 +7,7 @@ import { createServer } from "./server.js";
 // crash the process with an unhandled 'error' event.
 process.stdout.on("error", (error: NodeJS.ErrnoException) => {
   process.stderr.write(`stdout error (${error.code ?? "unknown"}); exiting\n`);
-  process.exit(0);
+  process.exit(error.code === "EPIPE" ? 0 : 1);
 });
 
 async function main(): Promise<void> {

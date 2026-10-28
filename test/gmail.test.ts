@@ -914,9 +914,32 @@ describe("getGmailAttachment", () => {
       },
     });
     await expect(getGmailAttachment(client, { id: "m1", attachmentId: "BIG" })).rejects.toThrow(
-      /doc\.pdf.*18000000 bytes.*8388608.*saveToPath/s,
+      /doc\.pdf.*18000000 bytes.*6291456.*saveToPath/s,
     );
     expect(mockMessages.attachments.get).not.toHaveBeenCalled();
+  });
+
+  it("rejects an over-cap attachment whose metadata size is missing", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "1",
+              filename: "doc.pdf",
+              mimeType: "application/pdf",
+              body: { attachmentId: "BIG" },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: Buffer.alloc(10).toString("base64url") },
+    });
+    await expect(
+      getGmailAttachment(client, { id: "m1", attachmentId: "BIG", maxBytes: 8 }),
+    ).rejects.toThrow(/doc\.pdf.*10 bytes.*8-byte inline limit/s);
   });
 
   it("returns bytes when maxBytes is above the attachment size", async () => {

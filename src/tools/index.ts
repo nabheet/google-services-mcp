@@ -528,7 +528,7 @@ export function registerTools(server: McpServer): void {
     {
       title: "Get email attachment",
       description:
-        "Download a single attachment by message ID and attachment ID. Text-like files are returned decoded as text; binary files as base64. Attachments over 8 MB are rejected unless saved to disk — pass saveToPath (or savePath) to write the raw bytes to a local file instead.",
+        "Download a single attachment by message ID and attachment ID. Text-like files are returned decoded as text; binary files as base64. Attachments over 6 MB are rejected unless saved to disk — pass saveToPath (or savePath) to write the raw bytes to a local file instead.",
       inputSchema: {
         id: z.string().describe("Message ID."),
         attachmentId: z.string().describe("Attachment ID (from list_attachments)."),
