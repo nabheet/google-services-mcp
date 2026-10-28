@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -693,6 +693,56 @@ describe("getGmailAttachment", () => {
       size: 5,
       text: "# Hi",
     });
+    // Text-like attachments must not also carry the base64 payload — emitting
+    // both nearly doubles the frame for a single file (the size cap counts raw
+    // bytes only).
+    expect(result).not.toHaveProperty("dataBase64");
+  });
+
+  it("falls back to base64 when a text attachment is not valid UTF-8", async () => {
+    const bytes = Buffer.from([0x63, 0x61, 0x66, 0xe9]); // "café" in Latin-1, not UTF-8
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "0.1",
+              filename: "menu.txt",
+              mimeType: "text/plain",
+              body: { attachmentId: "ATTL1", size: 4 },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: bytes.toString("base64url"), size: 4 },
+    });
+    const result = await getGmailAttachment(client, { id: "m1", attachmentId: "ATTL1" });
+    // Decoding would mangle 0xe9 into U+FFFD; return the exact bytes instead.
+    expect(result.text).toBeUndefined();
+    expect(result.dataBase64).toBe(bytes.toString("base64url"));
+  });
+
+  it("rejects a text attachment over the cap before downloading it", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "1",
+              filename: "big.txt",
+              mimeType: "text/plain",
+              body: { attachmentId: "BIGTXT", size: 18_000_000 },
+            },
+          ],
+        },
+      },
+    });
+    await expect(getGmailAttachment(client, { id: "m1", attachmentId: "BIGTXT" })).rejects.toThrow(
+      /big\.txt.*18000000 bytes.*6291456.*saveToPath/s,
+    );
+    expect(mockMessages.attachments.get).not.toHaveBeenCalled();
   });
 
   it("returns base64 only for binary mime types", async () => {
@@ -779,6 +829,231 @@ describe("getGmailAttachment", () => {
       id: "ATT1",
     });
     expect(result).toMatchObject({ filename: "old.md", mimeType: "text/markdown", text: "old" });
+  });
+
+  it("writes raw bytes to saveToPath instead of returning base64", async () => {
+    const bytes = Buffer.from([0x25, 0x50, 0x44, 0x46]);
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "0.1",
+              filename: "invoice.pdf",
+              mimeType: "application/pdf",
+              body: { attachmentId: "ATT7", size: 4 },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: bytes.toString("base64url"), size: 4 },
+    });
+    const saveToPath = join(tmpDir, "invoice.pdf");
+    const result = await getGmailAttachment(client, {
+      id: "m1",
+      attachmentId: "ATT7",
+      saveToPath,
+    });
+    expect(readFileSync(saveToPath)).toEqual(bytes);
+    expect(result).toEqual({
+      id: "ATT7",
+      partId: "0.1",
+      filename: "invoice.pdf",
+      mimeType: "application/pdf",
+      size: 4,
+      savedTo: saveToPath,
+    });
+  });
+
+  it("omits text when saving a text-like attachment to disk", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "0.1",
+              filename: "notes.md",
+              mimeType: "text/markdown",
+              body: { attachmentId: "ATT8", size: 4 },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: Buffer.from("# Hi").toString("base64url"), size: 4 },
+    });
+    const saveToPath = join(tmpDir, "notes.md");
+    const result = await getGmailAttachment(client, {
+      id: "m1",
+      attachmentId: "ATT8",
+      saveToPath,
+    });
+    expect(readFileSync(saveToPath, "utf8")).toBe("# Hi");
+    expect(result).not.toHaveProperty("text");
+    expect(result).not.toHaveProperty("dataBase64");
+  });
+
+  it("decodes base64url payloads that use the URL-safe alphabet", async () => {
+    const bytes = Buffer.from([0xfb, 0xff, 0xbf]);
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "0.1",
+              filename: "blob.bin",
+              mimeType: "application/octet-stream",
+              body: { attachmentId: "ATT9", size: 3 },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: bytes.toString("base64url"), size: 3 },
+    });
+    const saveToPath = join(tmpDir, "blob.bin");
+    await getGmailAttachment(client, { id: "m1", attachmentId: "ATT9", saveToPath });
+    expect(readFileSync(saveToPath)).toEqual(bytes);
+  });
+
+  it("rejects when the save path cannot be written", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "0.1",
+              filename: "x.pdf",
+              mimeType: "application/pdf",
+              body: { attachmentId: "ATT10", size: 1 },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({ data: { data: "AA==", size: 1 } });
+    const blocker = join(tmpDir, "not-a-dir");
+    writeFileSync(blocker, "x");
+    await expect(
+      getGmailAttachment(client, {
+        id: "m1",
+        attachmentId: "ATT10",
+        saveToPath: join(blocker, "x.pdf"),
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects an over-cap attachment before downloading it", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "1",
+              filename: "doc.pdf",
+              mimeType: "application/pdf",
+              body: { attachmentId: "BIG", size: 18_000_000 },
+            },
+          ],
+        },
+      },
+    });
+    await expect(getGmailAttachment(client, { id: "m1", attachmentId: "BIG" })).rejects.toThrow(
+      /doc\.pdf.*18000000 bytes.*6291456.*saveToPath/s,
+    );
+    expect(mockMessages.attachments.get).not.toHaveBeenCalled();
+  });
+
+  it("rejects an over-cap attachment whose metadata size is missing", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "1",
+              filename: "doc.pdf",
+              mimeType: "application/pdf",
+              body: { attachmentId: "BIG" },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: Buffer.alloc(10).toString("base64url") },
+    });
+    await expect(
+      getGmailAttachment(client, { id: "m1", attachmentId: "BIG", maxBytes: 8 }),
+    ).rejects.toThrow(/doc\.pdf.*10 bytes.*8-byte inline limit/s);
+  });
+
+  it("returns bytes when maxBytes is above the attachment size", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "1",
+              filename: "small.bin",
+              mimeType: "application/octet-stream",
+              body: { attachmentId: "SM", size: 4 },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: Buffer.from("abcd").toString("base64url"), size: 4 },
+    });
+    const result = await getGmailAttachment(client, {
+      id: "m1",
+      attachmentId: "SM",
+      maxBytes: 1024,
+    });
+    expect(result.dataBase64).toBe(Buffer.from("abcd").toString("base64url"));
+    expect(result.savedTo).toBeUndefined();
+  });
+
+  it("writes to saveToPath, creating missing parent directories", async () => {
+    const bytes = Buffer.from("%PDF-1.4");
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "1",
+              filename: "big.pdf",
+              mimeType: "application/pdf",
+              body: { attachmentId: "BIG2", size: 18_000_000 },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: bytes.toString("base64url"), size: bytes.length },
+    });
+    const saveToPath = join(tmpDir, "nested", "deeper", "big.pdf");
+    const result = await getGmailAttachment(client, {
+      id: "m1",
+      attachmentId: "BIG2",
+      saveToPath,
+    });
+    expect(readFileSync(saveToPath)).toEqual(bytes);
+    expect(result).toEqual({
+      id: "BIG2",
+      partId: "1",
+      filename: "big.pdf",
+      mimeType: "application/pdf",
+      size: 18_000_000,
+      savedTo: saveToPath,
+    });
+    expect(result).not.toHaveProperty("dataBase64");
+    expect(result).not.toHaveProperty("text");
   });
 });
 

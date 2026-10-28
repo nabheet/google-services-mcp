@@ -528,7 +528,7 @@ export function registerTools(server: McpServer): void {
     {
       title: "Get email attachment",
       description:
-        "Download a single attachment by message ID and attachment ID. Text-like files are returned decoded as text; binary files as base64.",
+        "Download a single attachment by message ID and attachment ID. Text-like files are returned decoded as text; binary files as base64. Attachments over 6 MB are rejected unless saved to disk — pass saveToPath to write the raw bytes to a local file instead.",
       inputSchema: {
         id: z.string().describe("Message ID."),
         attachmentId: z.string().describe("Attachment ID (from list_attachments)."),
@@ -538,11 +538,23 @@ export function registerTools(server: McpServer): void {
           .describe(
             "Stable part ID (from list_attachments); preferred over attachmentId for lookup.",
           ),
+        saveToPath: z
+          .string()
+          .optional()
+          .describe("Local path to write the raw bytes to (returns { savedTo } instead of data)."),
+        maxBytes: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Inline payload cap in raw bytes (default 6 MB). Ignored when saving to disk."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ id, attachmentId, partId, account }) =>
-      withClient(account, (client) => getGmailAttachment(client, { id, attachmentId, partId })),
+    async ({ id, attachmentId, partId, saveToPath, maxBytes, account }) =>
+      withClient(account, (client) =>
+        getGmailAttachment(client, { id, attachmentId, partId, saveToPath, maxBytes }),
+      ),
   );
 
   server.registerTool(
@@ -1674,15 +1686,21 @@ export function registerTools(server: McpServer): void {
     {
       title: "Export Drive file",
       description:
-        "Export a Google-native file (Docs/Sheets/Slides/Drawings) to another format (e.g. application/pdf, text/plain, application/vnd.openxmlformats-officedocument.wordprocessingml.document).",
+        "Export a Google-native file (Docs/Sheets/Slides/Drawings) to another format (e.g. application/pdf, text/plain, application/vnd.openxmlformats-officedocument.wordprocessingml.document). Pass saveToPath to write the exported bytes to a local file instead.",
       inputSchema: {
         fileId: z.string().describe("Drive file ID."),
         mimeType: z.string().describe("Target MIME type (e.g. application/pdf)."),
+        saveToPath: z
+          .string()
+          .optional()
+          .describe(
+            "Local path to write the exported bytes to (returns { savedTo } instead of data).",
+          ),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ fileId, mimeType, account }) =>
-      withClient(account, (client) => exportDriveFile(client, { fileId, mimeType })),
+    async ({ fileId, mimeType, saveToPath, account }) =>
+      withClient(account, (client) => exportDriveFile(client, { fileId, mimeType, saveToPath })),
   );
 
   server.registerTool(

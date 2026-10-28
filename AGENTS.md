@@ -131,9 +131,12 @@ All publishing happens from GitHub Actions via npm **trusted publishing**
 - `.github/workflows/ci.yml` — the single workflow file (npm allows ONE
   trusted publisher per package; workflow filename must match):
   - `test` job: typecheck/test/build on `main` + PRs (Node 24)
-  - push to `main` → `publish` job auto-publishes next patch to `latest` +
-    creates `vX.Y.Z` tag + GitHub release (version derived from last published
-    `latest`; intentional minor/major bumps in package.json are honored)
+  - push to `main` that changed shipping files → `publish` job auto-publishes
+    next patch to `latest` + creates `vX.Y.Z` tag + GitHub release (version
+    derived from last published `latest`; intentional minor/major bumps in
+    package.json are honored). The first step of that job diffs `before..sha`;
+    pushes that only touch `.github/*`, `package-lock.json`, the version field
+    or an inert devDependency publish nothing
   - tag `v*-beta*` → `publish` job publishes `beta` + prerelease GitHub release
   - every PR push → `prerelease` job publishes `<version>-beta.<run_number>`
     to the `beta` dist-tag (`npm i google-services-mcp@beta`), so every PR is
