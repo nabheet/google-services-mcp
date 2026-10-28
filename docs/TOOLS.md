@@ -454,6 +454,10 @@ optional (`summary`, `description`, `location`, `start`, `end`, `attendees`,
 `timeZone`, `recurrence`, `reminderMethod`, `reminderMinutes`,
 `remindersUseDefault`, `sendUpdates`, `transparency`, `colorId`, `calendarId`).
 
+`start` and `end` may be changed one at a time: a lone side is completed from
+the stored event, keeping the current duration. Converting between an all-day
+event and a timed one needs both sides in the same call.
+
 ### `google_calendar_delete_event`
 
 Delete an event by ID. Args: `eventId` (required), `calendarId` (optional).
@@ -474,7 +478,9 @@ responseStatus.
 ### `google_calendar_free_busy`
 
 Query busy intervals across calendars to find free meeting windows. Everything
-outside the returned busy intervals is free.
+outside the returned busy intervals is free, unless that calendar reports an
+error: a calendar that could not be read comes back with `errors` alongside an
+empty `busy` list, so an unreadable calendar is never mistaken for a free one.
 
 | arg | type | notes |
 | --- | --- | --- |

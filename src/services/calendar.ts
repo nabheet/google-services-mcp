@@ -80,7 +80,8 @@ export interface FreeBusyInterval {
 export interface FreeBusyResult {
   timeMin?: string;
   timeMax?: string;
-  calendars: Record<string, { busy: FreeBusyInterval[] }>;
+  /** Per calendar; `errors` is present when the calendar could not be read. */
+  calendars: Record<string, { busy: FreeBusyInterval[]; errors?: string[] }>;
 }
 
 export type ResponseStatus = "accepted" | "declined" | "tentative";
@@ -141,6 +142,81 @@ export interface EventSummary {
 
 function isAllDay(dt: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(dt);
+}
+
+const OFFSET_SUFFIX = /(?:Z|[+-]\d{2}:\d{2})$/;
+
+/** Move an RFC3339 datetime by `deltaMs`, keeping the offset the caller used. */
+function shiftDateTime(dt: string, deltaMs: number): string {
+  const target = Date.parse(dt) + deltaMs;
+  const offset = OFFSET_SUFFIX.exec(dt)?.[0];
+  if (offset === undefined || offset === "Z") return new Date(target).toISOString();
+  const sign = offset.startsWith("-") ? -1 : 1;
+  const [hours, minutes] = offset.slice(1).split(":").map(Number) as [number, number];
+  const local = new Date(target + sign * (hours * 60 + minutes) * 60_000)
+    .toISOString()
+    .slice(0, 19);
+  return `${local}${offset}`;
+}
+
+/** Move an all-day date by `deltaMs`, counting whole days. */
+function shiftDate(date: string, deltaMs: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + deltaMs).toISOString().slice(0, 10);
+}
+
+function storedBound(value: calendar_v3.Schema$EventDateTime | undefined): string | undefined {
+  return value?.dateTime ?? value?.date ?? undefined;
+}
+
+/**
+ * Resolve both ends of an update's time range. A lone `start` or `end` is
+ * filled in from the stored event, keeping the existing duration, because the
+ * update schema marks both sides optional and a one-sided patch would
+ * otherwise be dropped silently.
+ */
+async function resolveTimeRange(
+  calendar: calendar_v3.Calendar,
+  calendarId: string,
+  opts: UpdateEventOptions,
+): Promise<{ start: string; end: string } | undefined> {
+  if (opts.start !== undefined && opts.end !== undefined) {
+    return { start: opts.start, end: opts.end };
+  }
+  if (opts.start === undefined && opts.end === undefined) return undefined;
+
+  const current = await calendar.events.get({ calendarId, eventId: opts.eventId });
+  const storedStart = storedBound(current.data.start);
+  const storedEnd = storedBound(current.data.end);
+  if (storedStart === undefined || storedEnd === undefined) {
+    throw new Error(
+      "Cannot change only one side of the time range: the existing event has no time range. Pass both start and end.",
+    );
+  }
+
+  const given = (opts.start ?? opts.end) as string;
+  if (isAllDay(given) !== isAllDay(storedStart) || isAllDay(given) !== isAllDay(storedEnd)) {
+    throw new Error(
+      "Cannot mix an all-day date with a timed event in one update. Pass both start and end to convert the event.",
+    );
+  }
+
+  const duration = Date.parse(storedEnd) - Date.parse(storedStart);
+  if (!(duration > 0)) {
+    throw new Error(
+      "Cannot change only one side of the time range: the existing event ends before it starts. Pass both start and end.",
+    );
+  }
+
+  const allDay = isAllDay(given);
+  const shift = allDay
+    ? (value: string, delta: number) => shiftDate(value, delta)
+    : (value: string, delta: number) => shiftDateTime(value, delta);
+
+  if (opts.start !== undefined) {
+    return { start: opts.start, end: shift(opts.start, duration) };
+  }
+  const end = opts.end as string;
+  return { start: shift(end, -duration), end };
 }
 
 function buildStartEnd(start: string, end: string, timeZone?: string) {
@@ -344,9 +420,15 @@ export async function queryFreeBusy(
   });
   const calendars: FreeBusyResult["calendars"] = {};
   for (const [id, info] of Object.entries(res.data.calendars ?? {})) {
+    const errors = (info.errors ?? []).map((e) => e.reason ?? "unknownError");
     calendars[id] = {
       busy: (info.busy ?? []).map((b) => ({ start: b.start ?? "", end: b.end ?? "" })),
+      ...(errors.length > 0 ? { errors } : {}),
     };
+  }
+  // A requested calendar absent from the response is a failure, not a free one.
+  for (const id of opts.items ?? ["primary"]) {
+    calendars[id] ??= { busy: [], errors: ["calendar missing from the free/busy response"] };
   }
   return {
     timeMin: res.data.timeMin as string | undefined,
@@ -380,9 +462,13 @@ export async function updateEvent(
   if (opts.location !== undefined) requestBody.location = opts.location;
   if (opts.attendees !== undefined)
     requestBody.attendees = opts.attendees.map((email) => ({ email }));
-  if (opts.start !== undefined && opts.end !== undefined) {
-    assertRecurringTimeZone(opts.recurrence, opts.start, opts.end, opts.timeZone);
-    Object.assign(requestBody, buildStartEnd(opts.start, opts.end, opts.timeZone));
+  const range = await resolveTimeRange(calendar, opts.calendarId ?? "primary", opts);
+  if (range !== undefined) {
+    if (Date.parse(range.end) <= Date.parse(range.start)) {
+      throw new Error("Event end must not be before start.");
+    }
+    assertRecurringTimeZone(opts.recurrence, range.start, range.end, opts.timeZone);
+    Object.assign(requestBody, buildStartEnd(range.start, range.end, opts.timeZone));
   }
   if (opts.recurrence !== undefined) requestBody.recurrence = opts.recurrence;
   const reminders = buildReminders(opts);
@@ -422,10 +508,11 @@ export async function respondToEvent(
   const calendar = google.calendar({ version: "v3", auth: client });
   const calendarId = opts.calendarId ?? "primary";
   const current = await calendar.events.get({ calendarId, eventId: opts.eventId });
+  const wanted = opts.email.toLowerCase();
   const attendees: calendar_v3.Schema$EventAttendee[] = (current.data.attendees ?? []).map((a) =>
-    a.email === opts.email ? { ...a, responseStatus: opts.responseStatus } : a,
+    a.email?.toLowerCase() === wanted ? { ...a, responseStatus: opts.responseStatus } : a,
   );
-  if (!attendees.some((a) => a.email === opts.email)) {
+  if (!attendees.some((a) => a.email?.toLowerCase() === wanted)) {
     attendees.push({ email: opts.email, responseStatus: opts.responseStatus });
   }
   const res = await calendar.events.patch({

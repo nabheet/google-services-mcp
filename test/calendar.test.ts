@@ -513,3 +513,154 @@ describe("queryFreeBusy", () => {
     });
   });
 });
+
+describe("updateEvent with one side of the time range", () => {
+  it("keeps the duration when only start is given", async () => {
+    mockEvents.get.mockResolvedValue({
+      data: {
+        id: "e1",
+        start: { dateTime: "2026-08-17T09:00:00-07:00" },
+        end: { dateTime: "2026-08-17T10:00:00-07:00" },
+      },
+    });
+    mockEvents.patch.mockResolvedValue({ data: { id: "e1" } });
+
+    await updateEvent(client, {
+      calendarId: "primary",
+      eventId: "e1",
+      start: "2026-08-18T14:00:00-07:00",
+    });
+
+    expect(mockEvents.get).toHaveBeenCalledWith({ calendarId: "primary", eventId: "e1" });
+    expect(mockEvents.patch).toHaveBeenCalledWith({
+      calendarId: "primary",
+      eventId: "e1",
+      requestBody: {
+        start: { dateTime: "2026-08-18T14:00:00-07:00" },
+        end: { dateTime: "2026-08-18T15:00:00-07:00" },
+      },
+    });
+  });
+
+  it("keeps the duration when only end is given", async () => {
+    mockEvents.get.mockResolvedValue({
+      data: {
+        id: "e1",
+        start: { dateTime: "2026-08-17T09:00:00-07:00" },
+        end: { dateTime: "2026-08-17T10:00:00-07:00" },
+      },
+    });
+    mockEvents.patch.mockResolvedValue({ data: { id: "e1" } });
+
+    await updateEvent(client, { eventId: "e1", end: "2026-08-18T16:00:00-07:00" });
+
+    expect(mockEvents.patch).toHaveBeenCalledWith({
+      calendarId: "primary",
+      eventId: "e1",
+      requestBody: {
+        start: { dateTime: "2026-08-18T15:00:00-07:00" },
+        end: { dateTime: "2026-08-18T16:00:00-07:00" },
+      },
+    });
+  });
+
+  it("keeps the day span when only start of an all-day event is given", async () => {
+    mockEvents.get.mockResolvedValue({
+      data: { id: "e1", start: { date: "2026-08-17" }, end: { date: "2026-08-18" } },
+    });
+    mockEvents.patch.mockResolvedValue({ data: { id: "e1" } });
+
+    await updateEvent(client, { eventId: "e1", start: "2026-08-20" });
+
+    expect(mockEvents.patch).toHaveBeenCalledWith({
+      calendarId: "primary",
+      eventId: "e1",
+      requestBody: { start: { date: "2026-08-20" }, end: { date: "2026-08-21" } },
+    });
+  });
+
+  it("rejects mixing an all-day date with a timed event", async () => {
+    mockEvents.get.mockResolvedValue({
+      data: {
+        id: "e1",
+        start: { dateTime: "2026-08-17T09:00:00-07:00" },
+        end: { dateTime: "2026-08-17T10:00:00-07:00" },
+      },
+    });
+
+    await expect(updateEvent(client, { eventId: "e1", start: "2026-08-18" })).rejects.toThrow(
+      /all-day/,
+    );
+    expect(mockEvents.patch).not.toHaveBeenCalled();
+  });
+
+  it("rejects a lone time change when the stored event has no time range", async () => {
+    mockEvents.get.mockResolvedValue({ data: { id: "e1" } });
+
+    await expect(
+      updateEvent(client, { eventId: "e1", start: "2026-08-18T14:00:00-07:00" }),
+    ).rejects.toThrow(/no time range/);
+    expect(mockEvents.patch).not.toHaveBeenCalled();
+  });
+
+  it("still patches both sides without reading the event first", async () => {
+    mockEvents.patch.mockResolvedValue({ data: { id: "e1" } });
+
+    await updateEvent(client, {
+      eventId: "e1",
+      start: "2026-08-18T14:00:00-07:00",
+      end: "2026-08-18T15:00:00-07:00",
+    });
+
+    expect(mockEvents.get).not.toHaveBeenCalled();
+  });
+});
+
+describe("queryFreeBusy errors", () => {
+  it("reports a failed calendar instead of returning it as free", async () => {
+    mockFreeBusy.query.mockResolvedValue({
+      data: {
+        calendars: {
+          primary: { busy: [] },
+          "private@example.com": { busy: [], errors: [{ domain: "global", reason: "notFound" }] },
+        },
+      },
+    });
+
+    const result = await queryFreeBusy(client, {
+      timeMin: "t0",
+      timeMax: "t1",
+      items: ["primary", "private@example.com", "missing@example.com"],
+    });
+
+    expect(result.calendars.primary).toEqual({ busy: [] });
+    expect(result.calendars["private@example.com"]).toEqual({ busy: [], errors: ["notFound"] });
+    expect(result.calendars["missing@example.com"]?.errors).toHaveLength(1);
+  });
+});
+
+describe("respondToEvent email matching", () => {
+  it("matches the attendee email case-insensitively", async () => {
+    mockEvents.get.mockResolvedValue({
+      data: {
+        id: "e1",
+        attendees: [{ email: "Me@Example.com", responseStatus: "needsAction" }],
+      },
+    });
+    mockEvents.patch.mockResolvedValue({ data: { id: "e1" } });
+
+    await respondToEvent(client, {
+      eventId: "e1",
+      email: "me@example.com",
+      responseStatus: "accepted",
+    });
+
+    expect(mockEvents.patch).toHaveBeenCalledWith({
+      calendarId: "primary",
+      eventId: "e1",
+      requestBody: {
+        attendees: [{ email: "Me@Example.com", responseStatus: "accepted" }],
+      },
+    });
+  });
+});
