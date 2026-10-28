@@ -640,16 +640,31 @@ function overCapError(filename: string, size: number, maxBytes: number): Error {
 }
 
 /**
- * Bytes the value costs once embedded in the JSON-RPC frame: JSON escaping
- * (a NUL byte becomes `\u0000`, six characters) plus the surrounding quotes.
+ * Bytes the client receives for a result, measured the way it is actually sent:
+ * the tool puts `JSON.stringify(result, null, 2)` into `content[0].text`
+ * (util/result.ts), then the transport stringifies that envelope again — so the
+ * payload is escaped twice. A NUL byte costs 7 bytes here, not 1 or 6.
  */
-function frameBytes(value: string): number {
-  return Buffer.byteLength(JSON.stringify(value));
+function inlineFrameBytes(result: GmailAttachmentData): number {
+  const toolText = JSON.stringify(result, null, 2);
+  return Buffer.byteLength(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: 0,
+      result: { content: [{ type: "text", text: toolText }] },
+    }),
+  );
 }
 
-function overFrameCapError(filename: string, size: number, maxBytes: number): Error {
+function overFrameCapError(
+  filename: string,
+  frameBytes: number,
+  rawBytes: number,
+  maxBytes: number,
+): Error {
   return new Error(
-    `Attachment "${filename}" serializes to ${size} bytes, over the ${maxBytes}-byte inline limit. ` +
+    `Attachment "${filename}" is ${rawBytes} bytes raw, ${frameBytes} bytes as a JSON-RPC frame, ` +
+      `over the ${maxBytes}-byte inline limit (JSON escaping inflates NUL runs and base64). ` +
       "Pass saveToPath to write it to disk instead.",
   );
 }
@@ -763,13 +778,15 @@ export async function getGmailAttachment(
     }
   }
   if (decoded !== undefined) {
-    const size = frameBytes(decoded);
-    if (size > maxBytes) throw overFrameCapError(filename, size, maxBytes);
-    return { ...info, kind: "text", text: decoded };
+    const candidate: GmailAttachmentData = { ...info, kind: "text", text: decoded };
+    const frame = inlineFrameBytes(candidate);
+    if (frame > maxBytes) throw overFrameCapError(filename, frame, bytes.length, maxBytes);
+    return candidate;
   }
-  const size = frameBytes(dataBase64);
-  if (size > maxBytes) throw overFrameCapError(filename, size, maxBytes);
-  return { ...info, kind: "base64", dataBase64 };
+  const candidate: GmailAttachmentData = { ...info, kind: "base64", dataBase64 };
+  const frame = inlineFrameBytes(candidate);
+  if (frame > maxBytes) throw overFrameCapError(filename, frame, bytes.length, maxBytes);
+  return candidate;
 }
 
 // ---- Drafts ---------------------------------------------------------------
