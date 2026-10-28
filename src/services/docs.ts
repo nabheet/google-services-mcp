@@ -5,10 +5,24 @@ export interface GetDocumentArgs {
   documentId: string;
 }
 
+/**
+ * Google Docs indices are 1-based UTF-16 offsets: the body's first character
+ * is index 1, and index 0 is not a valid insertion or deletion point. A
+ * caller who assumes 0-based positions lands one character early, so refuse
+ * the value instead of silently writing in the wrong place.
+ */
+function assertDocIndex(index: number, field: string): void {
+  if (!Number.isInteger(index) || index < 1) {
+    throw new Error(
+      `${field} must be a 1-based index of at least 1 (Google Docs counts from 1, not 0), got ${index}.`,
+    );
+  }
+}
+
 export interface InsertTextArgs {
   documentId: string;
   text: string;
-  /** Optional 0-based character index to insert at. Defaults to end of document. */
+  /** Optional 1-based character index to insert at. Defaults to end of document. */
   index?: number;
 }
 
@@ -86,6 +100,7 @@ export async function insertText(
   const docs = google.docs({ version: "v1", auth: client });
   let location: Record<string, unknown>;
   if (index !== undefined) {
+    assertDocIndex(index, "index");
     location = { location: { index } };
   } else {
     location = { endOfSegmentLocation: {} };
@@ -124,9 +139,9 @@ export async function batchUpdateDocument(
 
 export interface DeleteRangeArgs {
   documentId: string;
-  /** 0-based start index (inclusive). */
+  /** 1-based start index (inclusive). */
   startIndex: number;
-  /** 0-based end index (exclusive). */
+  /** 1-based end index (exclusive). */
   endIndex: number;
 }
 
@@ -135,6 +150,10 @@ export async function deleteRange(
   client: Auth.OAuth2Client,
   { documentId, startIndex, endIndex }: DeleteRangeArgs,
 ): Promise<{ deleted: boolean }> {
+  assertDocIndex(startIndex, "startIndex");
+  if (!Number.isInteger(endIndex) || endIndex <= startIndex) {
+    throw new Error(`endIndex must be a whole number greater than startIndex, got ${endIndex}.`);
+  }
   await batchUpdateDocument(client, {
     documentId,
     requests: [{ deleteContentRange: { range: { startIndex, endIndex } } }],
@@ -146,7 +165,7 @@ export interface InsertTableArgs {
   documentId: string;
   rows: number;
   columns: number;
-  /** 0-based index where the table is inserted (a newline is added before it). */
+  /** 1-based index where the table is inserted (a newline is added before it). */
   index: number;
 }
 
@@ -155,6 +174,7 @@ export async function insertTable(
   client: Auth.OAuth2Client,
   { documentId, rows, columns, index }: InsertTableArgs,
 ): Promise<{ inserted: boolean }> {
+  assertDocIndex(index, "index");
   await batchUpdateDocument(client, {
     documentId,
     requests: [{ insertTable: { rows, columns, location: { index } } }],
@@ -166,7 +186,7 @@ export interface InsertInlineImageArgs {
   documentId: string;
   /** Publicly accessible PNG/JPEG/GIF URI (< 50MB, <= 25MP). */
   uri: string;
-  /** 0-based index inside an existing paragraph. */
+  /** 1-based index inside an existing paragraph. */
   index: number;
 }
 
@@ -175,6 +195,7 @@ export async function insertInlineImage(
   client: Auth.OAuth2Client,
   { documentId, uri, index }: InsertInlineImageArgs,
 ): Promise<{ objectId?: string | null }> {
+  assertDocIndex(index, "index");
   const res = await batchUpdateDocument(client, {
     documentId,
     requests: [{ insertInlineImage: { uri, location: { index } } }],
