@@ -88,13 +88,16 @@ everywhere below.
 
 - `latest` — stable releases, published automatically when a merge to `main`
   changes something the package ships
-- `beta` — staging builds, published manually from `main`
-  (e.g. `0.x.x-beta.0`)
+- `beta` — preview builds, not a snapshot of `main`. The tag moves to whichever
+  build ran last: a PR branch (each push to a non-draft PR, including the moment
+  it is marked ready for review), a `v*-beta*` tag, or a manual run from `main`.
+  Installing `@beta` gets you unmerged code that is currently under review.
 
-Try the staging channel without touching your stable install:
+Install a stable version unless you specifically want to try a branch:
 
 ```bash
-npx -y google-services-mcp@beta --version
+npx -y google-services-mcp@latest --version   # stable
+npx -y google-services-mcp@beta --version     # preview build
 ```
 
 All publishes are signed with npm **provenance** (trusted publishing via
@@ -303,9 +306,17 @@ All publishing happens from GitHub Actions — no local npm login needed:
    release. No manual steps. The next version is derived from the last
    published `latest` on npm, so repeated merges never collide; an
    intentional minor/major bump in `package.json` is honored.
-2. **Staging** — manual beta builds from `main`: **Actions → CI
-   → Run workflow**. Publishes a `beta` build (`0.1.1-beta.X`) under the
-   `beta` dist-tag with provenance.
+2. **Preview** — the `beta` dist-tag points at the last preview build, and is
+   advanced by three things:
+
+   - a push to a non-draft PR in this repository (including the
+     ready-for-review transition), as `<version>-beta.<run_number>`
+   - a `v*-beta*` tag push
+   - a manual run: **Actions → CI → Run workflow**, which publishes a
+     `0.x.x-beta.X` build of `main`
+
+   `beta` therefore tracks whichever build ran last, not `main`. Use `latest`
+   for anything you rely on.
 
 Prerelease tags `v*-beta*` publish to `beta` with a prerelease GitHub release
 (patch/minor builds for milestone testing). Publishing uses npm **trusted

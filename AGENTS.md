@@ -148,7 +148,12 @@ All publishing happens from GitHub Actions via npm **trusted publishing**
   - every PR push → `prerelease` job publishes `<version>-beta.<run_number>`
     to the `beta` dist-tag (`npm i google-services-mcp@beta`), so every PR is
     instantly installable (same-repo, non-draft, non-dependabot PRs; re-runs
-    deduped)
+    deduped). `pull_request` also runs on `ready_for_review`, because a PR
+    opened as a draft skips the job and would otherwise never publish the
+    commit that gets merged.
+  - `beta` is a preview channel, not a snapshot of `main`: the tag follows the
+    last build, so it can hold unmerged branch code. Stable installs use
+    `latest`.
   - manual dispatch → bump to next `-beta.X` prerelease (no git change),
     publish `beta` (staging build from `main`)
 
