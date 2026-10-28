@@ -514,11 +514,14 @@ local file instead (returns `{ savedTo }`).
 ### `google_drive_export`
 
 Export a Google-native file (Docs/Sheets/Slides/Drawings) to another format.
+Pass `saveToPath` to write the exported bytes to a local file instead (returns
+`{ savedTo }`).
 
 | arg | type | notes |
 | --- | --- | --- |
 | `fileId` | string | required. Drive file ID. |
 | `mimeType` | string | required. Target MIME type, e.g. `application/pdf`. |
+| `saveToPath` | string | optional. Local path to write the exported bytes to. |
 
 ### `google_drive_create_folder`
 
