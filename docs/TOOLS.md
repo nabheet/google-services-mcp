@@ -257,6 +257,7 @@ List draft emails.
 | arg | type | notes |
 | --- | --- | --- |
 | `maxResults` | number (1–100) | optional, default 25. |
+| `pageToken` | string | optional. From a previous page's `nextPageToken`. |
 
 ### `google_gmail_drafts_get`
 
@@ -934,8 +935,8 @@ Insert an image from a URL onto a slide. Args: `presentationId`, `pageObjectId`,
 
 ### `google_youtube_search`
 
-Search YouTube videos. Args: `query` (required), `maxResults` (default 10).
-Returns `{ id, type, title, channelTitle }` per item.
+Search YouTube videos. Args: `query` (required), `maxResults` (default 10),
+`pageToken` (optional). Returns `{ id, type, title, channelTitle }` per item.
 
 ### `google_youtube_get_video`
 
@@ -979,12 +980,13 @@ Note: private videos are not usable with the comment APIs — they report
 
 ### `google_youtube_my_videos`
 
-List the signed-in channel's uploads. Arg: `maxResults` (default 25).
-Returns `{ uploadsPlaylistId, videos }`.
+List the signed-in channel's uploads. Args: `maxResults` (default 25),
+`pageToken` (optional). Returns `{ uploadsPlaylistId, items, nextPageToken }`.
 
 ### `google_youtube_list_playlists`
 
-List the signed-in channel's playlists. Arg: `maxResults` (default 25).
+List the signed-in channel's playlists. Args: `maxResults` (default 25),
+`pageToken` (optional).
 
 ### `google_youtube_create_playlist`
 
@@ -1028,8 +1030,8 @@ Mark a comment as spam. Arg: `commentId` (required).
 
 ### `google_youtube_subscriptions`
 
-List the signed-in channel's subscriptions. Arg: `maxResults` (default
-50). Returns `{ title, channelId }` per item.
+List the signed-in channel's subscriptions. Args: `maxResults` (default 50),
+`pageToken` (optional). Returns `{ title, channelId }` per item.
 
 ## Forms
 
@@ -1039,7 +1041,9 @@ Get a form's questions and settings. Arg: `formId` (required).
 
 ### `google_forms_responses`
 
-List form responses. Args: `formId` (required), `pageSize` (default 100).
+List form responses. Args: `formId` (required), `pageSize` (default 100),
+`pageToken` (optional). The API caps a page at 100 responses, so follow
+`nextPageToken` for the rest.
 
 ### `google_forms_create`
 

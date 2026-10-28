@@ -59,16 +59,31 @@ describe("forms service", () => {
       },
     });
     const result = await getFormResponses(client, { formId: "f1" });
-    expect(result).toEqual([
-      { responseId: "r1", answers: { q1: { textAnswers: { answers: [{ value: "yes" }] } } } },
-    ]);
+    expect(result).toEqual({
+      items: [
+        { responseId: "r1", answers: { q1: { textAnswers: { answers: [{ value: "yes" }] } } } },
+      ],
+    });
     expect(mockForms.forms.responses.list).toHaveBeenCalledWith({ formId: "f1", pageSize: 100 });
   });
 
-  it("getFormResponses returns empty array when none", async () => {
+  it("getFormResponses returns no items when there are none", async () => {
     mockForms.forms.responses.list.mockResolvedValue({ data: {} });
     const result = await getFormResponses(client, { formId: "f1" });
-    expect(result).toEqual([]);
+    expect(result).toEqual({ items: [] });
+  });
+
+  it("getFormResponses passes pageToken and returns the next one", async () => {
+    mockForms.forms.responses.list.mockResolvedValue({
+      data: { responses: [{ responseId: "r2" }], nextPageToken: "p2" },
+    });
+    const result = await getFormResponses(client, { formId: "f1", pageToken: "p1" });
+    expect(mockForms.forms.responses.list).toHaveBeenCalledWith({
+      formId: "f1",
+      pageSize: 100,
+      pageToken: "p1",
+    });
+    expect(result.nextPageToken).toBe("p2");
   });
 
   it("createForm creates with title and returns id + responderUri", async () => {
@@ -356,6 +371,57 @@ describe("exportFormResponsesToSheet", () => {
       requestBody: { values: [["Name", "Rating"]] },
     });
     expect(result).toMatchObject({ appendedRows: 1, responses: 0 });
+  });
+
+  it("exports every page of responses, not just the first", async () => {
+    mockForms.forms.get.mockResolvedValue(form);
+    mockForms.forms.responses.list
+      .mockResolvedValueOnce({
+        data: {
+          responses: [
+            {
+              responseId: "r1",
+              answers: { q1: { textAnswers: { answers: [{ value: "Alice" }] } } },
+            },
+          ],
+          nextPageToken: "p2",
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          responses: [
+            {
+              responseId: "r2",
+              answers: { q1: { textAnswers: { answers: [{ value: "Bob" }] } } },
+            },
+          ],
+        },
+      });
+    mockSheetsValues.append.mockResolvedValue({ data: { updates: { updatedRows: 3 } } });
+
+    const result = await exportFormResponsesToSheet(client, {
+      formId: "f1",
+      spreadsheetId: "s1",
+    });
+
+    expect(mockForms.forms.responses.list).toHaveBeenCalledTimes(2);
+    expect(mockForms.forms.responses.list).toHaveBeenLastCalledWith({
+      formId: "f1",
+      pageSize: 100,
+      pageToken: "p2",
+    });
+    expect(mockSheetsValues.append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: {
+          values: [
+            ["Name", "Rating"],
+            ["Alice", ""],
+            ["Bob", ""],
+          ],
+        },
+      }),
+    );
+    expect(result).toMatchObject({ appendedRows: 3, responses: 2 });
   });
 });
 

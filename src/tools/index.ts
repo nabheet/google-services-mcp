@@ -756,11 +756,12 @@ export function registerTools(server: McpServer): void {
       description: "List draft emails.",
       inputSchema: {
         maxResults: z.number().min(1).max(100).optional().describe("Max drafts (default 25)."),
+        pageToken: z.string().optional().describe("Token from a previous page's nextPageToken."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ maxResults, account }) =>
-      withClient(account, (client) => listGmailDrafts(client, { maxResults })),
+    async ({ maxResults, pageToken, account }) =>
+      withClient(account, (client) => listGmailDrafts(client, { maxResults, pageToken })),
   );
 
   server.registerTool(
@@ -2692,11 +2693,12 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         query: z.string().describe("Search query."),
         maxResults: z.number().min(1).max(50).optional().describe("Max results (default 10)."),
+        pageToken: z.string().optional().describe("Token from a previous page's nextPageToken."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ query, maxResults, account }) =>
-      withClient(account, (client) => searchVideos(client, { query, maxResults })),
+    async ({ query, maxResults, pageToken, account }) =>
+      withClient(account, (client) => searchVideos(client, { query, maxResults, pageToken })),
   );
 
   server.registerTool(
@@ -2791,11 +2793,12 @@ export function registerTools(server: McpServer): void {
       description: "List the user's uploaded videos.",
       inputSchema: {
         maxResults: z.number().min(1).max(50).optional().describe("Max videos (default 25)."),
+        pageToken: z.string().optional().describe("Token from a previous page's nextPageToken."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ maxResults, account }) =>
-      withClient(account, (client) => getMyVideos(client, { maxResults })),
+    async ({ maxResults, pageToken, account }) =>
+      withClient(account, (client) => getMyVideos(client, { maxResults, pageToken })),
   );
 
   server.registerTool(
@@ -2805,11 +2808,12 @@ export function registerTools(server: McpServer): void {
       description: "List the user's YouTube playlists.",
       inputSchema: {
         maxResults: z.number().min(1).max(50).optional().describe("Max playlists (default 25)."),
+        pageToken: z.string().optional().describe("Token from a previous page's nextPageToken."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ maxResults, account }) =>
-      withClient(account, (client) => listPlaylists(client, { maxResults })),
+    async ({ maxResults, pageToken, account }) =>
+      withClient(account, (client) => listPlaylists(client, { maxResults, pageToken })),
   );
 
   server.registerTool(
@@ -2883,11 +2887,12 @@ export function registerTools(server: McpServer): void {
       description: "List the channels the user subscribes to.",
       inputSchema: {
         maxResults: z.number().min(1).max(50).optional().describe("Max results (default 50)."),
+        pageToken: z.string().optional().describe("Token from a previous page's nextPageToken."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ maxResults, account }) =>
-      withClient(account, (client) => listSubscriptions(client, { maxResults })),
+    async ({ maxResults, pageToken, account }) =>
+      withClient(account, (client) => listSubscriptions(client, { maxResults, pageToken })),
   );
 
   server.registerTool(
@@ -2979,11 +2984,12 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         formId: z.string().describe("Form ID."),
         pageSize: z.number().min(1).max(100).optional().describe("Max responses (default 100)."),
+        pageToken: z.string().optional().describe("Token from a previous page's nextPageToken."),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
-    async ({ formId, pageSize, account }) =>
-      withClient(account, (client) => getFormResponses(client, { formId, pageSize })),
+    async ({ formId, pageSize, pageToken, account }) =>
+      withClient(account, (client) => getFormResponses(client, { formId, pageSize, pageToken })),
   );
 
   server.registerTool(

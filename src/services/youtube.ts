@@ -2,10 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Auth, youtube_v3 } from "googleapis";
 import { google } from "googleapis";
+import type { ListPage } from "../util/pagination.js";
 
 export interface SearchVideosArgs {
   query: string;
   maxResults?: number;
+  /** Token from a previous page's `nextPageToken`. */
+  pageToken?: string;
 }
 
 export interface GetVideoArgs {
@@ -14,27 +17,31 @@ export interface GetVideoArgs {
 
 export async function searchVideos(
   client: Auth.OAuth2Client,
-  { query, maxResults = 10 }: SearchVideosArgs,
-): Promise<Array<{ id: string; type: string; title?: string; channelTitle?: string }>> {
+  { query, maxResults = 10, pageToken }: SearchVideosArgs,
+): Promise<ListPage<{ id: string; type: string; title?: string; channelTitle?: string }>> {
   const yt = google.youtube({ version: "v3", auth: client });
   const res = await yt.search.list({
     part: ["snippet"],
     q: query,
     type: ["video"],
     maxResults,
+    ...(pageToken !== undefined ? { pageToken } : {}),
   });
-  return (res.data.items ?? []).map((item) => ({
-    id: item.id?.videoId ?? item.id?.channelId ?? item.id?.playlistId ?? "",
-    type: item.id?.videoId
-      ? "video"
-      : item.id?.channelId
-        ? "channel"
-        : item.id?.playlistId
-          ? "playlist"
-          : "unknown",
-    title: item.snippet?.title ?? undefined,
-    channelTitle: item.snippet?.channelTitle ?? undefined,
-  }));
+  return {
+    items: (res.data.items ?? []).map((item) => ({
+      id: item.id?.videoId ?? item.id?.channelId ?? item.id?.playlistId ?? "",
+      type: item.id?.videoId
+        ? "video"
+        : item.id?.channelId
+          ? "channel"
+          : item.id?.playlistId
+            ? "playlist"
+            : "unknown",
+      title: item.snippet?.title ?? undefined,
+      channelTitle: item.snippet?.channelTitle ?? undefined,
+    })),
+    ...(res.data.nextPageToken ? { nextPageToken: res.data.nextPageToken } : {}),
+  };
 }
 
 export async function getVideo(
@@ -176,8 +183,8 @@ export async function updateVideo(
 
 export async function getMyVideos(
   client: Auth.OAuth2Client,
-  { maxResults = 25 }: { maxResults?: number },
-): Promise<{ uploadsPlaylistId: string | null; videos: youtube_v3.Schema$PlaylistItem[] }> {
+  { maxResults = 25, pageToken }: { maxResults?: number; pageToken?: string },
+): Promise<ListPage<youtube_v3.Schema$PlaylistItem> & { uploadsPlaylistId: string | null }> {
   // `channels.list` reports the uploads playlist directly. Searching the
   // playlist list by title only worked for English accounts with at most 50
   // playlists; the channel's own contentDetails has no such limit.
@@ -186,27 +193,36 @@ export async function getMyVideos(
   const uploadsPlaylistId =
     channels.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads ?? null;
   if (!uploadsPlaylistId) {
-    return { videos: [], uploadsPlaylistId: null };
+    return { items: [], uploadsPlaylistId: null };
   }
   const items = await yt.playlistItems.list({
     part: ["snippet", "contentDetails"],
     playlistId: uploadsPlaylistId,
     maxResults,
+    ...(pageToken !== undefined ? { pageToken } : {}),
   });
-  return { uploadsPlaylistId, videos: items.data.items ?? [] };
+  return {
+    uploadsPlaylistId,
+    items: items.data.items ?? [],
+    ...(items.data.nextPageToken ? { nextPageToken: items.data.nextPageToken } : {}),
+  };
 }
 
 export async function listPlaylists(
   client: Auth.OAuth2Client,
-  { maxResults = 25 }: { maxResults?: number },
-): Promise<youtube_v3.Schema$Playlist[]> {
+  { maxResults = 25, pageToken }: { maxResults?: number; pageToken?: string },
+): Promise<ListPage<youtube_v3.Schema$Playlist>> {
   const yt = google.youtube({ version: "v3", auth: client });
   const res = await yt.playlists.list({
     part: ["snippet", "contentDetails"],
     mine: true,
     maxResults,
+    ...(pageToken !== undefined ? { pageToken } : {}),
   });
-  return res.data.items ?? [];
+  return {
+    items: res.data.items ?? [],
+    ...(res.data.nextPageToken ? { nextPageToken: res.data.nextPageToken } : {}),
+  };
 }
 
 export async function createPlaylist(
@@ -262,18 +278,22 @@ export async function removeVideoFromPlaylist(
 
 export async function listSubscriptions(
   client: Auth.OAuth2Client,
-  { maxResults = 50 }: { maxResults?: number },
-): Promise<Array<{ title?: string; channelId?: string }>> {
+  { maxResults = 50, pageToken }: { maxResults?: number; pageToken?: string },
+): Promise<ListPage<{ title?: string; channelId?: string }>> {
   const yt = google.youtube({ version: "v3", auth: client });
   const res = await yt.subscriptions.list({
     part: ["snippet"],
     mine: true,
     maxResults,
+    ...(pageToken !== undefined ? { pageToken } : {}),
   });
-  return (res.data.items ?? []).map((item) => ({
-    title: item.snippet?.title ?? undefined,
-    channelId: item.snippet?.resourceId?.channelId ?? undefined,
-  }));
+  return {
+    items: (res.data.items ?? []).map((item) => ({
+      title: item.snippet?.title ?? undefined,
+      channelId: item.snippet?.resourceId?.channelId ?? undefined,
+    })),
+    ...(res.data.nextPageToken ? { nextPageToken: res.data.nextPageToken } : {}),
+  };
 }
 
 export interface ListCommentsArgs {

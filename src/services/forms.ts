@@ -1,5 +1,6 @@
 import type { Auth, forms_v1, sheets_v4 } from "googleapis";
 import { google } from "googleapis";
+import type { ListPage } from "../util/pagination.js";
 
 export interface GetFormArgs {
   formId: string;
@@ -37,11 +38,39 @@ export async function getForm(
 
 export async function getFormResponses(
   client: Auth.OAuth2Client,
-  { formId, pageSize = 100 }: GetFormArgs & { pageSize?: number },
-): Promise<forms_v1.Schema$FormResponse[]> {
+  { formId, pageSize = 100, pageToken }: GetFormArgs & { pageSize?: number; pageToken?: string },
+): Promise<ListPage<forms_v1.Schema$FormResponse>> {
   const forms = google.forms({ version: "v1", auth: client });
-  const res = await forms.forms.responses.list({ formId, pageSize });
-  return res.data.responses ?? [];
+  const res = await forms.forms.responses.list({
+    formId,
+    pageSize,
+    ...(pageToken !== undefined ? { pageToken } : {}),
+  });
+  return {
+    items: res.data.responses ?? [],
+    ...(res.data.nextPageToken ? { nextPageToken: res.data.nextPageToken } : {}),
+  };
+}
+
+/**
+ * Every response, following pagination. The API caps a page at 100 responses,
+ * so a single call silently drops the rest; callers that need the whole set
+ * (the sheet export) use this instead.
+ */
+export async function getAllFormResponses(
+  client: Auth.OAuth2Client,
+  { formId }: GetFormArgs,
+): Promise<forms_v1.Schema$FormResponse[]> {
+  const all: forms_v1.Schema$FormResponse[] = [];
+  let pageToken: string | undefined;
+  for (;;) {
+    const page = await getFormResponses(client, { formId, pageToken });
+    all.push(...page.items);
+    const next = page.nextPageToken;
+    // A repeated token would loop forever; the API should never do this.
+    if (next === undefined || next === pageToken) return all;
+    pageToken = next;
+  }
 }
 
 export async function createForm(
@@ -290,7 +319,7 @@ export async function exportFormResponsesToSheet(
 ): Promise<{ appendedRows: number; responses: number; skippedExisting: number }> {
   const [form, responses] = await Promise.all([
     getForm(client, { formId }),
-    getFormResponses(client, { formId }),
+    getAllFormResponses(client, { formId }),
   ]);
   const questions = (form.items ?? []).filter((i) => i.questionItem?.question);
   const headers = questions.map((i) => i.title ?? "Untitled");

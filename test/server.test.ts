@@ -326,16 +326,18 @@ describe("end-to-end tool calls", () => {
       data: { items: [{ id: { videoId: "v1" }, snippet: { title: "T" } }] },
     });
     const result = await callTool("google_youtube_search", { query: "cats" });
-    expect(result).toEqual([{ id: "v1", type: "video", title: "T", channelTitle: undefined }]);
+    expect(result).toEqual({
+      items: [{ id: "v1", type: "video", title: "T", channelTitle: undefined }],
+    });
   });
 
   it("google_forms_responses lists responses", async () => {
     await setup();
     mockFormsResponses.list.mockResolvedValue({
-      data: { responses: [{ responseId: "r1" }] },
+      data: { responses: [{ responseId: "r1" }], nextPageToken: "p2" },
     });
     const result = await callTool("google_forms_responses", { formId: "f1" });
-    expect(result).toEqual([{ responseId: "r1" }]);
+    expect(result).toEqual({ items: [{ responseId: "r1" }], nextPageToken: "p2" });
   });
 
   it("google_gmail_send returns a helpful error when the API fails", async () => {
