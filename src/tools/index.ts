@@ -542,7 +542,7 @@ export function registerTools(server: McpServer): void {
           .string()
           .optional()
           .describe(
-            "Local path to write the raw bytes to (returns { savedTo }). Must be inside the save root: GOOGLE_MCP_SAVE_ROOT, default ~/Downloads.",
+            'Local path to write the raw bytes to (returns savedTo and kind "saved" instead of an inline payload). Must be inside the save root: GOOGLE_MCP_SAVE_ROOT, default ~/Downloads.',
           ),
         maxBytes: z
           .number()

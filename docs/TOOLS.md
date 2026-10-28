@@ -14,9 +14,9 @@ Tools that touch the local filesystem share one pair of arg names.
 | write bytes to a local file | `saveToPath` | `{ savedTo }` in place of the inline payload |
 
 With `saveToPath` the raw bytes are written to that path and the inline payload
-(`data`, `dataBase64`, `text`) is omitted; the result carries `savedTo` alongside
-the tool's metadata. Missing parent directories are created recursively, so a
-path under a directory that does not exist yet still works.
+(`dataBase64`, `text`) is omitted; the result carries `savedTo` and `kind:
+"saved"` alongside the tool's metadata. Missing parent directories are created
+recursively, so a path under a directory that does not exist yet still works.
 
 Writes are confined to a save root: `GOOGLE_MCP_SAVE_ROOT` when set, otherwise
 `~/Downloads`. A path outside it is refused before any Google API call, and so
