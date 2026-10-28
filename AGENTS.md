@@ -150,6 +150,33 @@ All publishing happens from GitHub Actions via npm **trusted publishing**
   - manual dispatch → bump to next `-beta.X` prerelease (no git change),
     publish `beta` (staging build from `main`)
 
+### Force pushes never publish
+
+A push with `github.event.forced == true` skips the `publish` job entirely — no
+npm release, no tag, no GitHub release — and the run records a `::notice::`
+explaining why.
+
+The reasoning, which applies to any repo using this workflow:
+
+- `before` is unreachable after a rewrite, so `before..sha` cannot say what
+  changed. The guard would either fail the run or, worse, be trusted with a
+  diff that does not describe what was already released.
+- The registry already holds versions for commits that no longer exist. A
+  forced push can therefore publish a tree that was meant to be superseded, or
+  reuse a version number that belongs to history nobody can inspect.
+- Publishing is recoverable only by deprecating or unpublishing, so the safe
+  default is to wait.
+
+Nothing is lost: the next ordinary push to `main` diffs against a reachable
+`before` and publishes everything accumulated since the last release. If a
+rewrite must ship a specific build, publish it from a normal merge, or by hand
+after review.
+
+When copying this policy into another repo, keep the two pieces together: the
+`forced` check **before** the `before..sha` diff (so a rewrite is never diffed),
+and the `::notice::` line (so a skipped release is visible in the run summary
+rather than looking like a silent success).
+
 Never publish from a local shell. Stable versions are auto-derived from the
 npm registry on merge to `main`; manual version edits are not needed for patch
 releases.
