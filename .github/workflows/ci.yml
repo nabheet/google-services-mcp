@@ -67,6 +67,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           REF_TYPE: ${{ github.ref_type }}
+          FORCED: ${{ github.event.forced }}
           BEFORE: ${{ github.event.before }}
           SHA: ${{ github.sha }}
         run: |
@@ -76,6 +77,18 @@ jobs:
             echo "changed=$1" >> "$GITHUB_OUTPUT"
             echo "$2"
           }
+
+          # A force push rewrites history that may already be published. `before`
+          # is unreachable, so before..sha cannot describe what shipped, and the
+          # registry still holds versions for commits that no longer exist.
+          # Publishing here could ship a superseded tree or reuse a version that
+          # belongs to history nobody can inspect, so skip: the next ordinary push
+          # diffs against a reachable `before` and publishes everything since.
+          if [ "$FORCED" = "true" ]; then
+            echo "::notice::force push: publishing skipped (the next ordinary push to this branch will publish)"
+            emit false "force push: no publish"
+            exit 0
+          fi
 
           # A tag push (v*-beta*) is an explicit release request.
           if [ "$REF_TYPE" = "tag" ]; then
