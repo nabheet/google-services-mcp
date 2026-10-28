@@ -4,6 +4,32 @@ All tools are prefixed `google_` to avoid collisions with client-native tools.
 Every tool that talks to a Google service accepts an optional `account`
 argument (nickname) — when omitted, the default account is used.
 
+## Local file I/O
+
+Tools that touch the local filesystem share one pair of arg names.
+
+| direction | arg | result |
+| --- | --- | --- |
+| read a local file | `path` | — |
+| write bytes to a local file | `saveToPath` | `{ savedTo }` in place of the inline payload |
+
+With `saveToPath` the raw bytes are written to that path and the inline payload
+(`data`, `dataBase64`, `text`) is omitted; the result carries `savedTo` alongside
+the tool's metadata.
+
+| tool | reads `path` | writes `saveToPath` |
+| --- | --- | --- |
+| `google_gmail_send` | yes | — |
+| `google_gmail_reply` | yes | — |
+| `google_gmail_drafts_create` | yes | — |
+| `google_gmail_drafts_update` | yes | — |
+| `google_drive_upload` | yes | — |
+| `google_drive_update` | yes | — |
+| `google_youtube_upload` | yes | — |
+| `google_drive_download` | — | yes |
+| `google_gmail_get_attachment` | — | pending #119 |
+| `google_drive_export` | — | pending #120 |
+
 ## Account management
 
 ### `google_account_add`
