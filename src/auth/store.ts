@@ -8,6 +8,8 @@ export interface StoredAccount {
   name: string;
   /** Email address returned by Google at authorization time, if available. */
   email?: string;
+  /** OAuth client id used to obtain the tokens. Older records may omit this. */
+  clientId?: string;
   accessToken: string;
   refreshToken: string;
   /** Epoch milliseconds after which accessToken is no longer valid. */
