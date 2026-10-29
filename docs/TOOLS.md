@@ -1135,8 +1135,19 @@ Permanently delete a form. Arg: `formId` (required).
 ### `google_forms_export_responses`
 
 Append form responses to a spreadsheet. Args: `formId`, `spreadsheetId`
-(required), `sheetName` (default `Sheet1`). The header row is written once, and
-a re-run appends only responses that are not already in the tab, so running the
-export twice does not duplicate anything. Returns `appendedRows`, `responses`
-and `skippedExisting`. A tab that does not exist yet counts as empty; a tab
-that cannot be read fails the call rather than risking duplicates.
+(required), `sheetName` (default `Sheet1`). Adds a `__google_forms_response_id`
+column after question columns and uses response IDs for repeat-safe
+deduplication, so distinct responses with identical answers remain distinct.
+Existing tabs get the ID column appended; rows from older exports are matched
+by answers one-for-one and assigned IDs, before new rows are written with IDs.
+Legacy rows have no identity; a matching row is assumed to be an earlier export,
+so identical answers cannot prove whether it came from that response or a manual
+row. If the form later gains questions, their columns are added after the ID
+column without shifting existing data. If question order or titles no longer
+match existing columns, export fails without appending rows; reconcile the sheet
+header before retrying. A legacy question using the reserved ID header with
+existing data fails safely until that header is renamed. Answer edits to a
+response ID already in the tab do not update its exported row. Returns
+`appendedRows`, `responses` and `skippedExisting`. A tab that does not exist yet
+counts as empty; a tab that cannot be read fails the call rather than risking
+duplicates.

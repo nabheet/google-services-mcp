@@ -12,7 +12,12 @@ const mockForms = {
 };
 
 const mockDriveFiles = { delete: vi.fn() };
-const mockSheetsValues = { append: vi.fn(), get: vi.fn() };
+const mockSheetsValues = {
+  append: vi.fn(),
+  get: vi.fn(),
+  update: vi.fn(),
+  batchUpdate: vi.fn(),
+};
 
 vi.mock("googleapis", () => ({
   google: {
@@ -354,8 +359,8 @@ describe("exportFormResponsesToSheet", () => {
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [
-          ["Name", "Rating"],
-          ["Alice", "5; 4"],
+          ["Name", "Rating", "__google_forms_response_id"],
+          ["Alice", "5; 4", "r1"],
         ],
       },
     });
@@ -374,7 +379,7 @@ describe("exportFormResponsesToSheet", () => {
       spreadsheetId: "s1",
       range: "'Data'!A1",
       valueInputOption: "USER_ENTERED",
-      requestBody: { values: [["Name", "Rating"]] },
+      requestBody: { values: [["Name", "Rating", "__google_forms_response_id"]] },
     });
     expect(result).toMatchObject({ appendedRows: 1, responses: 0 });
   });
@@ -420,9 +425,9 @@ describe("exportFormResponsesToSheet", () => {
       expect.objectContaining({
         requestBody: {
           values: [
-            ["Name", "Rating"],
-            ["Alice", ""],
-            ["Bob", ""],
+            ["Name", "Rating", "__google_forms_response_id"],
+            ["Alice", "", "r1"],
+            ["Bob", "", "r2"],
           ],
         },
       }),
@@ -481,12 +486,25 @@ describe("exportFormResponsesToSheet idempotency", () => {
       spreadsheetId: "s1",
       range: "'Sheet1'!A1",
       valueInputOption: "USER_ENTERED",
-      requestBody: { values: [["Bob", "4"]] },
+      requestBody: { values: [["Bob", "4", "r1"]] },
+    });
+    expect(mockSheetsValues.update).toHaveBeenCalledWith({
+      spreadsheetId: "s1",
+      range: "'Sheet1'!C1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [["__google_forms_response_id"]] },
+    });
+    expect(mockSheetsValues.batchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: "s1",
+      requestBody: {
+        valueInputOption: "USER_ENTERED",
+        data: [{ range: "'Sheet1'!C2", values: [["r0"]] }],
+      },
     });
     expect(result).toMatchObject({ appendedRows: 1, responses: 2, skippedExisting: 1 });
   });
 
-  it("writes nothing when every response is already in the sheet", async () => {
+  it("stamps legacy response IDs without appending matched rows", async () => {
     mockForms.forms.get.mockResolvedValue(form);
     mockResponses([["Alice", "5"]]);
     mockSheetsValues.get.mockResolvedValue({
@@ -504,6 +522,13 @@ describe("exportFormResponsesToSheet idempotency", () => {
     });
 
     expect(mockSheetsValues.append).not.toHaveBeenCalled();
+    expect(mockSheetsValues.batchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: "s1",
+      requestBody: {
+        valueInputOption: "USER_ENTERED",
+        data: [{ range: "'Sheet1'!C2", values: [["r0"]] }],
+      },
+    });
     expect(result).toMatchObject({ appendedRows: 0, responses: 1, skippedExisting: 1 });
   });
 
@@ -519,8 +544,8 @@ describe("exportFormResponsesToSheet idempotency", () => {
       expect.objectContaining({
         requestBody: {
           values: [
-            ["Name", "Rating"],
-            ["Alice", "5"],
+            ["Name", "Rating", "__google_forms_response_id"],
+            ["Alice", "5", "r0"],
           ],
         },
       }),
@@ -551,5 +576,420 @@ describe("exportFormResponsesToSheet idempotency", () => {
       exportFormResponsesToSheet(client, { formId: "f1", spreadsheetId: "s1" }),
     ).rejects.toThrow(/permission/);
     expect(mockSheetsValues.append).not.toHaveBeenCalled();
+  });
+
+  it("exports distinct responses with identical answers using response IDs", async () => {
+    mockForms.forms.get.mockResolvedValue(form);
+    mockResponses([
+      ["Alice", "5"],
+      ["Alice", "5"],
+    ]);
+    mockSheetsValues.append.mockResolvedValue({ data: {} });
+
+    const result = await exportFormResponsesToSheet(client, {
+      formId: "f1",
+      spreadsheetId: "s1",
+    });
+
+    expect(mockSheetsValues.append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: {
+          values: [
+            ["Name", "Rating", "__google_forms_response_id"],
+            ["Alice", "5", "r0"],
+            ["Alice", "5", "r1"],
+          ],
+        },
+      }),
+    );
+    expect(result).toMatchObject({ appendedRows: 3, responses: 2, skippedExisting: 0 });
+  });
+
+  it("uses response IDs when deduplicating rows already exported", async () => {
+    mockForms.forms.get.mockResolvedValue(form);
+    mockResponses([
+      ["Alice", "5"],
+      ["Alice", "5"],
+    ]);
+    mockSheetsValues.get.mockResolvedValue({
+      data: {
+        values: [
+          ["Name", "Rating", "__google_forms_response_id"],
+          ["Alice", "5", "r0"],
+        ],
+      },
+    });
+    mockSheetsValues.append.mockResolvedValue({ data: {} });
+
+    const result = await exportFormResponsesToSheet(client, {
+      formId: "f1",
+      spreadsheetId: "s1",
+    });
+
+    expect(mockSheetsValues.append).toHaveBeenCalledWith(
+      expect.objectContaining({ requestBody: { values: [["Alice", "5", "r1"]] } }),
+    );
+    expect(result).toMatchObject({ appendedRows: 1, responses: 2, skippedExisting: 1 });
+  });
+
+  it("matches legacy duplicate-answer rows one-for-one during migration", async () => {
+    mockForms.forms.get.mockResolvedValue(form);
+    mockResponses([
+      ["Alice", "5"],
+      ["Alice", "5"],
+    ]);
+    mockSheetsValues.get.mockResolvedValue({
+      data: {
+        values: [
+          ["Name", "Rating"],
+          ["Alice", "5"],
+        ],
+      },
+    });
+    mockSheetsValues.append.mockResolvedValue({ data: {} });
+
+    const result = await exportFormResponsesToSheet(client, {
+      formId: "f1",
+      spreadsheetId: "s1",
+    });
+
+    expect(mockSheetsValues.append).toHaveBeenCalledWith(
+      expect.objectContaining({ requestBody: { values: [["Alice", "5", "r1"]] } }),
+    );
+    expect(mockSheetsValues.batchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: "s1",
+      requestBody: {
+        valueInputOption: "USER_ENTERED",
+        data: [{ range: "'Sheet1'!C2", values: [["r0"]] }],
+      },
+    });
+    expect(result).toMatchObject({ appendedRows: 1, responses: 2, skippedExisting: 1 });
+  });
+
+  it("pads legacy rows when Sheets omits trailing blank answer cells", async () => {
+    mockForms.forms.get.mockResolvedValue(form);
+    mockResponses([["Alice", ""]]);
+    mockSheetsValues.get.mockResolvedValue({ data: { values: [["Name", "Rating"], ["Alice"]] } });
+
+    const result = await exportFormResponsesToSheet(client, {
+      formId: "f1",
+      spreadsheetId: "s1",
+    });
+
+    expect(mockSheetsValues.append).not.toHaveBeenCalled();
+    expect(mockSheetsValues.batchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: "s1",
+      requestBody: {
+        valueInputOption: "USER_ENTERED",
+        data: [{ range: "'Sheet1'!C2", values: [["r0"]] }],
+      },
+    });
+    expect(result).toMatchObject({ appendedRows: 0, responses: 1, skippedExisting: 1 });
+  });
+
+  it("exports later identical responses after stamping legacy rows", async () => {
+    mockForms.forms.get.mockResolvedValue({
+      data: {
+        formId: "f1",
+        items: [{ itemId: "i1", title: "Name", questionItem: { question: { questionId: "q1" } } }],
+      },
+    });
+    mockForms.forms.responses.list
+      .mockResolvedValueOnce({
+        data: {
+          responses: [
+            {
+              responseId: "r0",
+              answers: { q1: { textAnswers: { answers: [{ value: "Alice" }] } } },
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          responses: [
+            {
+              responseId: "r0",
+              answers: { q1: { textAnswers: { answers: [{ value: "Alice" }] } } },
+            },
+            {
+              responseId: "r1",
+              answers: { q1: { textAnswers: { answers: [{ value: "Alice" }] } } },
+            },
+          ],
+        },
+      });
+    mockSheetsValues.get
+      .mockResolvedValueOnce({ data: { values: [["Name"], ["Alice"]] } })
+      .mockResolvedValueOnce({
+        data: {
+          values: [
+            ["Name", "__google_forms_response_id"],
+            ["Alice", "r0"],
+          ],
+        },
+      });
+    mockSheetsValues.append.mockResolvedValue({ data: {} });
+
+    await exportFormResponsesToSheet(client, { formId: "f1", spreadsheetId: "s1" });
+    const result = await exportFormResponsesToSheet(client, { formId: "f1", spreadsheetId: "s1" });
+
+    expect(mockSheetsValues.append).toHaveBeenCalledTimes(1);
+    expect(mockSheetsValues.append).toHaveBeenCalledWith(
+      expect.objectContaining({ requestBody: { values: [["Alice", "r1"]] } }),
+    );
+    expect(result).toMatchObject({ appendedRows: 1, responses: 2, skippedExisting: 1 });
+  });
+
+  it("preserves sheet row numbers when legacy data contains blank rows", async () => {
+    mockForms.forms.get.mockResolvedValue({
+      data: {
+        items: [{ itemId: "i1", title: "Name", questionItem: { question: { questionId: "q1" } } }],
+      },
+    });
+    mockForms.forms.responses.list.mockResolvedValue({
+      data: {
+        responses: [
+          { responseId: "r0", answers: { q1: { textAnswers: { answers: [{ value: "Alice" }] } } } },
+        ],
+      },
+    });
+    mockSheetsValues.get.mockResolvedValue({
+      data: { values: [["Name"], [], ["Alice"]] },
+    });
+
+    await exportFormResponsesToSheet(client, { formId: "f1", spreadsheetId: "s1" });
+
+    expect(mockSheetsValues.batchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: "s1",
+      requestBody: {
+        valueInputOption: "USER_ENTERED",
+        data: [{ range: "'Sheet1'!B3", values: [["r0"]] }],
+      },
+    });
+  });
+
+  it("appends newly added question columns after an existing response ID column", async () => {
+    mockForms.forms.get.mockResolvedValue({
+      data: {
+        ...form.data,
+        items: [
+          ...form.data.items,
+          { itemId: "i3", title: "Comment", questionItem: { question: { questionId: "q3" } } },
+        ],
+      },
+    });
+    mockForms.forms.responses.list.mockResolvedValue({
+      data: {
+        responses: [
+          {
+            responseId: "r1",
+            answers: {
+              q1: { textAnswers: { answers: [{ value: "Bob" }] } },
+              q2: { textAnswers: { answers: [{ value: "4" }] } },
+              q3: { textAnswers: { answers: [{ value: "More detail" }] } },
+            },
+          },
+        ],
+      },
+    });
+    mockSheetsValues.get
+      .mockResolvedValueOnce({
+        data: {
+          values: [
+            ["Name", "Rating", "__google_forms_response_id"],
+            ["Alice", "5", "r0"],
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          values: [
+            ["Name", "Rating", "__google_forms_response_id", "Comment"],
+            ["Alice", "5", "r0"],
+            ["Bob", "4", "r1", "More detail"],
+          ],
+        },
+      });
+    mockSheetsValues.append.mockResolvedValue({ data: {} });
+
+    await exportFormResponsesToSheet(client, { formId: "f1", spreadsheetId: "s1" });
+    await exportFormResponsesToSheet(client, { formId: "f1", spreadsheetId: "s1" });
+
+    expect(mockSheetsValues.update).toHaveBeenCalledWith({
+      spreadsheetId: "s1",
+      range: "'Sheet1'!D1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [["Comment"]] },
+    });
+    expect(mockSheetsValues.append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: { values: [["Bob", "4", "r1", "More detail"]] },
+      }),
+    );
+    expect(mockSheetsValues.append).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses to write when question order no longer matches existing columns", async () => {
+    mockForms.forms.get.mockResolvedValue({
+      data: {
+        items: [
+          { itemId: "i1", title: "Name", questionItem: { question: { questionId: "q1" } } },
+          { itemId: "i3", title: "Comment", questionItem: { question: { questionId: "q3" } } },
+          { itemId: "i2", title: "Rating", questionItem: { question: { questionId: "q2" } } },
+        ],
+      },
+    });
+    mockForms.forms.responses.list.mockResolvedValue({
+      data: {
+        responses: [
+          {
+            responseId: "r1",
+            answers: {
+              q1: { textAnswers: { answers: [{ value: "Bob" }] } },
+              q2: { textAnswers: { answers: [{ value: "4" }] } },
+              q3: { textAnswers: { answers: [{ value: "More detail" }] } },
+            },
+          },
+        ],
+      },
+    });
+    mockSheetsValues.get.mockResolvedValue({
+      data: {
+        values: [
+          ["Name", "Rating", "__google_forms_response_id"],
+          ["Alice", "5", "r0"],
+        ],
+      },
+    });
+
+    await expect(
+      exportFormResponsesToSheet(client, { formId: "f1", spreadsheetId: "s1" }),
+    ).rejects.toThrow(/question order differs/);
+
+    expect(mockSheetsValues.update).not.toHaveBeenCalled();
+    expect(mockSheetsValues.append).not.toHaveBeenCalled();
+  });
+
+  it("deduplicates when a question title matches the response ID column", async () => {
+    mockForms.forms.get.mockResolvedValue({
+      data: {
+        items: [
+          {
+            itemId: "i1",
+            title: "__google_forms_response_id",
+            questionItem: { question: { questionId: "q1" } },
+          },
+        ],
+      },
+    });
+    mockForms.forms.responses.list.mockResolvedValue({
+      data: {
+        responses: [
+          {
+            responseId: "r1",
+            answers: { q1: { textAnswers: { answers: [{ value: "answer" }] } } },
+          },
+        ],
+      },
+    });
+    mockSheetsValues.get.mockResolvedValueOnce({ data: {} }).mockResolvedValueOnce({
+      data: {
+        values: [
+          ["__google_forms_response_id", "__google_forms_response_id"],
+          ["answer", "r1"],
+        ],
+      },
+    });
+    mockSheetsValues.append.mockResolvedValue({ data: {} });
+
+    await exportFormResponsesToSheet(client, { formId: "f1", spreadsheetId: "s1" });
+    await exportFormResponsesToSheet(client, { formId: "f1", spreadsheetId: "s1" });
+
+    expect(mockSheetsValues.append).toHaveBeenCalledTimes(1);
+    expect(mockSheetsValues.append.mock.calls[0][0].requestBody.values).toEqual([
+      ["__google_forms_response_id", "__google_forms_response_id_2"],
+      ["answer", "r1"],
+    ]);
+  });
+
+  it("refuses ambiguous legacy sheets with a reserved question title", async () => {
+    mockForms.forms.get.mockResolvedValue({
+      data: {
+        items: [
+          {
+            itemId: "i1",
+            title: "__google_forms_response_id",
+            questionItem: { question: { questionId: "q1" } },
+          },
+        ],
+      },
+    });
+    mockForms.forms.responses.list.mockResolvedValue({
+      data: {
+        responses: [
+          {
+            responseId: "r1",
+            answers: { q1: { textAnswers: { answers: [{ value: "answer" }] } } },
+          },
+        ],
+      },
+    });
+    mockSheetsValues.get.mockResolvedValue({
+      data: { values: [["__google_forms_response_id"], ["answer"]] },
+    });
+
+    await expect(
+      exportFormResponsesToSheet(client, { formId: "f1", spreadsheetId: "s1" }),
+    ).rejects.toThrow(/Cannot identify response ID column/);
+
+    expect(mockSheetsValues.update).not.toHaveBeenCalled();
+    expect(mockSheetsValues.batchUpdate).not.toHaveBeenCalled();
+    expect(mockSheetsValues.append).not.toHaveBeenCalled();
+  });
+
+  it("keeps exact metadata header when its data cells are still blank", async () => {
+    mockForms.forms.get.mockResolvedValue({
+      data: {
+        items: [
+          { itemId: "i1", title: "Name", questionItem: { question: { questionId: "q1" } } },
+          {
+            itemId: "i2",
+            title: "__google_forms_response_id",
+            questionItem: { question: { questionId: "q2" } },
+          },
+        ],
+      },
+    });
+    mockForms.forms.responses.list.mockResolvedValue({
+      data: {
+        responses: [
+          {
+            responseId: "r1",
+            answers: {
+              q1: { textAnswers: { answers: [{ value: "Bob" }] } },
+              q2: { textAnswers: { answers: [{ value: "new" }] } },
+            },
+          },
+        ],
+      },
+    });
+    mockSheetsValues.get.mockResolvedValue({
+      data: {
+        values: [
+          ["Name", "__google_forms_response_id", "__google_forms_response_id_2"],
+          ["Alice", "old", ""],
+        ],
+      },
+    });
+    mockSheetsValues.append.mockResolvedValue({ data: {} });
+
+    await exportFormResponsesToSheet(client, { formId: "f1", spreadsheetId: "s1" });
+
+    expect(mockSheetsValues.append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: { values: [["Bob", "new", "r1"]] },
+      }),
+    );
   });
 });

@@ -3117,7 +3117,7 @@ export function registerTools(server: McpServer): void {
     {
       title: "Export form responses to Sheets",
       description:
-        "Append form responses to a spreadsheet tab. The header is written once and rows already in the tab are skipped, so a re-run adds only new responses.",
+        "Append form responses to Sheets with a __google_forms_response_id column for deduplication by response ID. Existing rows are migrated by answer matching; added questions go after the ID column, while reordered columns fail safely.",
       inputSchema: {
         formId: z.string().describe("Form ID."),
         spreadsheetId: z.string().describe("Destination spreadsheet ID."),

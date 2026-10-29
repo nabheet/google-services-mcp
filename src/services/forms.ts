@@ -287,9 +287,47 @@ function quoteSheetName(sheetName: string): string {
   return `'${sheetName.replace(/'/g, "''")}'`;
 }
 
-/** Normalized row identity, so a re-run can tell what is already exported. */
+const RESPONSE_ID_HEADER = "__google_forms_response_id";
+const RESPONSE_ID_HEADER_PATTERN = /^__google_forms_response_id(?:_\d+)?$/;
+
+/** Normalized row identity, used only to recognize rows from older exports. */
 function rowKey(row: unknown[]): string {
   return JSON.stringify(row.map((cell) => String(cell ?? "").trim()));
+}
+
+function responseIdHeader(headers: string[]): string {
+  let header = RESPONSE_ID_HEADER;
+  let suffix = 2;
+  while (headers.includes(header)) header = `${RESPONSE_ID_HEADER}_${suffix++}`;
+  return header;
+}
+
+function columnName(index: number): string {
+  let name = "";
+  for (let value = index + 1; value > 0; value = Math.floor((value - 1) / 26)) {
+    name = String.fromCharCode(65 + ((value - 1) % 26)) + name;
+  }
+  return name;
+}
+
+function questionColumn(questionIndex: number, responseIdColumn: number): number {
+  return questionIndex < responseIdColumn ? questionIndex : questionIndex + 1;
+}
+
+async function appendSheetHeaders(
+  sheets: sheets_v4.Sheets,
+  spreadsheetId: string,
+  sheetName: string,
+  startColumn: number,
+  headers: string[],
+): Promise<void> {
+  if (headers.length === 0) return;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${quoteSheetName(sheetName)}!${columnName(startColumn)}1`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [headers] },
+  });
 }
 
 /** Existing values in the tab; empty when the tab does not exist yet. */
@@ -314,7 +352,7 @@ async function readSheetRows(
   }
 }
 
-/** Append form responses (headers + rows) to a spreadsheet tab, once. */
+/** Append form responses, using response IDs for stable deduplication. */
 export async function exportFormResponsesToSheet(
   client: Auth.OAuth2Client,
   { formId, spreadsheetId, sheetName = "Sheet1" }: ExportResponsesArgs,
@@ -325,25 +363,185 @@ export async function exportFormResponsesToSheet(
   ]);
   const questions = (form.items ?? []).filter((i) => i.questionItem?.question);
   const headers = questions.map((i) => i.title ?? "Untitled");
-  const rows = responses.map((r) =>
-    questions.map((i) => {
+  const rows = responses.map((response) => ({
+    responseId: response.responseId ?? "",
+    values: questions.map((i) => {
       const qid = i.questionItem?.question?.questionId;
-      const ans = qid ? r.answers?.[qid] : undefined;
+      const ans = qid ? response.answers?.[qid] : undefined;
       const values = ans?.textAnswers?.answers?.map((a) => a.value ?? "") ?? [];
       return values.join("; ");
     }),
-  );
+  }));
   const sheets = google.sheets({ version: "v4", auth: client });
   const existing = await readSheetRows(sheets, spreadsheetId, sheetName);
-  const existingKeys = new Set(existing.map(rowKey));
-  const values: string[][] = existing.length === 0 ? [headers] : [];
+  const idHeader = responseIdHeader(headers);
+  const existingHeaders = existing[0] ?? [];
+  const existingDataRows = existing.slice(1);
+  let headerWidth = existingHeaders.length;
+  let responseIdColumn = headers.length;
+  if (existing.length > 0) {
+    const responseIds = new Set(rows.map((response) => response.responseId.trim()).filter(Boolean));
+    const candidates = existingHeaders
+      .map((cell, index) => (RESPONSE_ID_HEADER_PATTERN.test(String(cell ?? "")) ? index : -1))
+      .filter((index) => index >= 0);
+    const exactHeaderColumn = existingHeaders.findIndex((cell) => String(cell ?? "") === idHeader);
+    responseIdColumn = exactHeaderColumn;
+    if (responseIdColumn < 0 && candidates.length > 0) {
+      const matchingCandidates = candidates.map((candidate) => ({
+        column: candidate,
+        matches: existingDataRows.filter((row) =>
+          responseIds.has(String(row[candidate] ?? "").trim()),
+        ).length,
+      }));
+      const matchingMetadata = matchingCandidates.filter(({ matches }) => matches > 0);
+      if (matchingMetadata.length > 0) {
+        responseIdColumn = matchingMetadata.reduce((best, candidate) =>
+          candidate.matches > best.matches ? candidate : best,
+        ).column;
+      } else if (
+        existingDataRows.some((row) =>
+          candidates.some((candidate) => String(row[candidate] ?? "").trim()),
+        )
+      ) {
+        throw new Error(
+          "Cannot identify response ID column; rename reserved question headers or reconcile the sheet before exporting.",
+        );
+      }
+    }
+    if (
+      exactHeaderColumn < 0 &&
+      candidates.length > 1 &&
+      responseIdColumn >= 0 &&
+      responseIds.size > 0
+    ) {
+      responseIdColumn = candidates.reduce((best, candidate) => {
+        const score = existingDataRows.filter((row) =>
+          responseIds.has(String(row[candidate] ?? "").trim()),
+        ).length;
+        const bestScore = existingDataRows.filter((row) =>
+          responseIds.has(String(row[best] ?? "").trim()),
+        ).length;
+        if (score !== bestScore) return score > bestScore ? candidate : best;
+        const populated = existingDataRows.filter((row) =>
+          String(row[candidate] ?? "").trim(),
+        ).length;
+        const bestPopulated = existingDataRows.filter((row) =>
+          String(row[best] ?? "").trim(),
+        ).length;
+        return populated > bestPopulated ? candidate : best;
+      });
+    }
+  }
+  if (existing.length > 0 && responseIdColumn < 0) {
+    responseIdColumn = Math.max(existingHeaders.length, headers.length);
+  }
+
+  if (existing.length > 0) {
+    const questionColumns = new Map(
+      headers.map((header, index) => [questionColumn(index, responseIdColumn), header]),
+    );
+    for (const [index, cell] of existingHeaders.entries()) {
+      const value = String(cell ?? "");
+      if (!value || index === responseIdColumn) continue;
+      if (questionColumns.get(index) !== value) {
+        throw new Error(
+          "Form question order differs from sheet columns; reconcile the header row before exporting.",
+        );
+      }
+    }
+  }
+
+  const values: string[][] = existing.length === 0 ? [[...headers, idHeader]] : [];
+
+  const hasResponseIdColumn = responseIdColumn < existingHeaders.length;
+  if (existing.length > 0 && !hasResponseIdColumn) {
+    const addedHeaders = [...headers.slice(existingHeaders.length, responseIdColumn), idHeader];
+    await appendSheetHeaders(
+      sheets,
+      spreadsheetId,
+      sheetName,
+      existingHeaders.length,
+      addedHeaders,
+    );
+    headerWidth = responseIdColumn + 1;
+  }
+
+  if (existing.length > 0) {
+    const finalQuestionColumn =
+      headers.length === 0 ? -1 : questionColumn(headers.length - 1, responseIdColumn);
+    const requiredColumns = Math.max(responseIdColumn + 1, finalQuestionColumn + 1);
+    if (headerWidth < requiredColumns) {
+      const addedHeaders = Array.from({ length: requiredColumns - headerWidth }, (_, offset) => {
+        const column = headerWidth + offset;
+        return headers[column - 1] ?? "";
+      });
+      await appendSheetHeaders(sheets, spreadsheetId, sheetName, headerWidth, addedHeaders);
+    }
+  }
+
+  const existingResponseIds = new Set(
+    existingDataRows.map((row) => String(row[responseIdColumn] ?? "").trim()).filter(Boolean),
+  );
+  const legacyCounts = new Map<string, number>();
+  const legacyRows = new Map<string, number[]>();
+  for (const [index, row] of existingDataRows.entries()) {
+    if (String(row[responseIdColumn] ?? "").trim()) continue;
+    const answerValues = headers.map(
+      (_, index) => row[questionColumn(index, responseIdColumn)] ?? "",
+    );
+    const key = rowKey(answerValues);
+    legacyCounts.set(key, (legacyCounts.get(key) ?? 0) + 1);
+    const rowNumbers = legacyRows.get(key) ?? [];
+    rowNumbers.push(index + 2);
+    legacyRows.set(key, rowNumbers);
+  }
+
   let skippedExisting = 0;
-  for (const row of rows) {
-    if (existingKeys.has(rowKey(row))) {
+  const legacyIdWrites: Array<{ range: string; values: string[][] }> = [];
+  for (const response of rows) {
+    const responseId = response.responseId.trim();
+    if (responseId && existingResponseIds.has(responseId)) {
       skippedExisting += 1;
       continue;
     }
+    const key = rowKey(response.values);
+    const legacyCount = legacyCounts.get(key) ?? 0;
+    if (legacyCount > 0) {
+      legacyCounts.set(key, legacyCount - 1);
+      const rowNumber = legacyRows.get(key)?.shift();
+      if (responseId) {
+        if (rowNumber !== undefined) {
+          legacyIdWrites.push({
+            range: `${quoteSheetName(sheetName)}!${columnName(responseIdColumn)}${rowNumber}`,
+            values: [[responseId]],
+          });
+        }
+        existingResponseIds.add(responseId);
+      }
+      skippedExisting += 1;
+      continue;
+    }
+
+    const finalQuestionColumn =
+      response.values.length === 0
+        ? -1
+        : questionColumn(response.values.length - 1, responseIdColumn);
+    const row = Array.from(
+      { length: Math.max(responseIdColumn, finalQuestionColumn) + 1 },
+      () => "",
+    );
+    response.values.forEach((answer, index) => {
+      row[questionColumn(index, responseIdColumn)] = answer;
+    });
+    row[responseIdColumn] = responseId;
     values.push(row);
+    if (responseId) existingResponseIds.add(responseId);
+  }
+  if (legacyIdWrites.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId,
+      requestBody: { valueInputOption: "USER_ENTERED", data: legacyIdWrites },
+    });
   }
   if (values.length > 0) {
     await sheets.spreadsheets.values.append({
