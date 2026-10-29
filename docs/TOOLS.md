@@ -68,6 +68,12 @@ authorize again rather than leaving an account that can work only until its
 first access token expires. An already-stored account with an expired access
 token but no refresh token reports the same recovery: remove and re-add it.
 
+New account records remember the OAuth client ID that authorized them. If the
+configured client changes, those accounts are refused rather than sending a
+refresh token to the wrong client; restore the original credentials or
+remove and re-add the account. Legacy records without this field remain
+compatible.
+
 | arg | type | notes |
 | --- | --- | --- |
 | `name` | string | required. Account nickname (e.g. `personal`, `work`). |

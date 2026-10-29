@@ -148,6 +148,12 @@ describe("getClient", () => {
     expect(client.creds.refresh_token).toBe("rt-personal");
   });
 
+  it("refuses tokens bound to a different OAuth client", async () => {
+    await saveAccount(account("wrong-client", { clientId: "old-client" }));
+    await expect(authManager.getClient("wrong-client")).rejects.toThrow(/different OAuth client/i);
+    expect(oauth.refreshAccessToken).not.toHaveBeenCalled();
+  });
+
   it("refreshes and persists a new token when the access token is expired", async () => {
     await saveAccount(account("stale", { expiryDate: Date.now() - 1000 }));
     const client: { creds: Record<string, unknown> } = (await authManager.getClient(
@@ -179,6 +185,7 @@ describe("addAccount", () => {
     expect(added.name).toBe("newbie");
     expect(added.email).toBe("alice@example.com");
     expect(added.accessToken).toBe("at-from-flow");
+    expect(added.clientId).toBe("client-id-test");
     expect(oauth.openBrowser).not.toHaveBeenCalled();
     const persisted = await authManager.resolveAccount("newbie");
     expect(persisted.refreshToken).toBe("rt-from-flow");

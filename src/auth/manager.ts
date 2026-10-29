@@ -122,6 +122,13 @@ class AuthManager {
     const config = await this.getConfig();
     let account = await this.resolveAccount(name);
 
+    if (account.clientId !== undefined && account.clientId !== config.clientId) {
+      throw new Error(
+        `Account "${account.name}" was authorized with a different OAuth client. ` +
+          "Use the original client credentials, or remove and re-add the account.",
+      );
+    }
+
     if (account.expiryDate && Date.now() > account.expiryDate - 60_000) {
       if (!account.refreshToken) {
         throw new Error(
@@ -207,6 +214,7 @@ class AuthManager {
     const account: StoredAccount = {
       name: key,
       email: user.email,
+      clientId: config.clientId,
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       expiryDate: tokens.expiryDate,
