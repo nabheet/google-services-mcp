@@ -196,6 +196,55 @@ describe("listEvents", () => {
     );
     expect(result.items[0]).toMatchObject({ id: "e1", summary: "Standup" });
   });
+
+  it("defaults timeMin to now so the first page is upcoming, not the oldest events", async () => {
+    mockEvents.list.mockResolvedValue({ data: { items: [] } });
+    const before = Date.now();
+    await listEvents(client, { calendarId: "primary" });
+    const after = Date.now();
+
+    const timeMin = mockEvents.list.mock.calls[0][0].timeMin as string;
+    const parsed = Date.parse(timeMin);
+    expect(Number.isNaN(parsed)).toBe(false);
+    expect(parsed).toBeGreaterThanOrEqual(before - 1000);
+    expect(parsed).toBeLessThanOrEqual(after + 1000);
+  });
+
+  it("keeps a caller-supplied timeMin", async () => {
+    mockEvents.list.mockResolvedValue({ data: { items: [] } });
+    await listEvents(client, { timeMin: "2026-08-10T00:00:00Z" });
+    expect(mockEvents.list.mock.calls[0][0].timeMin).toBe("2026-08-10T00:00:00Z");
+  });
+
+  it("maps a recurring instance with the fields needed to target it", async () => {
+    mockEvents.list.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "e1_20260810T160000Z",
+            summary: "Standup",
+            status: "confirmed",
+            recurringEventId: "e1",
+            originalStartTime: { dateTime: "2026-08-10T09:00:00-07:00" },
+            start: { dateTime: "2026-08-10T09:00:00-07:00" },
+            end: { dateTime: "2026-08-10T09:15:00-07:00" },
+            attendees: [{ email: "a@example.com", responseStatus: "accepted" }],
+          },
+        ],
+      },
+    });
+
+    const result = await listEvents(client, {});
+    const item = result.items[0];
+
+    expect(item).toMatchObject({
+      id: "e1_20260810T160000Z",
+      status: "confirmed",
+      recurringEventId: "e1",
+      originalStartTime: { dateTime: "2026-08-10T09:00:00-07:00" },
+      attendees: [{ email: "a@example.com", responseStatus: "accepted" }],
+    });
+  });
 });
 
 describe("createEvent", () => {
@@ -466,6 +515,21 @@ describe("respondToEvent", () => {
       eventId: "e1",
       requestBody: { attendees: [{ email: "me@example.com", responseStatus: "declined" }] },
     });
+  });
+
+  it("throws when the address is not on the invite instead of adding it", async () => {
+    mockEvents.get.mockResolvedValue({
+      data: { id: "e1", attendees: [{ email: "other@example.com", responseStatus: "accepted" }] },
+    });
+
+    await expect(
+      respondToEvent(client, {
+        eventId: "e1",
+        email: "stranger@example.com",
+        responseStatus: "accepted",
+      }),
+    ).rejects.toThrow(/not an attendee/i);
+    expect(mockEvents.patch).not.toHaveBeenCalled();
   });
 });
 

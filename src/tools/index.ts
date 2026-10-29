@@ -1345,7 +1345,7 @@ export function registerTools(server: McpServer): void {
     {
       title: "Respond to calendar event invite",
       description:
-        "Accept, decline, or mark tentative an event invite by setting the attendee responseStatus.",
+        "Accept, decline, or mark tentative an event invite by setting the attendee responseStatus. The address must already be on the invite.",
       inputSchema: {
         eventId: z.string().describe("Event ID."),
         responseStatus: z
