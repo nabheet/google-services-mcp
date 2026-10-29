@@ -865,7 +865,8 @@ positions from `google_docs_get`.
 ### `google_docs_replace_text`
 
 Find and replace text. Args: `documentId` (required), `find` (required),
-`replace` (required), `matchCase` (boolean, default `true`).
+`replace` (required), `matchCase` (boolean, default `true`). Returns
+`occurrencesChanged`; `0` means the API confirmed no match.
 
 ### `google_docs_batch_update`
 
@@ -892,6 +893,12 @@ paragraph). Returns `{ objectId }`.
 
 ## Slides
 
+Every Slides/Docs/Sheets tool that reads a result id from `batchUpdate` fails
+when the API returns no reply for its request: batch-update replies are
+positional, so an absent reply leaves the change unconfirmed and reporting
+success would be a guess. Raw `*_batch_update` tools pass requests through as
+they are.
+
 ### `google_slides_get`
 
 Get a presentation's full JSON. Arg: `presentationId` (required).
@@ -903,11 +910,14 @@ Create a new presentation. Arg: `title` (required).
 ### `google_slides_replace_text`
 
 Find and replace text across slides. Args: `presentationId` (required),
-`find` (required), `replace` (required), `matchCase` (default `true`).
+`find` (required), `replace` (required), `matchCase` (default `true`). Returns
+`occurrencesChanged`; `0` means the API confirmed no match, not that the call
+was skipped.
 
 ### `google_slides_add_slide`
 
-Add a blank slide. Arg: `presentationId` (required). Returns the new slide `objectId`.
+Add a blank slide. Arg: `presentationId` (required). Returns the new slide
+`objectId`.
 
 ### `google_slides_delete_slide`
 

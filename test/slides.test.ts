@@ -148,7 +148,9 @@ describe("slides service", () => {
   });
 
   it("createTextbox without text sends only the shape request", async () => {
-    mockPresentations.batchUpdate.mockResolvedValue({ data: { replies: [] } });
+    mockPresentations.batchUpdate.mockResolvedValue({
+      data: { replies: [{ createShape: { objectId: "tb-generated" } }] },
+    });
     await createTextbox(client, { presentationId: "p1", pageObjectId: "page1" });
     const body = mockPresentations.batchUpdate.mock.calls[0][0].requestBody;
     expect(body.requests).toHaveLength(1);
@@ -167,5 +169,54 @@ describe("slides service", () => {
     const body = mockPresentations.batchUpdate.mock.calls[0][0].requestBody;
     expect(body.requests[0].createImage.url).toBe("https://example.com/pic.png");
     expect(body.requests[0].createImage.elementProperties.pageObjectId).toBe("page1");
+  });
+});
+
+describe("slides unconfirmed writes", () => {
+  beforeEach(() => {
+    mockPresentations.batchUpdate.mockResolvedValue({ data: {} });
+  });
+
+  it("replaceAllText throws when there is no reply", async () => {
+    await expect(
+      replaceAllText(client, { presentationId: "p1", find: "a", replace: "b" }),
+    ).rejects.toThrow(/no reply/i);
+  });
+
+  it("createSlide throws when there is no reply", async () => {
+    await expect(createSlide(client, { presentationId: "p1" })).rejects.toThrow(/no reply/i);
+  });
+
+  it("createSlide throws when the reply has no object id", async () => {
+    mockPresentations.batchUpdate.mockResolvedValue({ data: { replies: [{ createSlide: {} }] } });
+    await expect(createSlide(client, { presentationId: "p1" })).rejects.toThrow(/object id/i);
+  });
+
+  it("duplicateSlide throws when the reply has no object id", async () => {
+    mockPresentations.batchUpdate.mockResolvedValue({
+      data: { replies: [{ duplicateObject: {} }] },
+    });
+    await expect(
+      duplicateSlide(client, { presentationId: "p1", slideObjectId: "s1" }),
+    ).rejects.toThrow(/object id/i);
+  });
+
+  it("moveSlide throws instead of echoing the requested position", async () => {
+    await expect(
+      moveSlide(client, { presentationId: "p1", slideObjectId: "s2", insertionIndex: 1 }),
+    ).rejects.toThrow(/no reply/i);
+  });
+
+  it("createImage throws when the reply has no object id", async () => {
+    mockPresentations.batchUpdate.mockResolvedValue({ data: { replies: [{ createImage: {} }] } });
+    await expect(
+      createImage(client, { presentationId: "p1", pageObjectId: "page1", url: "https://x/y.png" }),
+    ).rejects.toThrow(/object id/i);
+  });
+
+  it("createTextbox throws when the shape reply is missing", async () => {
+    await expect(
+      createTextbox(client, { presentationId: "p1", pageObjectId: "page1" }),
+    ).rejects.toThrow(/no reply/i);
   });
 });
