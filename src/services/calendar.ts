@@ -140,6 +140,12 @@ export interface EventSummary {
   htmlLink?: string;
   attendees?: Array<{ email: string; displayName?: string; responseStatus?: string }>;
   recurrence?: string[];
+  /** Set on an instance of a recurring series: the series' event id. */
+  recurringEventId?: string;
+  /** Set on an instance: when this occurrence was scheduled to start. */
+  originalStartTime?: { dateTime?: string; date?: string; timeZone?: string };
+  /** "confirmed", "tentative" or "cancelled". */
+  status?: string;
   reminders?: {
     useDefault?: boolean;
     overrides?: Array<{ method?: string; minutes?: number }>;
@@ -368,9 +374,12 @@ export async function listEvents(
   opts: ListEventsOptions,
 ): Promise<ListPage<EventSummary>> {
   const calendar = google.calendar({ version: "v3", auth: client });
+  // Without timeMin the API returns the oldest events first, which is the
+  // opposite of "upcoming": the first page would be years of history.
+  const timeMin = opts.timeMin ?? new Date().toISOString();
   const res = await calendar.events.list({
     calendarId: opts.calendarId ?? "primary",
-    timeMin: opts.timeMin,
+    timeMin,
     timeMax: opts.timeMax,
     maxResults: opts.maxResults ?? 25,
     q: opts.q,
@@ -379,16 +388,7 @@ export async function listEvents(
     ...(opts.pageToken !== undefined ? { pageToken: opts.pageToken } : {}),
   });
   return {
-    items: (res.data.items ?? []).map((e) => ({
-      id: e.id as string,
-      summary: e.summary as string | undefined,
-      description: e.description as string | undefined,
-      location: e.location as string | undefined,
-      start: e.start as EventSummary["start"],
-      end: e.end as EventSummary["end"],
-      hangoutLink: e.hangoutLink as string | undefined,
-      htmlLink: e.htmlLink as string | undefined,
-    })),
+    items: (res.data.items ?? []).map(mapEvent),
     ...(res.data.nextPageToken ? { nextPageToken: res.data.nextPageToken } : {}),
   };
 }
@@ -533,7 +533,16 @@ export async function respondToEvent(
     a.email?.toLowerCase() === wanted ? { ...a, responseStatus: opts.responseStatus } : a,
   );
   if (!attendees.some((a) => a.email?.toLowerCase() === wanted)) {
-    attendees.push({ email: opts.email, responseStatus: opts.responseStatus });
+    // Adding the address would invent an invite and notify the organizer about
+    // a guest who was never invited. Say so instead.
+    const known = (current.data.attendees ?? [])
+      .map((a) => a.email)
+      .filter((email): email is string => Boolean(email))
+      .join(", ");
+    throw new Error(
+      `${opts.email} is not an attendee of event ${opts.eventId}` +
+        (known.length > 0 ? `; attendees are: ${known}.` : "; the event has no attendees."),
+    );
   }
   const res = await calendar.events.patch({
     calendarId,
@@ -583,6 +592,9 @@ function mapEvent(data: calendar_v3.Schema$Event): EventSummary {
     htmlLink: data.htmlLink as string | undefined,
     attendees: data.attendees as EventSummary["attendees"],
     recurrence: data.recurrence as string[] | undefined,
+    recurringEventId: data.recurringEventId as string | undefined,
+    originalStartTime: data.originalStartTime as EventSummary["originalStartTime"],
+    status: data.status as string | undefined,
     reminders: data.reminders as EventSummary["reminders"],
     transparency: data.transparency as string | undefined,
     colorId: data.colorId as string | undefined,

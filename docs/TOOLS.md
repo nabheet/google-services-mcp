@@ -434,7 +434,9 @@ Delete a secondary calendar permanently (destructive). Args: `calendarId`
 
 ### `google_calendar_list_events`
 
-List upcoming events, optionally filtered by time range or query.
+List upcoming events, optionally filtered by time range or query. Recurring
+events are expanded into individual occurrences (`singleEvents`), oldest first
+within the requested range.
 
 | arg | type | notes |
 | --- | --- | --- |
@@ -444,6 +446,16 @@ List upcoming events, optionally filtered by time range or query.
 | `q` | string | optional free-text search. |
 | `calendarId` | string | optional, default primary. |
 | `pageToken` | string | optional. From a previous page's `nextPageToken`. |
+
+Omitting `timeMin` means "from now", not "everything": the API's own default
+starts at the oldest event in the calendar, so the first page would be years of
+history rather than what is coming up.
+
+An occurrence carries the same fields as a single event plus `recurringEventId`
+(the series' id) and `originalStartTime` (when that occurrence was scheduled).
+Use the occurrence's own `id` to update or delete just that one; use
+`recurringEventId` to address the series. `status` is `confirmed`, `tentative`
+or `cancelled`.
 
 ### `google_calendar_create_event`
 
@@ -502,7 +514,8 @@ Delete an event by ID. Args: `eventId` (required), `calendarId` (optional).
 ### `google_calendar_respond`
 
 Accept, decline, or mark tentative an event invite by setting the attendee
-responseStatus.
+responseStatus. The address must already be on the invite: an address that is
+not an attendee is an error, so responding cannot silently add a guest.
 
 | arg | type | notes |
 | --- | --- | --- |
