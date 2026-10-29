@@ -29,6 +29,7 @@ on:
   # publish a beta build for the commit that is about to be merged.
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
   workflow_dispatch:
 
 jobs:
@@ -52,7 +53,7 @@ jobs:
       - run: node dist/main.js --version
 
   publish:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     needs: test
     runs-on: ubuntu-latest
     concurrency:
