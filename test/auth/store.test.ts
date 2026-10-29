@@ -60,11 +60,32 @@ describe("store", () => {
     expect(await loadAccount("nope")).toBeNull();
   });
 
+  it("loadAccount returns null for valid JSON that is not an account record", async () => {
+    await fs.mkdir(path.join(tmp, "accounts"), { recursive: true });
+    await fs.writeFile(
+      path.join(tmp, "accounts", "broken.json"),
+      JSON.stringify({ name: "broken", accessToken: 42, refreshToken: null, scopes: "gmail" }),
+      "utf8",
+    );
+
+    expect(await loadAccount("broken")).toBeNull();
+  });
+
   it("loadAllAccounts sorts by name and skips corrupt files", async () => {
     await saveAccount(makeAccount("zeta"));
     await saveAccount(makeAccount("alpha"));
     await saveAccount(makeAccount("mid"));
     await fs.writeFile(path.join(tmp, "accounts", "corrupt.json"), "not-json{", "utf8");
+    await fs.writeFile(
+      path.join(tmp, "accounts", "wrong-shape.json"),
+      JSON.stringify({ name: "wrong-shape", accessToken: 42 }),
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(tmp, "accounts", "wrong-name.json"),
+      JSON.stringify(makeAccount("different")),
+      "utf8",
+    );
     await fs.writeFile(path.join(tmp, "accounts", "ignored.txt"), "x", "utf8");
 
     const accounts = await loadAllAccounts();
