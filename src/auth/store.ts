@@ -18,6 +18,24 @@ export interface StoredAccount {
   createdAt: string;
 }
 
+function isStoredAccount(value: unknown, expectedName: string): value is StoredAccount {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+
+  const account = value as Record<string, unknown>;
+  return (
+    account.name === expectedName &&
+    typeof account.accessToken === "string" &&
+    typeof account.refreshToken === "string" &&
+    Array.isArray(account.scopes) &&
+    account.scopes.every((scope) => typeof scope === "string") &&
+    typeof account.createdAt === "string" &&
+    (account.email === undefined || typeof account.email === "string") &&
+    (account.clientId === undefined || typeof account.clientId === "string") &&
+    (account.expiryDate === undefined ||
+      (typeof account.expiryDate === "number" && Number.isFinite(account.expiryDate)))
+  );
+}
+
 export async function saveAccount(account: StoredAccount): Promise<void> {
   await ensureDirs();
   const safeName = sanitizeName(account.name);
@@ -32,8 +50,10 @@ export async function saveAccount(account: StoredAccount): Promise<void> {
 
 export async function loadAccount(name: string): Promise<StoredAccount | null> {
   try {
-    const raw = await fs.readFile(getAccountPath(name), "utf8");
-    return JSON.parse(raw) as StoredAccount;
+    const safeName = sanitizeName(name);
+    const raw = await fs.readFile(getAccountPath(safeName), "utf8");
+    const parsed: unknown = JSON.parse(raw);
+    return isStoredAccount(parsed, safeName) ? parsed : null;
   } catch {
     return null;
   }
@@ -47,7 +67,9 @@ export async function loadAllAccounts(): Promise<StoredAccount[]> {
     if (!file.endsWith(".json")) continue;
     try {
       const raw = await fs.readFile(path.join(getAccountsDir(), file), "utf8");
-      accounts.push(JSON.parse(raw) as StoredAccount);
+      const expectedName = file.slice(0, -".json".length);
+      const parsed: unknown = JSON.parse(raw);
+      if (isStoredAccount(parsed, expectedName)) accounts.push(parsed);
     } catch {
       // Corrupt or unreadable account file — skip it rather than crash the server.
     }
