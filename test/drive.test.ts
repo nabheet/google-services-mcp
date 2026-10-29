@@ -206,7 +206,7 @@ describe("deleteDriveFile", () => {
   it("deletes a file", async () => {
     mockFiles.delete.mockResolvedValue({ data: {} });
     await deleteDriveFile(client, { fileId: "f1" });
-    expect(mockFiles.delete).toHaveBeenCalledWith({ fileId: "f1" });
+    expect(mockFiles.delete).toHaveBeenCalledWith({ fileId: "f1", supportsAllDrives: true });
   });
 });
 
@@ -220,6 +220,7 @@ describe("trashDriveFile", () => {
       fileId: "f1",
       requestBody: { trashed: true },
       fields: expect.stringContaining("trashed"),
+      supportsAllDrives: true,
     });
     expect(result.trashed).toBe(true);
   });
@@ -235,6 +236,7 @@ describe("restoreDriveFile", () => {
       fileId: "f1",
       requestBody: { trashed: false },
       fields: expect.stringContaining("trashed"),
+      supportsAllDrives: true,
     });
     expect(result.trashed).toBe(false);
   });
@@ -253,6 +255,7 @@ describe("shareDriveFile", () => {
       requestBody: { type: "user", role: "reader", emailAddress: "__VG_EMAIL_b3e8b64ce83f__" },
       sendNotificationEmail: true,
       fields: "id",
+      supportsAllDrives: true,
     });
     expect(result.id).toBe("perm-1");
   });
@@ -294,6 +297,7 @@ describe("moveDriveFile", () => {
       addParents: "fld2",
       removeParents: "fld1",
       fields: expect.stringContaining("parents"),
+      supportsAllDrives: true,
     });
     expect(result).toMatchObject({ id: "f1", name: "notes.md", parents: ["fld2"] });
   });
@@ -307,6 +311,7 @@ describe("moveDriveFile", () => {
       fileId: "f1",
       addParents: "fld2",
       fields: expect.stringContaining("parents"),
+      supportsAllDrives: true,
     });
     expect(result).toMatchObject({ id: "f1" });
   });
@@ -337,7 +342,11 @@ describe("downloadDriveFile", () => {
   it("returns decoded text for text responses", async () => {
     mockFiles.get.mockResolvedValue({ data: "plain file content" });
     const result = await downloadDriveFile(client, { fileId: "f1" });
-    expect(mockFiles.get).toHaveBeenCalledWith({ fileId: "f1", alt: "media" });
+    expect(mockFiles.get).toHaveBeenCalledWith({
+      fileId: "f1",
+      alt: "media",
+      supportsAllDrives: true,
+    });
     expect(result).toEqual({ data: "plain file content", binary: false });
   });
 
@@ -372,7 +381,11 @@ describe("downloadDriveFile", () => {
   it("writes binary bytes to a local path when saveToPath is set", async () => {
     mockFiles.get.mockResolvedValue({ data: new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])]) });
     const result = await downloadDriveFile(client, { fileId: "f1", saveToPath: "/tmp/out.png" });
-    expect(mockFiles.get).toHaveBeenCalledWith({ fileId: "f1", alt: "media" });
+    expect(mockFiles.get).toHaveBeenCalledWith({
+      fileId: "f1",
+      alt: "media",
+      supportsAllDrives: true,
+    });
     expect(mockFs.writeFile).toHaveBeenCalledWith(
       "/tmp/out.png",
       Buffer.from([0x89, 0x50, 0x4e, 0x47]),
@@ -447,6 +460,7 @@ describe("createDriveFolder", () => {
     expect(mockFiles.create).toHaveBeenCalledWith({
       requestBody: { name: "Reports", mimeType: "application/vnd.google-apps.folder" },
       fields: expect.stringContaining("webViewLink"),
+      supportsAllDrives: true,
     });
     expect(result).toMatchObject({ id: "fld1", name: "Reports" });
   });
@@ -466,6 +480,7 @@ describe("copyDriveFile", () => {
       fileId: "f1",
       requestBody: { name: "notes copy.md" },
       fields: expect.stringContaining("webViewLink"),
+      supportsAllDrives: true,
     });
     expect(result.id).toBe("f-copy");
   });
@@ -477,6 +492,7 @@ describe("copyDriveFile", () => {
       fileId: "f1",
       requestBody: {},
       fields: expect.stringContaining("webViewLink"),
+      supportsAllDrives: true,
     });
   });
 });
@@ -492,7 +508,7 @@ describe("listDrivePermissions", () => {
       },
     });
     const result = await listDrivePermissions(client, { fileId: "f1" });
-    expect(mockPermissions.list).toHaveBeenCalledWith({ fileId: "f1" });
+    expect(mockPermissions.list).toHaveBeenCalledWith({ fileId: "f1", supportsAllDrives: true });
     expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({ id: "p1", type: "user", role: "writer" });
     expect(result[1]).toMatchObject({ id: "p2", type: "anyone", role: "reader" });
@@ -503,7 +519,11 @@ describe("deleteDrivePermission", () => {
   it("deletes a permission by id", async () => {
     mockPermissions.delete.mockResolvedValue({ data: {} });
     await deleteDrivePermission(client, { fileId: "f1", permissionId: "p1" });
-    expect(mockPermissions.delete).toHaveBeenCalledWith({ fileId: "f1", permissionId: "p1" });
+    expect(mockPermissions.delete).toHaveBeenCalledWith({
+      fileId: "f1",
+      permissionId: "p1",
+      supportsAllDrives: true,
+    });
   });
 });
 
@@ -521,6 +541,7 @@ describe("shareDriveFile extended", () => {
       requestBody: { type: "anyone", role: "reader" },
       sendNotificationEmail: false,
       fields: "id",
+      supportsAllDrives: true,
     });
     expect(result.id).toBe("perm-link");
   });
@@ -538,6 +559,7 @@ describe("shareDriveFile extended", () => {
       requestBody: { type: "domain", role: "writer", domain: "example.com" },
       sendNotificationEmail: true,
       fields: "id",
+      supportsAllDrives: true,
     });
   });
 
@@ -555,6 +577,7 @@ describe("shareDriveFile extended", () => {
       sendNotificationEmail: true,
       transferOwnership: true,
       fields: "id",
+      supportsAllDrives: true,
     });
   });
 });
@@ -571,5 +594,49 @@ describe("drive pagination", () => {
       }),
     );
     expect(result.nextPageToken).toBe("p2");
+  });
+});
+
+describe("shared drive support", () => {
+  it("sends supportsAllDrives on every single-file and permission call", async () => {
+    mockFiles.get.mockResolvedValue({ data: { id: "f1" } });
+    mockFiles.create.mockResolvedValue({ data: { id: "f1" } });
+    mockFiles.update.mockResolvedValue({ data: { id: "f1" } });
+    mockFiles.delete.mockResolvedValue({ data: {} });
+    mockFiles.copy.mockResolvedValue({ data: { id: "f1" } });
+    mockPermissions.create.mockResolvedValue({ data: { id: "p1" } });
+    mockPermissions.list.mockResolvedValue({ data: { permissions: [] } });
+    mockPermissions.delete.mockResolvedValue({ data: {} });
+
+    await getDriveFile(client, { fileId: "f1" });
+    await downloadDriveFile(client, { fileId: "f1" });
+    await updateDriveFile(client, { fileId: "f1", name: "renamed.md" });
+    await trashDriveFile(client, { fileId: "f1" });
+    await restoreDriveFile(client, { fileId: "f1" });
+    await moveDriveFile(client, { fileId: "f1", parentFolderId: "fld2" });
+    await copyDriveFile(client, { fileId: "f1" });
+    await deleteDriveFile(client, { fileId: "f1" });
+    await uploadDriveFile(client, { name: "x.txt", mimeType: "text/plain", content: "x" });
+    await createDriveFolder(client, { name: "Reports" });
+    await listDrivePermissions(client, { fileId: "f1" });
+    await shareDriveFile(client, { fileId: "f1", type: "anyone", role: "reader" });
+    await deleteDrivePermission(client, { fileId: "f1", permissionId: "p1" });
+
+    const calls: [string, Record<string, unknown>[]][] = [
+      ["files.get", mockFiles.get.mock.calls],
+      ["files.create", mockFiles.create.mock.calls],
+      ["files.update", mockFiles.update.mock.calls],
+      ["files.delete", mockFiles.delete.mock.calls],
+      ["files.copy", mockFiles.copy.mock.calls],
+      ["permissions.create", mockPermissions.create.mock.calls],
+      ["permissions.list", mockPermissions.list.mock.calls],
+      ["permissions.delete", mockPermissions.delete.mock.calls],
+    ];
+    for (const [name, callsForMethod] of calls) {
+      expect(callsForMethod.length, `${name} was called`).toBeGreaterThan(0);
+      for (const [params] of callsForMethod) {
+        expect(params, name).toMatchObject({ supportsAllDrives: true });
+      }
+    }
   });
 });

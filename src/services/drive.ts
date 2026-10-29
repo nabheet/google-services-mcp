@@ -93,6 +93,10 @@ export interface DriveFile {
  */
 const FILE_FIELDS = "id,name,mimeType,size,createdTime,modifiedTime,webViewLink,parents,trashed";
 
+// Without supportsAllDrives a request for an item on a shared drive is
+// answered with 404, even though files.list surfaced it.
+const SHARED_DRIVE = { supportsAllDrives: true } as const;
+
 export interface DownloadDriveResult {
   /** Base64-encoded raw bytes (binary) or the raw string (text). */
   data: string;
@@ -171,7 +175,11 @@ export async function getDriveFile(
   opts: GetDriveOptions,
 ): Promise<DriveFile> {
   const drive = google.drive({ version: "v3", auth: client });
-  const res = await drive.files.get({ fileId: opts.fileId, fields: FILE_FIELDS });
+  const res = await drive.files.get({
+    fileId: opts.fileId,
+    fields: FILE_FIELDS,
+    ...SHARED_DRIVE,
+  });
   return mapFile(res.data);
 }
 
@@ -183,7 +191,11 @@ export async function uploadDriveFile(
   const drive = google.drive({ version: "v3", auth: client });
   const requestBody: drive_v3.Schema$File = { name: opts.name, mimeType: opts.mimeType };
   if (opts.parentFolderId) requestBody.parents = [opts.parentFolderId];
-  const params: drive_v3.Params$Resource$Files$Create = { requestBody, fields: FILE_FIELDS };
+  const params: drive_v3.Params$Resource$Files$Create = {
+    requestBody,
+    fields: FILE_FIELDS,
+    ...SHARED_DRIVE,
+  };
   if (opts.path !== undefined) {
     params.media = { mimeType: opts.mimeType, body: createReadStream(opts.path) };
   } else if (opts.content !== undefined) {
@@ -206,6 +218,7 @@ export async function updateDriveFile(
     fileId: opts.fileId,
     requestBody,
     fields: FILE_FIELDS,
+    ...SHARED_DRIVE,
   };
   if (opts.path !== undefined) {
     params.media = {
@@ -225,7 +238,7 @@ export async function deleteDriveFile(
   opts: GetDriveOptions,
 ): Promise<void> {
   const drive = google.drive({ version: "v3", auth: client });
-  await drive.files.delete({ fileId: opts.fileId });
+  await drive.files.delete({ fileId: opts.fileId, ...SHARED_DRIVE });
 }
 
 /** Move a file to trash (recoverable via restoreDriveFile). */
@@ -238,6 +251,7 @@ export async function trashDriveFile(
     fileId: opts.fileId,
     requestBody: { trashed: true },
     fields: FILE_FIELDS,
+    ...SHARED_DRIVE,
   });
   return mapFile(res.data);
 }
@@ -252,6 +266,7 @@ export async function restoreDriveFile(
     fileId: opts.fileId,
     requestBody: { trashed: false },
     fields: FILE_FIELDS,
+    ...SHARED_DRIVE,
   });
   return mapFile(res.data);
 }
@@ -266,6 +281,7 @@ export async function moveDriveFile(
     fileId: opts.fileId,
     addParents: opts.parentFolderId,
     fields: FILE_FIELDS,
+    ...SHARED_DRIVE,
   };
   if (opts.removeParentFolderId) params.removeParents = opts.removeParentFolderId;
   const res = await drive.files.update(params);
@@ -289,6 +305,7 @@ export async function shareDriveFile(
     requestBody,
     fields: "id",
     sendNotificationEmail: opts.sendNotificationEmail !== false,
+    ...SHARED_DRIVE,
   };
   if (opts.transferOwnership) params.transferOwnership = true;
   const res = await drive.permissions.create(params);
@@ -305,7 +322,7 @@ export async function listDrivePermissions(
   opts: GetDriveOptions,
 ): Promise<PermissionSummary[]> {
   const drive = google.drive({ version: "v3", auth: client });
-  const res = await drive.permissions.list({ fileId: opts.fileId });
+  const res = await drive.permissions.list({ fileId: opts.fileId, ...SHARED_DRIVE });
   return (res.data.permissions ?? []).map((p) => ({
     id: p.id as string,
     type: p.type as string | undefined,
@@ -322,7 +339,11 @@ export async function deleteDrivePermission(
   opts: GetPermissionOptions,
 ): Promise<void> {
   const drive = google.drive({ version: "v3", auth: client });
-  await drive.permissions.delete({ fileId: opts.fileId, permissionId: opts.permissionId });
+  await drive.permissions.delete({
+    fileId: opts.fileId,
+    permissionId: opts.permissionId,
+    ...SHARED_DRIVE,
+  });
 }
 
 function mapFile(f: drive_v3.Schema$File): DriveFile {
@@ -345,7 +366,7 @@ export async function downloadDriveFile(
   opts: DownloadDriveOptions,
 ): Promise<DownloadDriveResult | { savedTo: string }> {
   const drive = google.drive({ version: "v3", auth: client });
-  const res = await drive.files.get({ fileId: opts.fileId, alt: "media" });
+  const res = await drive.files.get({ fileId: opts.fileId, alt: "media", ...SHARED_DRIVE });
   return saveOrMap(res, opts.saveToPath);
 }
 
@@ -370,7 +391,7 @@ export async function createDriveFolder(
     mimeType: "application/vnd.google-apps.folder",
   };
   if (opts.parentFolderId) requestBody.parents = [opts.parentFolderId];
-  const res = await drive.files.create({ requestBody, fields: FILE_FIELDS });
+  const res = await drive.files.create({ requestBody, fields: FILE_FIELDS, ...SHARED_DRIVE });
   return mapFile(res.data);
 }
 
@@ -382,6 +403,11 @@ export async function copyDriveFile(
   const drive = google.drive({ version: "v3", auth: client });
   const requestBody: drive_v3.Schema$File = {};
   if (opts.name) requestBody.name = opts.name;
-  const res = await drive.files.copy({ fileId: opts.fileId, requestBody, fields: FILE_FIELDS });
+  const res = await drive.files.copy({
+    fileId: opts.fileId,
+    requestBody,
+    fields: FILE_FIELDS,
+    ...SHARED_DRIVE,
+  });
   return mapFile(res.data);
 }
