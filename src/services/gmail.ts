@@ -323,6 +323,16 @@ interface ResolvedAttachment {
 }
 
 /** Resolve Drive file IDs into attachment bytes under the Gmail size cap. */
+/** Google-native files have no downloadable bytes; name them for the error. */
+const NATIVE_DRIVE_MIME: Record<string, string> = {
+  "application/vnd.google-apps.document": "Google Docs",
+  "application/vnd.google-apps.spreadsheet": "Google Sheets",
+  "application/vnd.google-apps.presentation": "Google Slides",
+  "application/vnd.google-apps.drawing": "Google Drawings",
+  "application/vnd.google-apps.form": "Google Forms",
+  "application/vnd.google-apps.script": "Google Apps Script",
+};
+
 async function resolveDriveAttachments(
   client: Auth.OAuth2Client,
   fileIds: string[],
@@ -332,6 +342,15 @@ async function resolveDriveAttachments(
     const meta = await getDriveFile(client, { fileId });
     if (!meta?.name) {
       throw new Error(`Drive file not found: ${fileId}`);
+    }
+    // Drive-native files (Docs/Sheets/Slides) have no bytes to download:
+    // files.get?alt=media fails on them. Say so instead of surfacing that.
+    const native = NATIVE_DRIVE_MIME[meta.mimeType ?? ""];
+    if (native) {
+      throw new Error(
+        `Cannot attach ${native} file "${meta.name}" as-is: Google-native files have no raw bytes. ` +
+          "Export it first (google_drive_export) and attach the exported file, or share the link.",
+      );
     }
     if (meta.size && Number(meta.size) > MAX_ATTACHMENT_BYTES) {
       throw new Error(
@@ -855,7 +874,15 @@ export async function getGmailAttachment(
     messageId: opts.id,
     id: attachmentId,
   });
-  const dataBase64 = (res.data.data ?? "") as string;
+  // A missing body is not an empty attachment: returning `dataBase64: ""` for a
+  // part whose metadata claims bytes would report a successful download of
+  // nothing. An attachment that is genuinely empty returns `data: ""`.
+  if (res.data.data === undefined || res.data.data === null) {
+    throw new Error(
+      `Attachment "${part.filename}" returned no data for message ${opts.id}; nothing was downloaded.`,
+    );
+  }
+  const dataBase64 = res.data.data;
   const bytes = Buffer.from(dataBase64, "base64url");
   // The pre-download gate needs part.size; fall back to the decoded length,
   // which also covers a part that did not match metadata.
@@ -868,7 +895,9 @@ export async function getGmailAttachment(
     partId: part.partId,
     filename,
     mimeType,
-    size: part.size ?? res.data.size ?? 0,
+    // The decoded length is the number of bytes in hand. The API's sizes are
+    // not always present, and reporting 0 for a file we did download is wrong.
+    size: bytes.length,
   };
   if (savePath !== undefined) {
     await mkdir(dirname(savePath), { recursive: true });
