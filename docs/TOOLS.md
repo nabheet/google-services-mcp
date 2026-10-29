@@ -568,20 +568,22 @@ List files, newest first, with an optional query.
 | `pageSize` | number (1–100) | optional, default 25. |
 | `pageToken` | string | optional. From a previous page's `nextPageToken`. |
 
-Files in shared drives are included, not only files in My Drive. Every Drive
-call (list, get, download, upload, update, copy, move, trash, delete and the
-permission calls) declares shared-drive support, so an item surfaced by `list`
-can be acted on afterwards: without that declaration Drive answers 404 for
-shared-drive items.
+Files in shared drives are included, not only files in My Drive. Every call
+that targets a file (get, download, upload, update, copy, move, trash, restore,
+delete and the permission calls) declares shared-drive support, so an item
+surfaced by `list` can be acted on afterwards: without that declaration Drive
+answers 404 for shared-drive items. `export` is the exception — that endpoint
+takes no such parameter.
 
 ### `google_drive_get`
 
 Get metadata for a single file. Args: `fileId` (required).
 
-Single-file results (`get`, `upload`, `update`, `copy`, `create_folder`, `move`)
-carry `id`, `name`, `mimeType`, `size`, `createdTime`, `modifiedTime`,
-`webViewLink`, `parents` and `trashed` where Drive reports them, so a caller
-does not need a second read to get the link or confirm the new parent.
+Single-file results (`get`, `upload`, `update`, `copy`, `create_folder`, `move`,
+`trash`, `restore`) carry `id`, `name`, `mimeType`, `size`, `createdTime`,
+`modifiedTime`, `webViewLink`, `parents` and `trashed` where Drive reports them,
+so a caller does not need a second read to get the link or confirm the new
+parent.
 
 ### `google_drive_upload`
 
