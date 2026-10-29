@@ -1,5 +1,6 @@
 import type { Auth, docs_v1 } from "googleapis";
 import { google } from "googleapis";
+import { requireObjectId, requireReply } from "../util/replies.js";
 
 export interface GetDocumentArgs {
   documentId: string;
@@ -125,7 +126,15 @@ export async function replaceAllText(
       ],
     },
   });
-  return res.data.replies?.[0]?.replaceAllText ?? { occurrencesChanged: 0 };
+  const reply = requireReply(res.data.replies, "replaceAllText");
+  const result = (reply as { replaceAllText?: docs_v1.Schema$ReplaceAllTextResponse })
+    .replaceAllText;
+  if (!result) {
+    throw new Error(
+      "replaceAllText: the API returned no replacement result, so nothing is confirmed.",
+    );
+  }
+  return result;
 }
 
 export async function batchUpdateDocument(
@@ -200,5 +209,7 @@ export async function insertInlineImage(
     documentId,
     requests: [{ insertInlineImage: { uri, location: { index } } }],
   });
-  return res.replies?.[0]?.insertInlineImage ?? { objectId: undefined };
+  const reply = requireReply(res.replies, "insertInlineImage");
+  const image = (reply as { insertInlineImage?: { objectId?: string | null } }).insertInlineImage;
+  return { objectId: requireObjectId(image?.objectId, "insertInlineImage") };
 }

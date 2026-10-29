@@ -1,5 +1,6 @@
 import type { Auth, slides_v1 } from "googleapis";
 import { google } from "googleapis";
+import { requireObjectId, requireReply } from "../util/replies.js";
 
 export interface GetPresentationArgs {
   presentationId: string;
@@ -52,7 +53,15 @@ export async function replaceAllText(
       ],
     },
   });
-  return res.data.replies?.[0]?.replaceAllText ?? { occurrencesChanged: 0 };
+  const reply = requireReply(res.data.replies, "replaceAllText");
+  const result = (reply as { replaceAllText?: slides_v1.Schema$ReplaceAllTextResponse })
+    .replaceAllText;
+  if (!result) {
+    throw new Error(
+      "replaceAllText: the API returned no replacement result, so nothing is confirmed.",
+    );
+  }
+  return result;
 }
 
 export async function createSlide(
@@ -66,7 +75,9 @@ export async function createSlide(
       requests: [{ createSlide: { slideLayoutReference: { predefinedLayout: "BLANK" as const } } }],
     },
   });
-  return res.data.replies?.[0]?.createSlide ?? { objectId: undefined };
+  const reply = requireReply(res.data.replies, "createSlide");
+  const created = (reply as { createSlide?: slides_v1.Schema$CreateSlideResponse }).createSlide;
+  return { objectId: requireObjectId(created?.objectId, "createSlide") };
 }
 
 export async function deleteSlide(
@@ -109,7 +120,9 @@ export async function duplicateSlide(
     presentationId,
     requestBody: { requests: [{ duplicateObject: { objectId: slideObjectId } }] },
   });
-  return res.data.replies?.[0]?.duplicateObject ?? { objectId: undefined };
+  const reply = requireReply(res.data.replies, "duplicateSlide");
+  const copy = (reply as { duplicateObject?: { objectId?: string | null } }).duplicateObject;
+  return { objectId: requireObjectId(copy?.objectId, "duplicateSlide") };
 }
 
 export interface MoveSlideArgs {
@@ -129,15 +142,16 @@ export async function moveSlide(
       requests: [{ updateSlidesPosition: { slideObjectIds: [slideObjectId], insertionIndex } }],
     },
   });
-  const reply = res.data.replies?.[0] as
-    | { updateSlidesPosition?: { slideObjectIds?: string[]; insertionIndex?: number } }
-    | undefined;
-  return (
-    reply?.updateSlidesPosition ?? {
-      slideObjectIds: [slideObjectId],
-      insertionIndex,
-    }
-  );
+  const reply = requireReply(res.data.replies, "moveSlide") as {
+    updateSlidesPosition?: { slideObjectIds?: string[]; insertionIndex?: number };
+  };
+  const moved = reply.updateSlidesPosition;
+  if (!moved) {
+    throw new Error(
+      "moveSlide: the API returned no move result, so the new position is unconfirmed.",
+    );
+  }
+  return moved;
 }
 
 export interface CreateTextboxArgs {
@@ -187,8 +201,10 @@ export async function createTextbox(
     presentationId,
     requestBody: { requests },
   });
-  const created = res.data.replies?.[0]?.createShape;
-  return { objectId: created?.objectId ?? objectId };
+  const reply = requireReply(res.data.replies, "createTextbox") as {
+    createShape?: { objectId?: string | null };
+  };
+  return { objectId: requireObjectId(reply.createShape?.objectId ?? objectId, "createTextbox") };
 }
 
 export interface CreateImageArgs {
@@ -232,5 +248,7 @@ export async function createImage(
       ],
     },
   });
-  return res.data.replies?.[0]?.createImage ?? { objectId: undefined };
+  const reply = requireReply(res.data.replies, "createImage");
+  const image = (reply as { createImage?: { objectId?: string | null } }).createImage;
+  return { objectId: requireObjectId(image?.objectId, "createImage") };
 }

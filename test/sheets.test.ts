@@ -328,4 +328,11 @@ describe("row range validation", () => {
     ).rejects.toThrow(/startIndex/);
     expect(mockSpreadsheets.batchUpdate).not.toHaveBeenCalled();
   });
+
+  it("setNamedRange throws when the reply names no range", async () => {
+    mockSpreadsheets.batchUpdate.mockResolvedValue({ data: { replies: [] } });
+    await expect(
+      setNamedRange(client, { spreadsheetId: "s1", name: "Data", range: { sheetId: 0 } }),
+    ).rejects.toThrow(/no reply/i);
+  });
 });

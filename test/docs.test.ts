@@ -260,3 +260,29 @@ describe("docs index validation", () => {
     );
   });
 });
+
+describe("docs unconfirmed writes", () => {
+  it("replaceAllText throws when the API returns no reply for the request", async () => {
+    mockDocs.documents.batchUpdate.mockResolvedValue({ data: { replies: [] } });
+    await expect(
+      replaceAllText(client, { documentId: "d1", find: "a", replace: "b" }),
+    ).rejects.toThrow(/no reply/i);
+  });
+
+  it("replaceAllText reports a real zero when the reply says nothing matched", async () => {
+    mockDocs.documents.batchUpdate.mockResolvedValue({
+      data: { replies: [{ replaceAllText: { occurrencesChanged: 0 } }] },
+    });
+    const result = await replaceAllText(client, { documentId: "d1", find: "a", replace: "b" });
+    expect(result.occurrencesChanged).toBe(0);
+  });
+
+  it("insertInlineImage throws when the reply carries no object id", async () => {
+    mockDocs.documents.batchUpdate.mockResolvedValue({
+      data: { replies: [{ insertInlineImage: {} }] },
+    });
+    await expect(
+      insertInlineImage(client, { documentId: "d1", uri: "https://example.com/i.png", index: 2 }),
+    ).rejects.toThrow(/object id/i);
+  });
+});

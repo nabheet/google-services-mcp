@@ -1,5 +1,6 @@
 import type { Auth, sheets_v4 } from "googleapis";
 import { google } from "googleapis";
+import { requireReply } from "../util/replies.js";
 
 export interface GetSpreadsheetArgs {
   spreadsheetId: string;
@@ -290,5 +291,13 @@ export async function setNamedRange(
     spreadsheetId,
     requests: [{ addNamedRange: { namedRange: { name, range } } }],
   });
-  return res.replies?.[0]?.addNamedRange?.namedRange ?? { namedRangeId: undefined };
+  const reply = requireReply(res.replies, "setNamedRange");
+  const namedRange = (reply as { addNamedRange?: { namedRange?: NamedRangeInfo } }).addNamedRange
+    ?.namedRange;
+  if (!namedRange?.namedRangeId) {
+    throw new Error(
+      "setNamedRange: the API returned no named range id, so the range is unconfirmed.",
+    );
+  }
+  return namedRange;
 }
