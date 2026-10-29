@@ -462,6 +462,12 @@ Omitting `timeMin` means "from now", not "everything": the API's own default
 starts at the oldest event in the calendar, so the first page would be years of
 history rather than what is coming up.
 
+A page token continues the query it was issued for: the original `timeMin`,
+`timeMax`, `q`, `calendarId` and account travel inside it. Pass it back on its
+own; only `maxResults` may be changed. Supplying a different filter or calendar
+alongside a page token is rejected rather than silently ignored, and a token
+this server did not issue is refused — omit `pageToken` to start a new query.
+
 An occurrence carries the same fields as a single event plus `recurringEventId`
 (the series' id) and `originalStartTime` (when that occurrence was scheduled).
 Use the occurrence's own `id` to update or delete just that one; use

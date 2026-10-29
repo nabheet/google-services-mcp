@@ -735,15 +735,161 @@ describe("respondToEvent email matching", () => {
 });
 
 describe("calendar pagination", () => {
-  it("passes pageToken and returns nextPageToken for events", async () => {
-    mockEvents.list.mockResolvedValue({
-      data: { items: [{ id: "e2" }], nextPageToken: "page-2" },
+  it("rejects a page token that this server did not issue", async () => {
+    await expect(listEvents(client, { pageToken: "page-1" })).rejects.toThrow(
+      "Page token was not issued by this server. Omit pageToken to start a new query.",
+    );
+    expect(mockEvents.list).not.toHaveBeenCalled();
+  });
+
+  it("keeps the default timeMin stable across pages", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-10-28T12:00:00.000Z"));
+      mockEvents.list
+        .mockResolvedValueOnce({ data: { items: [], nextPageToken: "page-2" } })
+        .mockResolvedValueOnce({ data: { items: [] } });
+
+      const firstPage = await listEvents(client, {
+        calendarId: "work",
+        timeMax: "2026-11-01T00:00:00.000Z",
+        maxResults: 12,
+        q: "meeting",
+      });
+      vi.setSystemTime(new Date("2026-10-28T12:05:00.000Z"));
+      await listEvents(client, { pageToken: firstPage.nextPageToken });
+
+      expect(mockEvents.list.mock.calls[1][0]).toEqual(
+        expect.objectContaining({
+          calendarId: "work",
+          pageToken: "page-2",
+          timeMin: "2026-10-28T12:00:00.000Z",
+          timeMax: "2026-11-01T00:00:00.000Z",
+          maxResults: 12,
+          q: "meeting",
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects a continuation that changes the calendar or filter", async () => {
+    mockEvents.list.mockResolvedValueOnce({
+      data: { items: [], nextPageToken: "page-2" },
     });
+    const firstPage = await listEvents(client, {
+      calendarId: "work",
+      timeMin: "2026-10-01T00:00:00.000Z",
+      q: "standup",
+      accountKey: "work",
+    });
+    mockEvents.list.mockClear();
 
-    const result = await listEvents(client, { pageToken: "page-1" });
+    const pageToken = firstPage.nextPageToken as string;
+    await expect(
+      listEvents(client, { pageToken, calendarId: "personal", accountKey: "work" }),
+    ).rejects.toThrow(/does not match calendarId\./);
+    await expect(
+      listEvents(client, {
+        pageToken,
+        timeMin: "2026-10-02T00:00:00.000Z",
+        accountKey: "work",
+      }),
+    ).rejects.toThrow(/does not match timeMin\./);
+    await expect(
+      listEvents(client, {
+        pageToken,
+        timeMax: "2026-10-02T00:00:00.000Z",
+        accountKey: "work",
+      }),
+    ).rejects.toThrow(/does not match timeMax\./);
+    await expect(
+      listEvents(client, { pageToken, q: "review", accountKey: "work" }),
+    ).rejects.toThrow(/does not match q\./);
+    await expect(listEvents(client, { pageToken, accountKey: "personal" })).rejects.toThrow(
+      /does not match account\./,
+    );
+    expect(mockEvents.list).not.toHaveBeenCalled();
+  });
 
-    expect(mockEvents.list).toHaveBeenCalledWith(expect.objectContaining({ pageToken: "page-1" }));
-    expect(result.nextPageToken).toBe("page-2");
+  it("refuses a cursor issued for an account when no account is given", async () => {
+    mockEvents.list.mockResolvedValueOnce({
+      data: { items: [], nextPageToken: "page-2" },
+    });
+    const firstPage = await listEvents(client, {
+      timeMin: "2026-10-01T00:00:00.000Z",
+      accountKey: "work",
+    });
+    mockEvents.list.mockClear();
+
+    await expect(listEvents(client, { pageToken: firstPage.nextPageToken })).rejects.toThrow(
+      /does not match account\./,
+    );
+    expect(mockEvents.list).not.toHaveBeenCalled();
+  });
+
+  it("matches a continuation against empty optional filters", async () => {
+    mockEvents.list.mockResolvedValueOnce({
+      data: { items: [], nextPageToken: "page-2" },
+    });
+    const firstPage = await listEvents(client, { timeMin: "2026-10-01T00:00:00.000Z" });
+    mockEvents.list.mockClear();
+
+    await expect(
+      listEvents(client, {
+        pageToken: firstPage.nextPageToken,
+        q: "standup",
+        accountKey: undefined,
+      }),
+    ).rejects.toThrow(/does not match q\./);
+    expect(mockEvents.list).not.toHaveBeenCalled();
+  });
+
+  it("lets a continuation change the page size", async () => {
+    mockEvents.list
+      .mockResolvedValueOnce({ data: { items: [], nextPageToken: "page-2" } })
+      .mockResolvedValueOnce({ data: { items: [] } });
+    const firstPage = await listEvents(client, { maxResults: 5 });
+
+    await listEvents(client, { pageToken: firstPage.nextPageToken, maxResults: 50 });
+
+    expect(mockEvents.list.mock.calls[1][0]).toEqual(
+      expect.objectContaining({ pageToken: "page-2", maxResults: 50 }),
+    );
+  });
+
+  it("rejects malformed page tokens", async () => {
+    const encode = (value: string) => `gcal-v1.${Buffer.from(value).toString("base64url")}`;
+    const valid = {
+      pageToken: "page-2",
+      calendarId: "primary",
+      timeMin: "2026-10-01T00:00:00.000Z",
+      maxResults: 25,
+    };
+    const malformed = [
+      "",
+      "gcal-v1.",
+      "gcal-v1.!!!!",
+      encode("not json"),
+      encode(JSON.stringify({ ...valid, pageToken: "" })),
+      encode(JSON.stringify({ ...valid, calendarId: "" })),
+      encode(JSON.stringify({ ...valid, timeMin: "" })),
+      encode(JSON.stringify({ ...valid, maxResults: 0 })),
+      encode(JSON.stringify({ ...valid, maxResults: 1.5 })),
+      encode(JSON.stringify({ ...valid, maxResults: 251 })),
+      encode(JSON.stringify({ ...valid, timeMax: 5 })),
+      encode(JSON.stringify({ ...valid, q: 5 })),
+      encode(JSON.stringify({ ...valid, account: "" })),
+      encode(JSON.stringify({ ...valid, account: 7 })),
+    ];
+
+    for (const pageToken of malformed) {
+      await expect(listEvents(client, { pageToken })).rejects.toThrow(
+        "Invalid calendar event page token.",
+      );
+    }
+    expect(mockEvents.list).not.toHaveBeenCalled();
   });
 
   it("omits nextPageToken on the last page", async () => {
