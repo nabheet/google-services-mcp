@@ -99,6 +99,9 @@ describe("forms service", () => {
   });
 
   it("addQuestion appends a text question", async () => {
+    mockForms.forms.get.mockResolvedValueOnce({
+      data: { items: [{ itemId: "existing-1" }, { itemId: "existing-2" }] },
+    });
     mockForms.forms.batchUpdate.mockResolvedValue({ data: { replies: [{}] } });
     const result = await addQuestion(client, {
       formId: "f1",
@@ -106,9 +109,10 @@ describe("forms service", () => {
       description: "Optional",
     });
     expect(result).toEqual({ added: true });
+    expect(mockForms.forms.get).toHaveBeenCalledWith({ formId: "f1", fields: "items.itemId" });
     const body = mockForms.forms.batchUpdate.mock.calls[0][0].requestBody;
     expect(body.requests[0].createItem).toMatchObject({
-      location: { index: 0 },
+      location: { index: 2 },
       item: {
         title: "What is your name?",
         description: "Optional",
@@ -119,6 +123,7 @@ describe("forms service", () => {
   });
 
   it("addQuestion supports multiple choice", async () => {
+    mockForms.forms.get.mockResolvedValueOnce({ data: { items: [] } });
     mockForms.forms.batchUpdate.mockResolvedValue({ data: { replies: [] } });
     await addQuestion(client, {
       formId: "f1",
@@ -127,6 +132,7 @@ describe("forms service", () => {
       options: ["A", "B"],
     });
     const body = mockForms.forms.batchUpdate.mock.calls[0][0].requestBody;
+    expect(body.requests[0].createItem.location.index).toBe(0);
     expect(body.requests[0].createItem.item.questionItem.question.choiceQuestion).toEqual({
       type: "RADIO",
       options: [{ value: "A" }, { value: "B" }],
