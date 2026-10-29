@@ -312,6 +312,24 @@ describe("sendGmail with Drive attachments", () => {
       }),
     ).rejects.toThrow(/not found/i);
   });
+
+  it("explains that Google-native files cannot be attached as-is", async () => {
+    mockDriveFiles.get.mockResolvedValueOnce({
+      data: {
+        id: "f1",
+        name: "Notes",
+        mimeType: "application/vnd.google-apps.document",
+      },
+    });
+    await expect(
+      sendGmail(client, {
+        to: "bob@example.com",
+        subject: "S",
+        body: "B",
+        driveFileIds: ["f1"],
+      }),
+    ).rejects.toThrow(/Google Docs|export/i);
+  });
 });
 
 describe("sendGmail with inline attachments", () => {
@@ -680,7 +698,7 @@ describe("getGmailAttachment", () => {
       },
     });
     mockMessages.attachments.get.mockResolvedValue({
-      data: { data: Buffer.from("# Hi").toString("base64url"), size: 5 },
+      data: { data: Buffer.from("# Hi").toString("base64url"), size: 4 },
     });
     const result = await getGmailAttachment(client, { id: "m1", attachmentId: "ATT1" });
     expect(mockMessages.attachments.get).toHaveBeenCalledWith({
@@ -693,7 +711,7 @@ describe("getGmailAttachment", () => {
       partId: "0.1",
       filename: "skills.md",
       mimeType: "text/markdown",
-      size: 5,
+      size: 4,
       text: "# Hi",
       kind: "text",
     });
@@ -1197,12 +1215,59 @@ describe("getGmailAttachment", () => {
       partId: "1",
       filename: "big.pdf",
       mimeType: "application/pdf",
-      size: 18_000_000,
+      size: bytes.length,
       savedTo: saveToPath,
       kind: "saved",
     });
     expect(result).not.toHaveProperty("dataBase64");
     expect(result).not.toHaveProperty("text");
+  });
+
+  it("reports the decoded byte count when the API gives no size", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "0.1",
+              filename: "a.txt",
+              mimeType: "text/plain",
+              body: { attachmentId: "A1" },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({
+      data: { data: Buffer.from("hello").toString("base64url") },
+    });
+
+    const result = await getGmailAttachment(client, { id: "m1", attachmentId: "A1" });
+
+    // Not 0: the bytes were returned, so the size is known.
+    expect(result.size).toBe(5);
+  });
+
+  it("throws when the attachment body comes back empty", async () => {
+    mockMessages.get.mockResolvedValue({
+      data: {
+        payload: {
+          parts: [
+            {
+              partId: "0.1",
+              filename: "a.pdf",
+              mimeType: "application/pdf",
+              body: { attachmentId: "A1", size: 4096 },
+            },
+          ],
+        },
+      },
+    });
+    mockMessages.attachments.get.mockResolvedValue({ data: {} });
+
+    await expect(getGmailAttachment(client, { id: "m1", attachmentId: "A1" })).rejects.toThrow(
+      /no data/i,
+    );
   });
 });
 
