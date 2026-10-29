@@ -1350,14 +1350,16 @@ describe("getGmailDraft", () => {
             mimeType: "multipart/mixed",
             parts: [
               {
-                mimeType: "text/plain",
-                body: { data: Buffer.from("draft body").toString("base64url") },
-              },
-              {
-                partId: "0.1",
-                filename: "draft.csv",
-                mimeType: "text/csv",
-                body: { attachmentId: "ATT789", size: 128 },
+                partId: "0",
+                mimeType: "multipart/related",
+                parts: [
+                  {
+                    partId: "0.1",
+                    filename: "draft.csv",
+                    mimeType: "text/csv",
+                    body: { attachmentId: "ATT789", size: 128 },
+                  },
+                ],
               },
             ],
           },
@@ -1365,6 +1367,7 @@ describe("getGmailDraft", () => {
       },
     });
     const result = await getGmailDraft(client, { id: "d1" });
+    expect(result.hasAttachments).toBe(true);
     expect(result.attachments).toEqual([
       {
         id: "ATT789",

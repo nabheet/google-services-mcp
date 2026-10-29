@@ -1015,9 +1015,6 @@ export async function getGmailDraft(
   const payload = msg.payload ?? ({} as gmail_v1.Schema$MessagePart);
   const headers = payload.headers ?? [];
   const parsed = parseHeaders(headers);
-  const hasAttachments =
-    Array.isArray(payload.parts) &&
-    payload.parts.some((p: gmail_v1.Schema$MessagePart) => p.filename && p.filename.length > 0);
   return {
     draftId: draft.id ?? "",
     id: msg.id ?? "",
@@ -1029,7 +1026,7 @@ export async function getGmailDraft(
     subject: parsed.subject,
     date: parsed.date,
     body: extractBody(payload),
-    hasAttachments,
+    hasAttachments: hasAttachmentParts(payload),
     attachments: collectAttachments(payload),
   };
 }
