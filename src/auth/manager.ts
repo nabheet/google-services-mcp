@@ -123,6 +123,12 @@ class AuthManager {
     let account = await this.resolveAccount(name);
 
     if (account.expiryDate && Date.now() > account.expiryDate - 60_000) {
+      if (!account.refreshToken) {
+        throw new Error(
+          `Account "${account.name}" has no refresh token and its access token is expired. ` +
+            "Remove and re-add the account to authorize it again.",
+        );
+      }
       const tokens = await refreshAccessToken(config, account.refreshToken);
       account = {
         ...account,
@@ -190,13 +196,19 @@ class AuthManager {
     const callback = await callbackPromise;
 
     const tokens = await exchangeCode(config, callback.code, codeVerifier);
+    if (!tokens.refreshToken) {
+      throw new Error(
+        `Google authorization returned no refresh token for account "${key}". ` +
+          "Remove the account if it was partially created and authorize again.",
+      );
+    }
     const user = await fetchUserInfo(tokens.accessToken);
 
     const account: StoredAccount = {
       name: key,
       email: user.email,
       accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken ?? "",
+      refreshToken: tokens.refreshToken,
       expiryDate: tokens.expiryDate,
       scopes: config.scopes ?? [],
       createdAt: new Date().toISOString(),

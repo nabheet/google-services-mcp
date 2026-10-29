@@ -63,6 +63,11 @@ Start the OAuth consent flow to connect a new Google account. Opens a browser fo
 sign-in. An existing account name is refused rather than overwritten: remove it
 first or pick a different nickname.
 
+Authorization must return a refresh token. If it does not, no account is saved;
+authorize again rather than leaving an account that can work only until its
+first access token expires. An already-stored account with an expired access
+token but no refresh token reports the same recovery: remove and re-add it.
+
 | arg | type | notes |
 | --- | --- | --- |
 | `name` | string | required. Account nickname (e.g. `personal`, `work`). |

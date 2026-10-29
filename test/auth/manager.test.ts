@@ -160,6 +160,12 @@ describe("getClient", () => {
     expect(persisted.refreshToken).toBe("rt-rotated");
   });
 
+  it("fails clearly when an expired account has no refresh token", async () => {
+    await saveAccount(account("no-refresh", { refreshToken: "", expiryDate: Date.now() - 1000 }));
+    await expect(authManager.getClient("no-refresh")).rejects.toThrow(/no refresh token/i);
+    expect(oauth.refreshAccessToken).not.toHaveBeenCalled();
+  });
+
   it("does not refresh a still-valid token", async () => {
     await saveAccount(account("fresh"));
     await authManager.getClient("fresh");
@@ -182,6 +188,17 @@ describe("addAccount", () => {
     await authManager.addAccount("browser", {});
     expect(oauth.openBrowser).toHaveBeenCalledOnce();
     expect(oauth.openBrowser).toHaveBeenCalledWith(expect.stringContaining("accounts.google.com"));
+  });
+
+  it("refuses to save an account when authorization returns no refresh token", async () => {
+    vi.mocked(oauth.exchangeCode).mockResolvedValueOnce({
+      accessToken: "at-no-refresh",
+      expiryDate: Date.now() + 3600_000,
+    });
+    await expect(authManager.addAccount("no-refresh", { openBrowser: false })).rejects.toThrow(
+      /refresh token/i,
+    );
+    await expect(authManager.resolveAccount("no-refresh")).rejects.toThrow(/not found/i);
   });
 
   it("stores the sanitized name so later lookups match", async () => {
