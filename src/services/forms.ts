@@ -107,13 +107,15 @@ export async function addQuestion(
   } else {
     question = { required, textQuestion: {} };
   }
+  const form = await forms.forms.get({ formId, fields: "items.itemId" });
+  const index = form.data.items?.length ?? 0;
   await forms.forms.batchUpdate({
     formId,
     requestBody: {
       requests: [
         {
           createItem: {
-            location: { index: 0 },
+            location: { index },
             item: { title, description, questionItem: { question } },
           },
         },

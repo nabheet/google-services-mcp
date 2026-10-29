@@ -3009,7 +3009,7 @@ export function registerTools(server: McpServer): void {
     "google_forms_add_question",
     {
       title: "Add form question",
-      description: "Add a text or multiple-choice question to a form.",
+      description: "Append a text or multiple-choice question to the end of a form.",
       inputSchema: {
         formId: z.string().describe("Form ID."),
         title: z.string().describe("Question text."),
