@@ -10,11 +10,93 @@ export interface ListEventsOptions {
   q?: string;
   /** Token from a previous page's `nextPageToken`. */
   pageToken?: string;
+  /** Account the cursor was issued for; rejects a cursor reused across accounts. */
+  accountKey?: string;
 }
 
 export interface ListCalendarsOptions {
   /** Token from a previous page's `nextPageToken`. */
   pageToken?: string;
+}
+
+interface EventPageCursor {
+  pageToken: string;
+  calendarId: string;
+  timeMin: string;
+  timeMax?: string;
+  maxResults: number;
+  q?: string;
+  account?: string;
+}
+
+const EVENT_PAGE_TOKEN_PREFIX = "gcal-v1.";
+const INVALID_PAGE_TOKEN = "Invalid calendar event page token.";
+
+function encodeEventPageToken(cursor: EventPageCursor): string {
+  return `${EVENT_PAGE_TOKEN_PREFIX}${Buffer.from(JSON.stringify(cursor)).toString("base64url")}`;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+function isEventPageCursor(value: unknown): value is EventPageCursor {
+  if (typeof value !== "object" || value === null) return false;
+  const cursor = value as Record<string, unknown>;
+  return (
+    isNonEmptyString(cursor.pageToken) &&
+    isNonEmptyString(cursor.calendarId) &&
+    isNonEmptyString(cursor.timeMin) &&
+    typeof cursor.maxResults === "number" &&
+    Number.isInteger(cursor.maxResults) &&
+    cursor.maxResults >= 1 &&
+    cursor.maxResults <= 250 &&
+    (cursor.timeMax === undefined || isNonEmptyString(cursor.timeMax)) &&
+    (cursor.q === undefined || typeof cursor.q === "string") &&
+    (cursor.account === undefined || isNonEmptyString(cursor.account))
+  );
+}
+
+function decodeEventPageToken(token: string): EventPageCursor {
+  if (token.length === 0) throw new Error(INVALID_PAGE_TOKEN);
+  if (!token.startsWith(EVENT_PAGE_TOKEN_PREFIX)) {
+    // A bare Google token carries no query, so the filters it was issued for
+    // are unknowable and continuing would silently change the result set.
+    throw new Error(
+      "Page token was not issued by this server. Omit pageToken to start a new query.",
+    );
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(
+      Buffer.from(token.slice(EVENT_PAGE_TOKEN_PREFIX.length), "base64url").toString("utf8"),
+    );
+  } catch {
+    throw new Error(INVALID_PAGE_TOKEN);
+  }
+  if (!isEventPageCursor(parsed)) throw new Error(INVALID_PAGE_TOKEN);
+  return parsed;
+}
+
+/**
+ * A page token only continues the query it was issued for. Silently dropping
+ * conflicting arguments would return rows from a different calendar or filter.
+ */
+function assertCursorMatches(opts: ListEventsOptions, cursor: EventPageCursor): void {
+  const conflicts: string[] = [];
+  if (opts.calendarId !== undefined && opts.calendarId !== cursor.calendarId) {
+    conflicts.push("calendarId");
+  }
+  if (opts.timeMin !== undefined && opts.timeMin !== cursor.timeMin) conflicts.push("timeMin");
+  if (opts.timeMax !== undefined && opts.timeMax !== cursor.timeMax) conflicts.push("timeMax");
+  if (opts.q !== undefined && opts.q !== cursor.q) conflicts.push("q");
+  if (opts.accountKey !== cursor.account) conflicts.push("account");
+  if (conflicts.length > 0) {
+    throw new Error(
+      `Page token does not match ${conflicts.join(", ")}. Omit pageToken to start a new query.`,
+    );
+  }
 }
 
 export type SendUpdates = "all" | "externalOnly" | "none";
@@ -374,22 +456,42 @@ export async function listEvents(
   opts: ListEventsOptions,
 ): Promise<ListPage<EventSummary>> {
   const calendar = google.calendar({ version: "v3", auth: client });
+  const cursor = opts.pageToken !== undefined ? decodeEventPageToken(opts.pageToken) : undefined;
+  if (cursor) assertCursorMatches(opts, cursor);
+
   // Without timeMin the API returns the oldest events first, which is the
   // opposite of "upcoming": the first page would be years of history.
-  const timeMin = opts.timeMin ?? new Date().toISOString();
+  const calendarId = cursor?.calendarId ?? opts.calendarId ?? "primary";
+  const timeMin = cursor?.timeMin ?? opts.timeMin ?? new Date().toISOString();
+  const timeMax = cursor ? cursor.timeMax : opts.timeMax;
+  const maxResults = opts.maxResults ?? cursor?.maxResults ?? 25;
+  const q = cursor ? cursor.q : opts.q;
+  const account = cursor ? cursor.account : opts.accountKey;
   const res = await calendar.events.list({
-    calendarId: opts.calendarId ?? "primary",
+    calendarId,
     timeMin,
-    timeMax: opts.timeMax,
-    maxResults: opts.maxResults ?? 25,
-    q: opts.q,
+    timeMax,
+    maxResults,
+    q,
     singleEvents: true,
     orderBy: "startTime",
-    ...(opts.pageToken !== undefined ? { pageToken: opts.pageToken } : {}),
+    ...(cursor ? { pageToken: cursor.pageToken } : {}),
   });
   return {
     items: (res.data.items ?? []).map(mapEvent),
-    ...(res.data.nextPageToken ? { nextPageToken: res.data.nextPageToken } : {}),
+    ...(res.data.nextPageToken
+      ? {
+          nextPageToken: encodeEventPageToken({
+            pageToken: res.data.nextPageToken,
+            calendarId,
+            timeMin,
+            timeMax,
+            maxResults,
+            q,
+            account,
+          }),
+        }
+      : {}),
   };
 }
 

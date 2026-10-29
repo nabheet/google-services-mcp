@@ -1100,15 +1100,27 @@ export function registerTools(server: McpServer): void {
         calendarId: z.string().optional().describe("Calendar ID (default primary)."),
         pageToken: z
           .string()
+          .min(1)
           .optional()
-          .describe("Page token from a previous result's nextPageToken."),
+          .describe(
+            "Page token from a previous result's nextPageToken. Continues that query; omit to start a new one.",
+          ),
         account: z.string().optional().describe("Account nickname to use."),
       },
     },
     async ({ timeMin, timeMax, maxResults, q, calendarId, pageToken, account }) =>
-      withClient(account, (client) =>
-        listEvents(client, { timeMin, timeMax, maxResults, q, calendarId, pageToken }),
-      ),
+      withClient(account, async (client) => {
+        const resolved = await authManager.resolveAccount(account);
+        return listEvents(client, {
+          timeMin,
+          timeMax,
+          maxResults,
+          q,
+          calendarId,
+          pageToken,
+          accountKey: resolved.name,
+        });
+      }),
   );
 
   server.registerTool(

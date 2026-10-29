@@ -72,6 +72,34 @@ describe("calendar E2E (nock)", () => {
     expect(nock.isDone()).toBe(true);
   });
 
+  it("listEvents continues with the same query through a wrapped page token", async () => {
+    lockNetwork();
+    const client = makeClient();
+    const timeMin = "2026-09-21T00:00:00.000Z";
+    nock("https://www.googleapis.com")
+      .get("/calendar/v3/calendars/primary/events")
+      .query((q) => q.timeMin === timeMin && q.pageToken === undefined)
+      .reply(200, { items: [], nextPageToken: "raw-page-2" });
+    nock("https://www.googleapis.com")
+      .get("/calendar/v3/calendars/primary/events")
+      .query((q) => q.timeMin === timeMin && q.pageToken === "raw-page-2")
+      .reply(200, {
+        items: [
+          {
+            id: "ev2",
+            start: { dateTime: "2026-09-22T09:00:00Z" },
+            end: { dateTime: "2026-09-22T09:30:00Z" },
+          },
+        ],
+      });
+
+    const firstPage = await listEvents(client, { timeMin });
+    const secondPage = await listEvents(client, { pageToken: firstPage.nextPageToken });
+
+    expect(secondPage.items.map((item) => item.id)).toEqual(["ev2"]);
+    expect(nock.isDone()).toBe(true);
+  });
+
   it("createEvent POSTs the event body to /calendar/v3/calendars/primary/events", async () => {
     lockNetwork();
     const client = makeClient();
