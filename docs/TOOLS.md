@@ -568,7 +568,11 @@ List files, newest first, with an optional query.
 | `pageSize` | number (1–100) | optional, default 25. |
 | `pageToken` | string | optional. From a previous page's `nextPageToken`. |
 
-Files in shared drives are included, not only files in My Drive.
+Files in shared drives are included, not only files in My Drive. Every Drive
+call (list, get, download, upload, update, copy, move, trash, delete and the
+permission calls) declares shared-drive support, so an item surfaced by `list`
+can be acted on afterwards: without that declaration Drive answers 404 for
+shared-drive items.
 
 ### `google_drive_get`
 
