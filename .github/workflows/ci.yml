@@ -180,7 +180,7 @@ jobs:
           node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org/
-      - run: npm ci
+      - run: npm ci --ignore-scripts
         if: steps.changes.outputs.changed == 'true'
         timeout-minutes: 2
       - run: npm run build
@@ -380,7 +380,7 @@ jobs:
           node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org/
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run build
       - name: Compute prerelease version
         id: version
