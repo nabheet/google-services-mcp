@@ -139,6 +139,18 @@ jobs:
           # docs commit cannot change the tarball, so releasing on one only
           # burns a version number.
           INERT_DEVDEPS='["@biomejs/biome","@types/node","markdownlint-cli2","nock","tsx","vitest"]'
+
+          # The literal above is the list this commit publishes under. The guard
+          # compares against the copy on the base revision instead, so a PR that
+          # adds a dependency to the list cannot skip that dependency's own
+          # release — the entry has to land through review first. No literal on
+          # the base (guard newly added) means everything ships, the
+          # fail-closed direction.
+          INERT_DEVDEPS="$(git show "${BEFORE}:.github/workflows/ci.yml" 2>/dev/null \
+            | sed -n "s/^[[:space:]]*INERT_DEVDEPS='\(.*\)'[[:space:]]*$/\1/p" \
+            | head -n1 || true)"
+          [ -n "$INERT_DEVDEPS" ] || INERT_DEVDEPS='[]'
+
           pkg_shipping_changed() {
             local before after
             local normalise='del(.version)
